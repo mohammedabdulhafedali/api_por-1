@@ -21,6 +21,7 @@ public static class BaselineSchemaConfiguration
         ConfigureGroup07PublishingAndUsage(modelBuilder);
         ConfigureGroup08NotificationsAndAppendOnlyAudit(modelBuilder);
         ConfigureIdentitySessionTicketStore(modelBuilder);
+        ConfigureWordDerivativeRecords(modelBuilder);
     }
 
     private static void ConfigureGroup01IdentityAndAccess(ModelBuilder modelBuilder)
@@ -767,6 +768,12 @@ public static class BaselineSchemaConfiguration
                 .HasFilter("base_revision_id IS NOT NULL AND status = 'DRAFT'")
                 .HasDatabaseName("ux_document_revisions_active_draft_per_base_revision");
 
+            // OP-05 (V06): Only one active DRAFT working copy per API version concurrently
+            b.HasIndex(x => x.ApiVersionId)
+                .IsUnique()
+                .HasFilter("status = 'DRAFT'")
+                .HasDatabaseName("ux_document_revisions_active_draft_per_api_version");
+
             b.HasIndex(x => new { x.ApiVersionId, x.Status }).HasDatabaseName("ix_document_revisions_api_version_id_status");
 
             b.HasOne<ApiVersionEntity>()
@@ -1278,6 +1285,66 @@ public static class BaselineSchemaConfiguration
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_auth_sessions_users_user_id");
+        });
+    }
+
+    private static void ConfigureWordDerivativeRecords(ModelBuilder modelBuilder)
+    {
+        // word_derivative_records (Sprint S09 Task V08: OpenXML Word governance PoC & OP-03 error tracking)
+        modelBuilder.Entity<WordDerivativeRecordEntity>(b =>
+        {
+            b.ToTable("word_derivative_records", t =>
+            {
+                t.HasCheckConstraint("ck_word_derivative_records_fields_non_negative", "fields_updated_count >= 0");
+            });
+            b.HasKey(x => x.Id).HasName("pk_word_derivative_records");
+            b.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            b.Property(x => x.RevisionId).HasColumnName("revision_id").IsRequired();
+            b.Property(x => x.RevisionFileId).HasColumnName("revision_file_id").IsRequired();
+            b.Property(x => x.SourceObjectId).HasColumnName("source_object_id").IsRequired();
+            b.Property(x => x.DerivedObjectId).HasColumnName("derived_object_id");
+            b.Property(x => x.Status).HasColumnName("status").HasMaxLength(32).IsRequired();
+            b.Property(x => x.TemplateKindDetected).HasColumnName("template_kind_detected").HasMaxLength(40).IsRequired();
+            b.Property(x => x.FieldsUpdatedCount).HasColumnName("fields_updated_count").IsRequired();
+            b.Property(x => x.MatchedFieldsJson).HasColumnName("matched_fields_json").HasColumnType("jsonb").IsRequired();
+            b.Property(x => x.ValidationErrorsJson).HasColumnName("validation_errors_json").HasColumnType("jsonb").IsRequired();
+            b.Property(x => x.ErrorMessage).HasColumnName("error_message");
+            b.Property(x => x.IsPublishable).HasColumnName("is_publishable").IsRequired();
+            b.Property(x => x.CreatedBy).HasColumnName("created_by").IsRequired();
+            b.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
+
+            b.HasIndex(x => new { x.RevisionFileId, x.CreatedAt }).HasDatabaseName("ix_word_derivative_records_revision_file_id_created_at");
+            b.HasIndex(x => x.RevisionId).HasDatabaseName("ix_word_derivative_records_revision_id");
+
+            b.HasOne<DocumentRevisionEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.RevisionId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_word_derivative_records_document_revisions_revision_id");
+
+            b.HasOne<RevisionFileEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.RevisionFileId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_word_derivative_records_revision_files_revision_file_id");
+
+            b.HasOne<FileObjectEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.SourceObjectId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_word_derivative_records_file_objects_source_object_id");
+
+            b.HasOne<FileObjectEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.DerivedObjectId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_word_derivative_records_file_objects_derived_object_id");
+
+            b.HasOne<UserEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_word_derivative_records_users_created_by");
         });
     }
 }

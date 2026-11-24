@@ -441,3 +441,25 @@ public sealed class ReleaseHistoryEventEntity : IAppendOnlyEntity
     public DateTimeOffset RecordedAt { get; set; }
 }
 
+/// <summary>
+/// Supporting record for Sprint S09 Task V08 (OpenXML Word governance field PoC &amp; OP-03 failure isolation).
+/// Preserves the original uploaded FileObject intact and blocks publishing unverified or failed derivatives.
+/// </summary>
+public sealed class WordDerivativeRecordEntity
+{
+    public Guid Id { get; set; }
+    public Guid RevisionId { get; set; }
+    public Guid RevisionFileId { get; set; }
+    public Guid SourceObjectId { get; set; }
+    public Guid? DerivedObjectId { get; set; }
+    public string Status { get; set; } = string.Empty; // VERIFIED | PENDING_SCAN | NO_RECOGNIZED_FIELDS | FAILED
+    public string TemplateKindDetected { get; set; } = string.Empty; // SDT_CONTROLS | PLACEHOLDER_TOKENS | CUSTOM_PROPERTIES | MIXED | NONE
+    public int FieldsUpdatedCount { get; set; }
+    public string MatchedFieldsJson { get; set; } = "[]";
+    public string ValidationErrorsJson { get; set; } = "[]";
+    public string? ErrorMessage { get; set; }
+    public bool IsPublishable { get; set; }
+    public Guid CreatedBy { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
+

@@ -748,6 +748,11 @@ namespace ApiGovernance.Shared.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_document_revisions");
 
+                    b.HasIndex("ApiVersionId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_document_revisions_active_draft_per_api_version")
+                        .HasFilter("status = 'DRAFT'");
+
                     b.HasIndex("BaseRevisionId")
                         .IsUnique()
                         .HasDatabaseName("ux_document_revisions_active_draft_per_base_revision")
@@ -1668,6 +1673,91 @@ namespace ApiGovernance.Shared.Persistence.Migrations
                     b.ToTable("user_roles", (string)null);
                 });
 
+            modelBuilder.Entity("ApiGovernance.Shared.Persistence.Entities.WordDerivativeRecordEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DerivedObjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("derived_object_id");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<int>("FieldsUpdatedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("fields_updated_count");
+
+                    b.Property<bool>("IsPublishable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_publishable");
+
+                    b.Property<string>("MatchedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("matched_fields_json");
+
+                    b.Property<Guid>("RevisionFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_file_id");
+
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_id");
+
+                    b.Property<Guid>("SourceObjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_object_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TemplateKindDetected")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("template_kind_detected");
+
+                    b.Property<string>("ValidationErrorsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("validation_errors_json");
+
+                    b.HasKey("Id")
+                        .HasName("pk_word_derivative_records");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("DerivedObjectId");
+
+                    b.HasIndex("RevisionId")
+                        .HasDatabaseName("ix_word_derivative_records_revision_id");
+
+                    b.HasIndex("SourceObjectId");
+
+                    b.HasIndex("RevisionFileId", "CreatedAt")
+                        .HasDatabaseName("ix_word_derivative_records_revision_file_id_created_at");
+
+                    b.ToTable("word_derivative_records", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_word_derivative_records_fields_non_negative", "fields_updated_count >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ApiGovernance.Shared.Persistence.Entities.WorkflowDecisionEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2383,6 +2473,43 @@ namespace ApiGovernance.Shared.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_user_roles_users_user_id");
+                });
+
+            modelBuilder.Entity("ApiGovernance.Shared.Persistence.Entities.WordDerivativeRecordEntity", b =>
+                {
+                    b.HasOne("ApiGovernance.Shared.Persistence.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_word_derivative_records_users_created_by");
+
+                    b.HasOne("ApiGovernance.Shared.Persistence.Entities.FileObjectEntity", null)
+                        .WithMany()
+                        .HasForeignKey("DerivedObjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_word_derivative_records_file_objects_derived_object_id");
+
+                    b.HasOne("ApiGovernance.Shared.Persistence.Entities.RevisionFileEntity", null)
+                        .WithMany()
+                        .HasForeignKey("RevisionFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_word_derivative_records_revision_files_revision_file_id");
+
+                    b.HasOne("ApiGovernance.Shared.Persistence.Entities.DocumentRevisionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("RevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_word_derivative_records_document_revisions_revision_id");
+
+                    b.HasOne("ApiGovernance.Shared.Persistence.Entities.FileObjectEntity", null)
+                        .WithMany()
+                        .HasForeignKey("SourceObjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_word_derivative_records_file_objects_source_object_id");
                 });
 
             modelBuilder.Entity("ApiGovernance.Shared.Persistence.Entities.WorkflowDecisionEntity", b =>

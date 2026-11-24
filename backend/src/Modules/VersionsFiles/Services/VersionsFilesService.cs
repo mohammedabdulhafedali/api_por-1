@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using System.Text.Json;
 using ApiGovernance.Modules.VersionsFiles.Configuration;
 using ApiGovernance.Modules.VersionsFiles.Contracts;
+using ApiGovernance.Modules.VersionsFiles.OpenXml;
 using ApiGovernance.Modules.VersionsFiles.Scanning;
 using ApiGovernance.Modules.VersionsFiles.Storage;
 using ApiGovernance.Modules.VersionsFiles.Validation;
@@ -11,6 +13,7 @@ using ApiGovernance.Shared.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace ApiGovernance.Modules.VersionsFiles.Services;
 
@@ -37,9 +40,28 @@ public interface IVersionsFilesService
         string traceId,
         CancellationToken cancellationToken = default);
 
-    Task<DocumentRevisionDto> CreateInitialDraftRevisionAsync(
+    Task<IReadOnlyList<DocumentRevisionDto>> GetVersionRevisionsAsync(
         ClaimsPrincipal actorPrincipal,
         Guid versionId,
+        string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task<DocumentRevisionDto> CreateRevisionAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid versionId,
+        CreateDocumentRevisionRequest? request,
+        string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task<RevisionDetailsResponse> GetRevisionDetailsAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task<SubmitRevisionResponse> SubmitRevisionAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
         string traceId,
         CancellationToken cancellationToken = default);
 
@@ -81,14 +103,38 @@ public interface IVersionsFilesService
         Guid revisionId,
         Guid revisionFileId,
         CancellationToken cancellationToken = default);
+
+    Task<WordDerivativeRecordDto> GenerateWordDerivativeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        Guid revisionFileId,
+        string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task<WordDerivativeRecordDto?> GetLatestWordDerivativeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        Guid revisionFileId,
+        string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task<(Stream ContentStream, string FileName, string ContentType, long SizeBytes, string Sha256)> DownloadVerifiedWordDerivativeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        Guid revisionFileId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Implements Sprint S08 Tasks V01, V02, V03, and V04:
+/// Implements Sprint S08 (V01–V04) and Sprint S09 (V05–V08):
 /// - V01: Private non-web immutable object storage with SHA-256 verification.
 /// - V02: Strict extension, quota, magic-byte, and archive safety checks + quarantine isolation.
 /// - V03: Fail-closed AV scanning (PENDING_SCAN when engine absent; INFECTED rejected/quarantined).
 /// - V04: Manual free-text API version labels cleanly decoupled from document revisions.
+/// - V05: Documentation package revisions, mandatory file completeness validation, and guarded submission.
+/// - V06: Protection of approved/submitted revisions, working copy creation from approved base + change request, OP-05 concurrency.
+/// - V07: Server-authorized, SHA-256 verified, fully audited file downloads.
+/// - V08: Open XML SDK PoC for updating recognized Word governance fields into a verified derived copy without altering the original (OP-03).
 /// </summary>
 public sealed class VersionsFilesService(
     ApiGovernanceDbContext dbContext,
@@ -97,8 +143,10 @@ public sealed class VersionsFilesService(
     IPrivateFileStore privateFileStore,
     IFileSecurityScanner fileScanner,
     FileUploadContentValidator contentValidator,
+    IWordGovernanceDerivativeService wordDerivativeService,
     IOptions<FileStorageOptions> storageOptions) : IVersionsFilesService
 {
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
     private readonly FileStorageOptions _storageOptions = storageOptions.Value;
 
     public async Task<IntegrationVersionsResponse> GetIntegrationVersionsAsync(
@@ -236,6 +284,7 @@ public sealed class VersionsFilesService(
         IReadOnlyList<DocumentRevisionDto> revisions = [];
         DocumentRevisionDto? selectedRevision = null;
         IReadOnlyList<RevisionFileDto> files = [];
+        IReadOnlyList<WordDerivativeRecordDto> wordDerivatives = [];
 
         if (revisionId.HasValue)
         {
@@ -251,7 +300,7 @@ public sealed class VersionsFilesService(
 
         if (effectiveVersionId.HasValue && versions.Any(v => v.Id == effectiveVersionId.Value))
         {
-            revisions = await LoadRevisionDtosAsync(effectiveVersionId.Value, access.Document.RequirementTemplateId, traceId, cancellationToken);
+            revisions = await LoadRevisionDtosAsync(effectiveVersionId.Value, traceId, cancellationToken);
             selectedRevision = revisionId.HasValue
                 ? revisions.FirstOrDefault(r => r.Id == revisionId.Value) ?? revisions.FirstOrDefault()
                 : revisions.FirstOrDefault();
@@ -259,26 +308,31 @@ public sealed class VersionsFilesService(
             if (selectedRevision is not null)
             {
                 files = await LoadRevisionFileDtosAsync(selectedRevision.Id, traceId, cancellationToken);
+                wordDerivatives = await LoadWordDerivativeDtosForRevisionAsync(selectedRevision.Id, traceId, cancellationToken);
             }
         }
+
+        var approvedChangeRequests = await LoadApprovedChangeRequestsAsync(integration.Id, cancellationToken);
 
         var hasFilesUpload = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "files.upload", cancellationToken);
         var hasFilesDelete = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "files.delete", cancellationToken);
         var hasFilesDownload = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "files.download", cancellationToken);
         var hasRevisionsCreate = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.create", cancellationToken);
+        var hasRevisionsSubmit = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.submit", cancellationToken);
 
         var hasDocFilesManage = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.FilesManage, out var fm) && fm.Allowed;
         var hasDocEdit = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Edit, out var de) && de.Allowed;
         var scannerInfo = fileScanner.GetRuntimeInfo();
+        var notArchived = !string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase);
 
         return new IntegrationFilesWorkspaceResponse(
             integration.Id,
             integration.DocumentId,
             integration.ReferenceCode,
             derivedTitle,
-            CanCreateDraftRevision: hasRevisionsCreate && hasDocEdit && isAssignedDev && access.Document.State != "ARCHIVED",
-            CanUploadFiles: hasFilesUpload && hasDocFilesManage && isAssignedDev && access.Document.State != "ARCHIVED",
-            CanDeleteFiles: hasFilesDelete && hasDocFilesManage && isAssignedDev && access.Document.State != "ARCHIVED",
+            CanCreateDraftRevision: hasRevisionsCreate && hasDocEdit && isAssignedDev && notArchived,
+            CanUploadFiles: hasFilesUpload && hasDocFilesManage && isAssignedDev && notArchived,
+            CanDeleteFiles: hasFilesDelete && hasDocFilesManage && isAssignedDev && notArchived,
             CanDownloadFiles: hasFilesDownload,
             IsCurrentUserAssignedDeveloper: isAssignedDev,
             ScannerConfigured: scannerInfo.IsConfigured,
@@ -289,12 +343,43 @@ public sealed class VersionsFilesService(
             Revisions: revisions,
             SelectedRevision: selectedRevision,
             Files: files,
-            TraceId: traceId);
+            TraceId: traceId,
+            CanSubmitRevision: hasRevisionsSubmit && hasDocEdit && isAssignedDev && notArchived,
+            CanCreateWorkingCopy: hasRevisionsCreate && hasDocEdit && isAssignedDev && notArchived,
+            ApprovedChangeRequests: approvedChangeRequests,
+            WordDerivatives: wordDerivatives);
     }
 
-    public async Task<DocumentRevisionDto> CreateInitialDraftRevisionAsync(
+    public async Task<IReadOnlyList<DocumentRevisionDto>> GetVersionRevisionsAsync(
         ClaimsPrincipal actorPrincipal,
         Guid versionId,
+        string traceId,
+        CancellationToken cancellationToken = default)
+    {
+        var version = await dbContext.ApiVersions.AsNoTracking()
+            .FirstOrDefaultAsync(v => v.Id == versionId, cancellationToken);
+
+        if (version is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "إصدار API المطلوب غير موجود أو غير متاح.",
+                messageEn: "API version was not found or access is restricted.");
+        }
+
+        await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
+            actorPrincipal,
+            version.IntegrationId,
+            DocumentPermissionCatalog.View,
+            "REVISION_LIST_DENIED",
+            cancellationToken);
+
+        return await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
+    }
+
+    public async Task<DocumentRevisionDto> CreateRevisionAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid versionId,
+        CreateDocumentRevisionRequest? request,
         string traceId,
         CancellationToken cancellationToken = default)
     {
@@ -328,13 +413,96 @@ public sealed class VersionsFilesService(
                 messageEn: "Cannot create a documentation revision for an archived API document.");
         }
 
+        var isWorkingCopyMode = request is not null && (request.BaseRevisionId.HasValue || request.ChangeRequestId.HasValue);
+
+        if (!isWorkingCopyMode)
+        {
+            // Mode A: Initial Draft — blocked if an APPROVED revision already exists (V06 / AC-07)
+            var hasApproved = await dbContext.DocumentRevisions.AsNoTracking()
+                .AnyAsync(r => r.ApiVersionId == version.Id && r.Status == RevisionStatusValues.Approved, cancellationToken);
+
+            if (hasApproved)
+            {
+                await serverAuthorization.WriteAuditEventAsync(
+                    access.Actor.Id,
+                    "REVISION_CREATE_BLOCKED_NEEDS_CHANGE_REQUEST",
+                    "API_VERSION",
+                    version.Id,
+                    "DENIED",
+                    new { integrationId = integration.Id, versionId = version.Id },
+                    cancellationToken);
+
+                throw ApiContractException.UnprocessableEntity(
+                    messageAr: "توجد مراجعة معتمدة لهذا الإصدار؛ لا يمكن إنشاء نسخة عمل جديدة إلا بناءً على طلب تغيير معتمد (V06).",
+                    messageEn: "An approved revision already exists for this API version; creating a new working copy requires an approved change request (V06).");
+            }
+        }
+        else
+        {
+            // Mode B: Working Copy from Approved Base Revision + Approved Change Request (V06 / OP-05)
+            if (!request!.BaseRevisionId.HasValue || !request.ChangeRequestId.HasValue)
+            {
+                throw ApiContractException.BadRequest(
+                    messageAr: "لإنشاء نسخة عمل من مراجعة معتمدة يلزم تحديد كلٍّ من معرف المراجعة المرجعية (BaseRevisionId) ومعرف طلب التغيير المعتمد (ChangeRequestId).",
+                    messageEn: "Creating a working copy requires both BaseRevisionId and ChangeRequestId.");
+            }
+        }
+
         var hasActiveDraft = await dbContext.DocumentRevisions.AsNoTracking()
-            .AnyAsync(r => r.ApiVersionId == version.Id && r.Status == "DRAFT", cancellationToken);
+            .AnyAsync(r => r.ApiVersionId == version.Id && r.Status == RevisionStatusValues.Draft, cancellationToken);
         if (hasActiveDraft)
         {
             throw ApiContractException.Conflict(
-                messageAr: "توجد مسودة مراجعة نشطة بالفعل لهذا الإصدار؛ استخدمها لرفع الملفات.",
-                messageEn: "An active DRAFT documentation revision already exists for this API version.");
+                messageAr: "توجد مسودة مراجعة نشطة بالفعل لهذا الإصدار؛ لا يُسمح بأكثر من نسخة عمل نشطة في وقت واحد (OP-05).",
+                messageEn: "An active DRAFT working copy already exists for this API version (OP-05 single active working copy rule).");
+        }
+
+        DocumentRevisionEntity? baseRevision = null;
+        ChangeRequestEntity? changeRequest = null;
+
+        if (isWorkingCopyMode)
+        {
+            baseRevision = await dbContext.DocumentRevisions.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == request!.BaseRevisionId!.Value && r.ApiVersionId == version.Id, cancellationToken);
+
+            if (baseRevision is null)
+            {
+                throw ApiContractException.NotFound(
+                    messageAr: "المراجعة الأساسية المطلوبة غير موجودة ضمن هذا الإصدار.",
+                    messageEn: "Specified base revision was not found in this API version.");
+            }
+
+            if (!string.Equals(baseRevision.Status, RevisionStatusValues.Approved, StringComparison.OrdinalIgnoreCase))
+            {
+                throw ApiContractException.UnprocessableEntity(
+                    messageAr: $"لا يمكن إنشاء نسخة عمل إلا انطلاقًا من مراجعة معتمدة (APPROVED)، الحالة الحالية: {baseRevision.Status}.",
+                    messageEn: $"Working copies can only branch from an APPROVED revision (current status: {baseRevision.Status}).");
+            }
+
+            var changeRequestId = request!.ChangeRequestId!.Value;
+            changeRequest = await dbContext.ChangeRequests.AsNoTracking()
+                .FirstOrDefaultAsync(cr => cr.Id == changeRequestId && cr.IntegrationId == integration.Id, cancellationToken);
+
+            if (changeRequest is null)
+            {
+                throw ApiContractException.NotFound(
+                    messageAr: "طلب التغيير المحدد غير موجود لهذا التكامل.",
+                    messageEn: "Specified change request was not found for this integration.");
+            }
+
+            if (changeRequest.SourceRevisionId != baseRevision.Id)
+            {
+                throw ApiContractException.UnprocessableEntity(
+                    messageAr: "طلب التغيير المحدد لا يرتبط بالمراجعة المرجعية المختارة.",
+                    messageEn: "The specified change request does not target the selected base revision.");
+            }
+
+            if (!string.Equals(changeRequest.Status, "APPROVED", StringComparison.OrdinalIgnoreCase))
+            {
+                throw ApiContractException.UnprocessableEntity(
+                    messageAr: $"لا يمكن فتح نسخة عمل قبل اعتماد طلب التغيير؛ الحالة الحالية للطلب: {changeRequest.Status}.",
+                    messageEn: $"Change request must be APPROVED before creating a working copy (current status: {changeRequest.Status}).");
+            }
         }
 
         var maxNum = await dbContext.DocumentRevisions.AsNoTracking()
@@ -342,54 +510,282 @@ public sealed class VersionsFilesService(
             .Select(r => (int?)r.RevisionNumber)
             .MaxAsync(cancellationToken) ?? 0;
 
+        var now = DateTimeOffset.UtcNow;
         var revision = new DocumentRevisionEntity
         {
             Id = Guid.NewGuid(),
             ApiVersionId = version.Id,
             RevisionNumber = maxNum + 1,
-            BaseRevisionId = null,
-            ChangeRequestId = null,
-            Status = "DRAFT",
+            BaseRevisionId = baseRevision?.Id,
+            ChangeRequestId = changeRequest?.Id,
+            Status = RevisionStatusValues.Draft,
             CreatedBy = access.Actor.Id,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = now,
             ApprovedAt = null
         };
 
-        // Snapshot current requirement template rules into revision_file_requirements
-        var templateRules = await dbContext.FileRequirementRules.AsNoTracking()
-            .Where(r => r.TemplateId == access.Document.RequirementTemplateId)
-            .ToListAsync(cancellationToken);
+        List<RevisionFileRequirementEntity> targetRequirements;
+        List<RevisionFileEntity> carriedFiles = [];
 
-        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        dbContext.DocumentRevisions.Add(revision);
-
-        foreach (var rule in templateRules)
+        if (baseRevision is not null)
         {
-            dbContext.RevisionFileRequirements.Add(new RevisionFileRequirementEntity
+            var baseReqs = await dbContext.RevisionFileRequirements.AsNoTracking()
+                .Where(rr => rr.RevisionId == baseRevision.Id)
+                .ToListAsync(cancellationToken);
+
+            if (baseReqs.Count > 0)
+            {
+                targetRequirements = baseReqs.Select(rr => new RevisionFileRequirementEntity
+                {
+                    Id = Guid.NewGuid(),
+                    RevisionId = revision.Id,
+                    FileTypeId = rr.FileTypeId,
+                    RequirementMode = rr.RequirementMode,
+                    MinCount = rr.MinCount,
+                    MaxCount = rr.MaxCount
+                }).ToList();
+            }
+            else
+            {
+                targetRequirements = await BuildRequirementSnapshotFromTemplateAsync(
+                    revision.Id, access.Document.RequirementTemplateId, cancellationToken);
+            }
+
+            var baseFiles = await dbContext.RevisionFiles.AsNoTracking()
+                .Where(rf => rf.RevisionId == baseRevision.Id)
+                .ToListAsync(cancellationToken);
+
+            carriedFiles = baseFiles.Select(bf => new RevisionFileEntity
             {
                 Id = Guid.NewGuid(),
                 RevisionId = revision.Id,
-                FileTypeId = rule.FileTypeId,
-                RequirementMode = rule.RequirementMode,
-                MinCount = rule.MinCount,
-                MaxCount = rule.MaxCount
-            });
+                FileTypeId = bf.FileTypeId,
+                ObjectId = bf.ObjectId,
+                OriginalName = bf.OriginalName,
+                SourceRevisionFileId = bf.Id,
+                UploadedBy = access.Actor.Id,
+                UploadedAt = now
+            }).ToList();
+        }
+        else
+        {
+            targetRequirements = await BuildRequirementSnapshotFromTemplateAsync(
+                revision.Id, access.Document.RequirementTemplateId, cancellationToken);
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        try
+        {
+            await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            dbContext.DocumentRevisions.Add(revision);
+            dbContext.RevisionFileRequirements.AddRange(targetRequirements);
+            if (carriedFiles.Count > 0)
+            {
+                dbContext.RevisionFiles.AddRange(carriedFiles);
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException dbEx) when (dbEx.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            dbContext.ChangeTracker.Clear();
+
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "REVISION_WORKING_COPY_CONFLICT",
+                "API_VERSION",
+                version.Id,
+                "CONFLICT",
+                new { integrationId = integration.Id, versionId = version.Id, request?.BaseRevisionId, request?.ChangeRequestId },
+                cancellationToken);
+
+            throw ApiContractException.Conflict(
+                messageAr: "تم رصد تعارض تزامن: توجد نسخة عمل نشطة بالفعل لهذا الإصدار أو طلب التغيير (OP-05).",
+                messageEn: "Concurrency conflict: an active working copy already exists for this API version, base revision, or change request (OP-05).");
+        }
 
         await serverAuthorization.WriteAuditEventAsync(
             access.Actor.Id,
-            "DOCUMENT_REVISION_CREATED",
+            isWorkingCopyMode ? "DOCUMENT_WORKING_COPY_CREATED" : "DOCUMENT_REVISION_CREATED",
             "DOCUMENT_REVISION",
             revision.Id,
             "SUCCESS",
-            new { integrationId = integration.Id, apiVersionId = version.Id, version.VersionLabel, revision.RevisionNumber },
+            new
+            {
+                integrationId = integration.Id,
+                apiVersionId = version.Id,
+                version.VersionLabel,
+                revision.RevisionNumber,
+                revision.BaseRevisionId,
+                revision.ChangeRequestId,
+                carriedForwardFilesCount = carriedFiles.Count
+            },
             cancellationToken);
 
-        var dtos = await LoadRevisionDtosAsync(version.Id, access.Document.RequirementTemplateId, traceId, cancellationToken);
+        var dtos = await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
         return dtos.First(d => d.Id == revision.Id);
+    }
+
+    public async Task<RevisionDetailsResponse> GetRevisionDetailsAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        string traceId,
+        CancellationToken cancellationToken = default)
+    {
+        var (access, integration, version, _) = await ResolveAuthorizedRevisionAsync(
+            actorPrincipal,
+            revisionId,
+            DocumentPermissionCatalog.View,
+            "REVISION_DETAILS_DENIED",
+            requireAssignedDeveloper: false,
+            cancellationToken: cancellationToken);
+
+        var (derivedTitle, _, _, _) = await LoadDocumentPartyLabelsAsync(access.Document, cancellationToken);
+        var dtos = await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
+        var revDto = dtos.First(r => r.Id == revisionId);
+        var files = await LoadRevisionFileDtosAsync(revisionId, traceId, cancellationToken);
+        var wordDerivatives = await LoadWordDerivativeDtosForRevisionAsync(revisionId, traceId, cancellationToken);
+
+        var isAssignedDev = await documentAuthorization.IsUserAssignedDeveloperAsync(
+            access.Actor.Id, integration.DocumentId, integration.Id, cancellationToken);
+        var notArchived = !string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase);
+
+        var hasFilesUpload = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "files.upload", cancellationToken);
+        var hasFilesDelete = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "files.delete", cancellationToken);
+        var hasFilesDownload = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "files.download", cancellationToken);
+        var hasRevisionsCreate = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.create", cancellationToken);
+        var hasRevisionsSubmit = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.submit", cancellationToken);
+
+        var hasDocFilesManage = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.FilesManage, out var fm) && fm.Allowed;
+        var hasDocEdit = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Edit, out var de) && de.Allowed;
+
+        return new RevisionDetailsResponse(
+            Revision: revDto,
+            IntegrationId: integration.Id,
+            DocumentId: integration.DocumentId,
+            ReferenceCode: integration.ReferenceCode,
+            DerivedTitle: derivedTitle,
+            CanSubmit: hasRevisionsSubmit && hasDocEdit && isAssignedDev && notArchived && !revDto.IsProtected,
+            CanCreateWorkingCopy: hasRevisionsCreate && hasDocEdit && isAssignedDev && notArchived,
+            CanUploadFiles: hasFilesUpload && hasDocFilesManage && isAssignedDev && notArchived && !revDto.IsProtected,
+            CanDeleteFiles: hasFilesDelete && hasDocFilesManage && isAssignedDev && notArchived && !revDto.IsProtected,
+            CanDownloadFiles: hasFilesDownload,
+            Files: files,
+            WordDerivatives: wordDerivatives,
+            TraceId: traceId);
+    }
+
+    public async Task<SubmitRevisionResponse> SubmitRevisionAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        string traceId,
+        CancellationToken cancellationToken = default)
+    {
+        var (access, integration, version, revision) = await ResolveAuthorizedRevisionAsync(
+            actorPrincipal,
+            revisionId,
+            DocumentPermissionCatalog.Edit,
+            "REVISION_SUBMIT_DENIED",
+            requireAssignedDeveloper: true,
+            cancellationToken: cancellationToken);
+
+        if (string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن تقديم مراجعة لوثيقة مؤرشفة.",
+                messageEn: "Cannot submit a documentation revision for an archived API document.");
+        }
+
+        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
+        {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "REVISION_IMMUTABILITY_VIOLATION",
+                "DOCUMENT_REVISION",
+                revision.Id,
+                "DENIED",
+                new { integrationId = integration.Id, revisionId = revision.Id, currentStatus = revision.Status, attemptedAction = "SUBMIT" },
+                cancellationToken);
+
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: $"لا يمكن تقديم هذه المراجعة لأنها محمية في حالة ({revision.Status}) وليست مسودة (DRAFT).",
+                messageEn: $"Cannot submit revision because it is protected in '{revision.Status}' status and not a DRAFT.");
+        }
+
+        var precheckDtos = await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
+        var revDto = precheckDtos.First(r => r.Id == revision.Id);
+
+        if (!revDto.IsReadyForSubmission)
+        {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "REVISION_SUBMIT_BLOCKED",
+                "DOCUMENT_REVISION",
+                revision.Id,
+                "DENIED",
+                new
+                {
+                    integrationId = integration.Id,
+                    revisionId = revision.Id,
+                    revDto.MissingRequiredTypesCount,
+                    revDto.PendingScanCount,
+                    revDto.SubmissionBlockersEn
+                },
+                cancellationToken);
+
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: string.Join(" ", revDto.SubmissionBlockersAr),
+                messageEn: string.Join(" ", revDto.SubmissionBlockersEn),
+                details: new
+                {
+                    missingRequiredTypesCount = revDto.MissingRequiredTypesCount,
+                    pendingScanCount = revDto.PendingScanCount,
+                    blockersAr = revDto.SubmissionBlockersAr,
+                    blockersEn = revDto.SubmissionBlockersEn
+                });
+        }
+
+        var updatedRows = await dbContext.DocumentRevisions
+            .Where(r => r.Id == revision.Id && r.Status == RevisionStatusValues.Draft)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RevisionStatusValues.Submitted), cancellationToken);
+
+        if (updatedRows == 0)
+        {
+            throw ApiContractException.Conflict(
+                messageAr: "تم تعديل حالة هذه المراجعة بالتزامن من طلب آخر؛ يرجى التحديث وإعادة التحقق.",
+                messageEn: "Revision status was modified concurrently by another request.");
+        }
+
+        dbContext.ReleaseHistoryEvents.Add(new ReleaseHistoryEventEntity
+        {
+            Id = Guid.NewGuid(),
+            RevisionId = revision.Id,
+            EventType = "REVISION_SUBMITTED",
+            ActorUserId = access.Actor.Id,
+            ChangeRequestId = revision.ChangeRequestId,
+            RecordedAt = DateTimeOffset.UtcNow
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            access.Actor.Id,
+            "REVISION_SUBMITTED",
+            "DOCUMENT_REVISION",
+            revision.Id,
+            "SUCCESS",
+            new
+            {
+                integrationId = integration.Id,
+                apiVersionId = version.Id,
+                version.VersionLabel,
+                revision.RevisionNumber,
+                cleanFilesCount = revDto.FilesCount
+            },
+            cancellationToken);
+
+        var updatedDtos = await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
+        var updatedDto = updatedDtos.First(r => r.Id == revision.Id);
+        return new SubmitRevisionResponse(updatedDto, revDto.FilesCount, traceId);
     }
 
     public async Task<IReadOnlyList<RevisionFileDto>> GetRevisionFilesAsync(
@@ -425,11 +821,20 @@ public sealed class VersionsFilesService(
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(revision.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
         {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "REVISION_IMMUTABILITY_VIOLATION",
+                "DOCUMENT_REVISION",
+                revision.Id,
+                "DENIED",
+                new { integrationId = integration.Id, revisionId = revision.Id, currentStatus = revision.Status, attemptedAction = "UPLOAD_FILE" },
+                cancellationToken);
+
             throw ApiContractException.UnprocessableEntity(
-                messageAr: "لا يمكن رفع ملفات لمراجعة غير موجودة في حالة مسودة (DRAFT).",
-                messageEn: "Files can only be uploaded to a documentation revision in DRAFT status.");
+                messageAr: $"ممنوع (V06): هذه المراجعة محمية في حالة ({revision.Status}) ولا يمكن رفع ملفات إليها دون طلب تغيير معتمد ونسخة عمل جديدة.",
+                messageEn: $"Protected (V06): files cannot be uploaded to a revision in '{revision.Status}' status; create an approved working copy instead.");
         }
 
         if (string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase))
@@ -438,6 +843,10 @@ public sealed class VersionsFilesService(
                 messageAr: "لا يمكن رفع ملفات لوثيقة مؤرشفة.",
                 messageEn: "Cannot upload files to an archived API document.");
         }
+
+        // V06 / PRD-04: If this draft is a Change Request working copy, enforce change-request file scope
+        await EnforceChangeRequestFileTypeScopeAsync(
+            access.Actor.Id, integration.Id, revision, fileTypeId, "UPLOAD_FILE", cancellationToken);
 
         var fileType = await dbContext.FileTypes.AsNoTracking()
             .FirstOrDefaultAsync(ft => ft.Id == fileTypeId && ft.IsActive, cancellationToken);
@@ -448,7 +857,6 @@ public sealed class VersionsFilesService(
                 messageEn: "The selected file type does not exist or is inactive.");
         }
 
-        // Verify FileTypeId belongs to the revision requirement snapshot (or template fallback if legacy)
         var reqRule = await dbContext.RevisionFileRequirements.AsNoTracking()
             .FirstOrDefaultAsync(r => r.RevisionId == revision.Id && r.FileTypeId == fileTypeId, cancellationToken);
 
@@ -740,8 +1148,17 @@ public sealed class VersionsFilesService(
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(revision.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
         {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "REVISION_IMMUTABILITY_VIOLATION",
+                "DOCUMENT_REVISION",
+                revision.Id,
+                "DENIED",
+                new { integrationId = integration.Id, revisionId = revision.Id, currentStatus = revision.Status, attemptedAction = "RESCAN_FILE" },
+                cancellationToken);
+
             throw ApiContractException.UnprocessableEntity(
                 messageAr: "إعادة الفحص متاحة فقط للملفات داخل مراجعة مسودة (DRAFT).",
                 messageEn: "Re-scanning is only allowed on files inside a DRAFT revision.");
@@ -858,11 +1275,20 @@ public sealed class VersionsFilesService(
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(revision.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
         {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "REVISION_IMMUTABILITY_VIOLATION",
+                "DOCUMENT_REVISION",
+                revision.Id,
+                "DENIED",
+                new { integrationId = integration.Id, revisionId = revision.Id, currentStatus = revision.Status, attemptedAction = "DELETE_FILE", revisionFileId },
+                cancellationToken);
+
             throw ApiContractException.UnprocessableEntity(
-                messageAr: "يُمنع حذف ملفات من مراجعة معتمدة أو مغلقة.",
-                messageEn: "Cannot remove files from a non-draft documentation revision.");
+                messageAr: $"ممنوع (V06): يُمنع حذف ملفات من مراجعة محمية في حالة ({revision.Status}).",
+                messageEn: $"Protected (V06): cannot remove files from a revision in '{revision.Status}' status.");
         }
 
         var revFile = await dbContext.RevisionFiles
@@ -873,6 +1299,9 @@ public sealed class VersionsFilesService(
                 messageAr: "ملف المراجعة المطلوب غير موجود.",
                 messageEn: "Revision file was not found.");
         }
+
+        await EnforceChangeRequestFileScopeOnDeleteAsync(
+            access.Actor.Id, integration.Id, revision, revFile, cancellationToken);
 
         dbContext.RevisionFiles.Remove(revFile);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -988,10 +1417,27 @@ public sealed class VersionsFilesService(
                 details: new { scanStatus = fileObject.ScanStatus, sha256 = fileObject.Sha256 });
         }
 
-        var (stream, sizeBytes) = await privateFileStore.OpenVerifiedImmutableObjectReadStreamAsync(
-            fileObject.StorageKey,
-            fileObject.Sha256,
-            cancellationToken);
+        Stream stream;
+        long sizeBytes;
+        try
+        {
+            (stream, sizeBytes) = await privateFileStore.OpenVerifiedImmutableObjectReadStreamAsync(
+                fileObject.StorageKey,
+                fileObject.Sha256,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is ApiContractException or InvalidOperationException)
+        {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "FILE_DOWNLOAD_INTEGRITY_FAILED",
+                "REVISION_FILE",
+                revFile.Id,
+                "DENIED",
+                new { integrationId = integration.Id, revisionId, objectId = fileObject.Id, expectedSha256 = fileObject.Sha256, reason = ex.Message },
+                cancellationToken);
+            throw;
+        }
 
         await serverAuthorization.WriteAuditEventAsync(
             access.Actor.Id,
@@ -999,10 +1445,441 @@ public sealed class VersionsFilesService(
             "REVISION_FILE",
             revFile.Id,
             "SUCCESS",
-            new { integrationId = integration.Id, revisionId, objectId = fileObject.Id, revFile.OriginalName, fileObject.Sha256 },
+            new { integrationId = integration.Id, revisionId, objectId = fileObject.Id, revFile.OriginalName, fileObject.Sha256, sizeBytes },
             cancellationToken);
 
         return (stream, revFile.OriginalName, fileObject.MediaType ?? "application/octet-stream", sizeBytes, fileObject.Sha256);
+    }
+
+    public async Task<WordDerivativeRecordDto> GenerateWordDerivativeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        Guid revisionFileId,
+        string traceId,
+        CancellationToken cancellationToken = default)
+    {
+        var (access, integration, version, revision) = await ResolveAuthorizedRevisionAsync(
+            actorPrincipal,
+            revisionId,
+            DocumentPermissionCatalog.FilesManage,
+            "WORD_DERIVATIVE_GENERATE_DENIED",
+            requireAssignedDeveloper: true,
+            cancellationToken: cancellationToken);
+
+        if (string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن توليد مشتق Word لوثيقة مؤرشفة.",
+                messageEn: "Cannot generate Word derivatives for an archived API document.");
+        }
+
+        var revFile = await dbContext.RevisionFiles.AsNoTracking()
+            .FirstOrDefaultAsync(rf => rf.Id == revisionFileId && rf.RevisionId == revision.Id, cancellationToken);
+        if (revFile is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "ملف المراجعة المطلوب غير موجود.",
+                messageEn: "Revision file was not found.");
+        }
+
+        if (!revFile.OriginalName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "إثبات جدوى تحديث الحقول ينطبق فقط على ملفات Word بصيغة (.docx).",
+                messageEn: "Word governance derivative generation applies only to .docx files.");
+        }
+
+        var sourceObject = await dbContext.FileObjects.AsNoTracking()
+            .FirstOrDefaultAsync(fo => fo.Id == revFile.ObjectId, cancellationToken);
+        if (sourceObject is null || !string.Equals(sourceObject.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase))
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "يجب أن يكون ملف Word الأصلي سليمًا (CLEAN) ومتاحًا في المخزن الدائم قبل توليد النسخة المشتقة.",
+                messageEn: "Original .docx file must be CLEAN in immutable storage before generating a derived copy.");
+        }
+
+        var (derivedTitle, providerName, consumerName, apiGroupName) =
+            await LoadDocumentPartyLabelsAsync(access.Document, cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var metadata = new WordGovernanceMetadataContext(
+            DocumentTitle: derivedTitle,
+            IntegrationCode: integration.ReferenceCode,
+            ApiGroupName: apiGroupName,
+            ProviderName: providerName,
+            ConsumerName: consumerName,
+            VersionLabel: version.VersionLabel,
+            RevisionNumber: revision.RevisionNumber,
+            RevisionStatus: revision.Status,
+            SourceSha256: sourceObject.Sha256,
+            GeneratedAtUtc: now);
+
+        var stagedDerivedPath = privateFileStore.CreateStagingFilePath(".docx");
+        WordDerivativeGenerationOutcome outcome;
+        try
+        {
+            await using var sourceStream = (await privateFileStore.OpenVerifiedImmutableObjectReadStreamAsync(
+                sourceObject.StorageKey, sourceObject.Sha256, cancellationToken)).Stream;
+
+            outcome = await wordDerivativeService.TryGenerateDerivedCopyAsync(
+                sourceStream, stagedDerivedPath, metadata, cancellationToken);
+        }
+        catch
+        {
+            await privateFileStore.DeleteFileIfExistsAsync(stagedDerivedPath, CancellationToken.None);
+            throw;
+        }
+
+        var recordId = Guid.NewGuid();
+        Guid? derivedObjectId = null;
+        string finalStatus;
+        bool isPublishable = false;
+        string? errorMsg = outcome.ErrorMessage;
+        var validationErrors = outcome.ValidationErrors.ToList();
+
+        if (!outcome.PackageValid)
+        {
+            await privateFileStore.DeleteFileIfExistsAsync(stagedDerivedPath, CancellationToken.None);
+            finalStatus = WordDerivativeStatusValues.Failed;
+        }
+        else if (outcome.MatchedFields.Count == 0)
+        {
+            await privateFileStore.DeleteFileIfExistsAsync(stagedDerivedPath, CancellationToken.None);
+            finalStatus = WordDerivativeStatusValues.NoRecognizedFields;
+            errorMsg = "لم يتم العثور على حقول أو علامات حوكمة معرّفة بثقة داخل ملف Word (المحتوى الأصلي محفوظ دون تغيير).";
+        }
+        else
+        {
+            // Verify derived .docx through V02 content validator & V03 fail-closed AV scanner before allowing publishing (OP-03)
+            var contentCheck = await contentValidator.ValidateStagedContentAsync(
+                stagedDerivedPath,
+                $"derived-{revFile.OriginalName}",
+                ".docx",
+                "WORD_DOC",
+                cancellationToken);
+
+            if (!contentCheck.IsValid)
+            {
+                await privateFileStore.DeleteFileIfExistsAsync(stagedDerivedPath, CancellationToken.None);
+                finalStatus = WordDerivativeStatusValues.Failed;
+                validationErrors.Add(contentCheck.MessageEn ?? "Derived .docx failed content safety validation.");
+                errorMsg = contentCheck.MessageAr;
+            }
+            else
+            {
+                var derivedSha = await privateFileStore.ComputeFileSha256Async(stagedDerivedPath, cancellationToken);
+                var derivedSize = new FileInfo(stagedDerivedPath).Length;
+                var scanVerdict = await fileScanner.ScanStagedFileAsync(
+                    stagedDerivedPath, $"derived-{revFile.OriginalName}", cancellationToken);
+
+                var newObjId = Guid.NewGuid();
+                if (string.Equals(scanVerdict.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase))
+                {
+                    var key = await privateFileStore.CommitImmutableObjectAsync(
+                        stagedDerivedPath, newObjId, derivedSha, cancellationToken);
+
+                    dbContext.FileObjects.Add(new FileObjectEntity
+                    {
+                        Id = newObjId,
+                        StorageKey = key,
+                        Sha256 = derivedSha,
+                        SizeBytes = derivedSize,
+                        MediaType = contentCheck.CanonicalMediaType,
+                        ScanStatus = FileScanStatusValues.Clean,
+                        CreatedAt = now
+                    });
+                    derivedObjectId = newObjId;
+                    finalStatus = WordDerivativeStatusValues.Verified;
+                    isPublishable = true;
+                }
+                else if (string.Equals(scanVerdict.ScanStatus, FileScanStatusValues.PendingScan, StringComparison.OrdinalIgnoreCase))
+                {
+                    var qKey = await privateFileStore.MoveToQuarantineAsync(stagedDerivedPath, newObjId, cancellationToken);
+                    dbContext.FileObjects.Add(new FileObjectEntity
+                    {
+                        Id = newObjId,
+                        StorageKey = qKey,
+                        Sha256 = derivedSha,
+                        SizeBytes = derivedSize,
+                        MediaType = contentCheck.CanonicalMediaType,
+                        ScanStatus = FileScanStatusValues.PendingScan,
+                        CreatedAt = now
+                    });
+                    derivedObjectId = newObjId;
+                    finalStatus = WordDerivativeStatusValues.PendingScan;
+                    errorMsg = scanVerdict.MessageAr;
+                }
+                else
+                {
+                    var qKey = await privateFileStore.MoveToQuarantineAsync(stagedDerivedPath, newObjId, cancellationToken);
+                    dbContext.FileObjects.Add(new FileObjectEntity
+                    {
+                        Id = newObjId,
+                        StorageKey = qKey,
+                        Sha256 = derivedSha,
+                        SizeBytes = derivedSize,
+                        MediaType = contentCheck.CanonicalMediaType,
+                        ScanStatus = FileScanStatusValues.Infected,
+                        CreatedAt = now
+                    });
+                    derivedObjectId = newObjId;
+                    finalStatus = WordDerivativeStatusValues.Failed;
+                    validationErrors.Add(scanVerdict.MessageEn);
+                    errorMsg = scanVerdict.MessageAr;
+                }
+            }
+        }
+
+        var record = new WordDerivativeRecordEntity
+        {
+            Id = recordId,
+            RevisionId = revision.Id,
+            RevisionFileId = revFile.Id,
+            SourceObjectId = sourceObject.Id,
+            DerivedObjectId = derivedObjectId,
+            Status = finalStatus,
+            TemplateKindDetected = outcome.TemplateKindDetected,
+            FieldsUpdatedCount = outcome.MatchedFields.Count,
+            MatchedFieldsJson = JsonSerializer.Serialize(outcome.MatchedFields, JsonOpts),
+            ValidationErrorsJson = JsonSerializer.Serialize(validationErrors, JsonOpts),
+            ErrorMessage = errorMsg,
+            IsPublishable = isPublishable,
+            CreatedBy = access.Actor.Id,
+            CreatedAt = now
+        };
+
+        dbContext.WordDerivativeRecords.Add(record);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            access.Actor.Id,
+            isPublishable ? "WORD_DERIVATIVE_VERIFIED" : $"WORD_DERIVATIVE_{finalStatus}",
+            "REVISION_FILE",
+            revFile.Id,
+            isPublishable ? "SUCCESS" : (finalStatus == WordDerivativeStatusValues.PendingScan ? "PENDING" : "FAILED"),
+            new
+            {
+                integrationId = integration.Id,
+                revisionId = revision.Id,
+                sourceObjectId = sourceObject.Id,
+                derivedObjectId,
+                finalStatus,
+                outcome.TemplateKindDetected,
+                fieldsUpdatedCount = outcome.MatchedFields.Count,
+                isPublishable,
+                errorMsg
+            },
+            cancellationToken);
+
+        var records = await LoadWordDerivativeDtosForRevisionAsync(revision.Id, traceId, cancellationToken);
+        return records.First(r => r.Id == record.Id);
+    }
+
+    public async Task<WordDerivativeRecordDto?> GetLatestWordDerivativeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        Guid revisionFileId,
+        string traceId,
+        CancellationToken cancellationToken = default)
+    {
+        await ResolveAuthorizedRevisionAsync(
+            actorPrincipal,
+            revisionId,
+            DocumentPermissionCatalog.View,
+            "WORD_DERIVATIVE_READ_DENIED",
+            requireAssignedDeveloper: false,
+            cancellationToken: cancellationToken);
+
+        var revFileExists = await dbContext.RevisionFiles.AsNoTracking()
+            .AnyAsync(rf => rf.Id == revisionFileId && rf.RevisionId == revisionId, cancellationToken);
+        if (!revFileExists)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "ملف المراجعة المطلوب غير موجود ضمن هذه المراجعة.",
+                messageEn: "Revision file was not found in the specified revision.");
+        }
+
+        var allForRev = await LoadWordDerivativeDtosForRevisionAsync(revisionId, traceId, cancellationToken);
+        return allForRev.FirstOrDefault(w => w.RevisionFileId == revisionFileId);
+    }
+
+    public async Task<(Stream ContentStream, string FileName, string ContentType, long SizeBytes, string Sha256)> DownloadVerifiedWordDerivativeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid revisionId,
+        Guid revisionFileId,
+        CancellationToken cancellationToken = default)
+    {
+        var (access, integration, _, _) = await ResolveAuthorizedRevisionAsync(
+            actorPrincipal,
+            revisionId,
+            DocumentPermissionCatalog.View,
+            "WORD_DERIVATIVE_DOWNLOAD_DENIED",
+            requireAssignedDeveloper: false,
+            cancellationToken: cancellationToken);
+
+        var revFile = await dbContext.RevisionFiles.AsNoTracking()
+            .FirstOrDefaultAsync(rf => rf.Id == revisionFileId && rf.RevisionId == revisionId, cancellationToken);
+        if (revFile is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "ملف المراجعة المطلوب غير موجود ضمن هذه المراجعة.",
+                messageEn: "Revision file was not found in the specified revision.");
+        }
+
+        var latestRecord = await dbContext.WordDerivativeRecords.AsNoTracking()
+            .Where(w => w.RevisionId == revisionId && w.RevisionFileId == revisionFileId)
+            .OrderByDescending(w => w.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (latestRecord is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "لم يتم توليد نسخة مشتقة لملف Word هذا بعد.",
+                messageEn: "No Word derivative record exists for this file yet.");
+        }
+
+        if (!latestRecord.IsPublishable ||
+            !string.Equals(latestRecord.Status, WordDerivativeStatusValues.Verified, StringComparison.OrdinalIgnoreCase) ||
+            !latestRecord.DerivedObjectId.HasValue)
+        {
+            await serverAuthorization.WriteAuditEventAsync(
+                access.Actor.Id,
+                "WORD_DERIVATIVE_DOWNLOAD_BLOCKED",
+                "REVISION_FILE",
+                revFile.Id,
+                "DENIED",
+                new { integrationId = integration.Id, revisionId, latestRecord.Status, latestRecord.IsPublishable },
+                cancellationToken);
+
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: $"ممنوع (OP-03): لا يمكن تنزيل أو نشر مشتق Word غير متحقق (الحالة: {latestRecord.Status}).",
+                messageEn: $"Blocked (OP-03): cannot download or publish an unverified Word derivative (status: {latestRecord.Status}).");
+        }
+
+        var derivedObj = await dbContext.FileObjects.AsNoTracking()
+            .FirstOrDefaultAsync(fo => fo.Id == latestRecord.DerivedObjectId.Value, cancellationToken);
+        if (derivedObj is null || !string.Equals(derivedObj.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase))
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "كائن الملف المشتق غير متاح أو لم يجتز الفحص الأمني.",
+                messageEn: "Derived Word file object is unavailable or has not passed security scanning.");
+        }
+
+        var (stream, sizeBytes) = await privateFileStore.OpenVerifiedImmutableObjectReadStreamAsync(
+            derivedObj.StorageKey, derivedObj.Sha256, cancellationToken);
+
+        var derivedName = $"derived-{revFile.OriginalName}";
+
+        await serverAuthorization.WriteAuditEventAsync(
+            access.Actor.Id,
+            "WORD_DERIVATIVE_DOWNLOADED",
+            "REVISION_FILE",
+            revFile.Id,
+            "SUCCESS",
+            new { integrationId = integration.Id, revisionId, derivedObjectId = derivedObj.Id, derivedName, derivedObj.Sha256, sizeBytes },
+            cancellationToken);
+
+        return (stream, derivedName, derivedObj.MediaType ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document", sizeBytes, derivedObj.Sha256);
+    }
+
+    private async Task EnforceChangeRequestFileTypeScopeAsync(
+        Guid actorId,
+        Guid integrationId,
+        DocumentRevisionEntity revision,
+        Guid attemptedFileTypeId,
+        string actionName,
+        CancellationToken cancellationToken)
+    {
+        if (!revision.ChangeRequestId.HasValue)
+        {
+            return;
+        }
+
+        var allowedFileTypeIds = await (
+            from crf in dbContext.ChangeRequestFiles.AsNoTracking()
+            join srf in dbContext.RevisionFiles.AsNoTracking() on crf.SourceRevisionFileId equals srf.Id
+            where crf.ChangeRequestId == revision.ChangeRequestId.Value
+            select srf.FileTypeId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (allowedFileTypeIds.Count > 0 && !allowedFileTypeIds.Contains(attemptedFileTypeId))
+        {
+            await serverAuthorization.WriteAuditEventAsync(
+                actorId,
+                "CHANGE_SCOPE_VIOLATION",
+                "DOCUMENT_REVISION",
+                revision.Id,
+                "DENIED",
+                new { integrationId, revisionId = revision.Id, changeRequestId = revision.ChangeRequestId, attemptedFileTypeId, actionName },
+                cancellationToken);
+
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "ممنوع: مسموح في نسخة العمل هذه تعديل أو رفع الملفات المشمولة في نطاق طلب التغيير المعتمد فقط (PRD-04).",
+                messageEn: "Blocked: only file types included in the approved change request scope may be modified in this working copy (PRD-04).");
+        }
+    }
+
+    private async Task EnforceChangeRequestFileScopeOnDeleteAsync(
+        Guid actorId,
+        Guid integrationId,
+        DocumentRevisionEntity revision,
+        RevisionFileEntity targetFile,
+        CancellationToken cancellationToken)
+    {
+        if (!revision.ChangeRequestId.HasValue)
+        {
+            return;
+        }
+
+        var affectedSourceIds = await dbContext.ChangeRequestFiles.AsNoTracking()
+            .Where(crf => crf.ChangeRequestId == revision.ChangeRequestId.Value)
+            .Select(crf => crf.SourceRevisionFileId)
+            .ToListAsync(cancellationToken);
+
+        if (affectedSourceIds.Count == 0)
+        {
+            return;
+        }
+
+        if (targetFile.SourceRevisionFileId.HasValue && !affectedSourceIds.Contains(targetFile.SourceRevisionFileId.Value))
+        {
+            await serverAuthorization.WriteAuditEventAsync(
+                actorId,
+                "CHANGE_SCOPE_VIOLATION",
+                "REVISION_FILE",
+                targetFile.Id,
+                "DENIED",
+                new { integrationId, revisionId = revision.Id, changeRequestId = revision.ChangeRequestId, targetFile.SourceRevisionFileId },
+                cancellationToken);
+
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "ممنوع: لا يمكن حذف ملف لم يُعتمد تغييره ضمن نطاق طلب التغيير (PRD-04).",
+                messageEn: "Blocked: cannot remove a carried-forward file that is outside the approved change request scope (PRD-04).");
+        }
+
+        await EnforceChangeRequestFileTypeScopeAsync(
+            actorId, integrationId, revision, targetFile.FileTypeId, "DELETE_FILE", cancellationToken);
+    }
+
+    private async Task<List<RevisionFileRequirementEntity>> BuildRequirementSnapshotFromTemplateAsync(
+        Guid revisionId,
+        Guid templateId,
+        CancellationToken cancellationToken)
+    {
+        var templateRules = await dbContext.FileRequirementRules.AsNoTracking()
+            .Where(r => r.TemplateId == templateId)
+            .ToListAsync(cancellationToken);
+
+        return templateRules.Select(rule => new RevisionFileRequirementEntity
+        {
+            Id = Guid.NewGuid(),
+            RevisionId = revisionId,
+            FileTypeId = rule.FileTypeId,
+            RequirementMode = rule.RequirementMode,
+            MinCount = rule.MinCount,
+            MaxCount = rule.MaxCount
+        }).ToList();
     }
 
     private async Task<(AuthorizedDocumentAccess Access, IntegrationEntity Integration, ApiVersionEntity Version, DocumentRevisionEntity Revision)>
@@ -1116,7 +1993,6 @@ public sealed class VersionsFilesService(
 
     private async Task<IReadOnlyList<DocumentRevisionDto>> LoadRevisionDtosAsync(
         Guid versionId,
-        Guid fallbackTemplateId,
         string traceId,
         CancellationToken cancellationToken)
     {
@@ -1170,26 +2046,76 @@ public sealed class VersionsFilesService(
         {
             var myReqs = reqRows.Where(r => r.RevisionId == rev.Id).ToList();
             var myFiles = revFiles.Where(f => f.RevisionId == rev.Id).ToList();
+            var pendingCount = myFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.PendingScan, StringComparison.OrdinalIgnoreCase));
+            var cleanCount = myFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase));
+            var nonCleanCount = myFiles.Count(f => !string.Equals(f.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase));
+
+            var blockersAr = new List<string>();
+            var blockersEn = new List<string>();
+            var missingRequiredTypes = 0;
 
             var reqProgress = myReqs
                 .OrderBy(r => fileTypes.TryGetValue(r.FileTypeId, out var ft) ? ft.DisplayName : string.Empty)
                 .Select(r =>
                 {
                     fileTypes.TryGetValue(r.FileTypeId, out var ft);
+                    var typeName = ft?.DisplayName ?? r.FileTypeId.ToString();
                     var matchingFiles = myFiles.Where(f => f.FileTypeId == r.FileTypeId).ToList();
+                    var typeClean = matchingFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase));
+                    var typePending = matchingFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.PendingScan, StringComparison.OrdinalIgnoreCase));
+
+                    var isRequiredRule = string.Equals(r.RequirementMode, "REQUIRED", StringComparison.OrdinalIgnoreCase) || r.MinCount > 0;
+                    var effectiveMin = isRequiredRule ? Math.Max(1, r.MinCount) : 0;
+                    var missingCount = Math.Max(0, effectiveMin - typeClean);
+                    var exceedsMax = r.MaxCount > 0 && typeClean > r.MaxCount;
+                    var satisfied = missingCount == 0 && !exceedsMax;
+
+                    if (!satisfied)
+                    {
+                        if (missingCount > 0)
+                        {
+                            missingRequiredTypes++;
+                            blockersAr.Add($"يلزم رفع ({missingCount}) ملف سليم إضافي لنوع الملف الإلزامي ({typeName}).");
+                            blockersEn.Add($"Required file type '{typeName}' still needs {missingCount} clean file(s).");
+                        }
+                        if (exceedsMax)
+                        {
+                            blockersAr.Add($"عدد ملفات ({typeName}) يتجاوز الحد الأقصى ({r.MaxCount}).");
+                            blockersEn.Add($"File type '{typeName}' exceeds maximum count ({r.MaxCount}).");
+                        }
+                    }
+
                     return new RevisionRequirementProgressDto(
                         r.FileTypeId,
-                        ft?.DisplayName ?? string.Empty,
+                        typeName,
                         ft?.CatalogCode ?? string.Empty,
                         exts.GetValueOrDefault(r.FileTypeId, []),
                         ft?.MaxSizeBytes ?? 0,
                         r.RequirementMode,
                         r.MinCount,
                         r.MaxCount,
-                        UploadedCleanCount: matchingFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.Clean, StringComparison.OrdinalIgnoreCase)),
-                        UploadedPendingScanCount: matchingFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.PendingScan, StringComparison.OrdinalIgnoreCase)));
+                        UploadedCleanCount: typeClean,
+                        UploadedPendingScanCount: typePending,
+                        IsSatisfied: satisfied,
+                        MissingRequiredCount: missingCount,
+                        ExceedsMaxCount: exceedsMax);
                 })
                 .ToList();
+
+            if (nonCleanCount > 0)
+            {
+                blockersAr.Add($"يوجد ({nonCleanCount}) ملف في الحجر الأمني أو بانتظار الفحص؛ لا يمكن التقديم قبل اجتياز الفحص الأمني للجميع.");
+                blockersEn.Add($"{nonCleanCount} file(s) are quarantined or pending security scan and must pass scanning before submission.");
+            }
+
+            if (cleanCount == 0 && blockersAr.Count == 0)
+            {
+                blockersAr.Add("يلزم وجود ملف سليم واحد على الأقل داخل حزمة التوثيق قبل التقديم.");
+                blockersEn.Add("At least one CLEAN file is required in the documentation package prior to submission.");
+            }
+
+            var isProtected = !string.Equals(rev.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase);
+            var isReady = !isProtected && blockersAr.Count == 0;
 
             return new DocumentRevisionDto(
                 rev.Id,
@@ -1204,9 +2130,14 @@ public sealed class VersionsFilesService(
                 rev.CreatedAt,
                 rev.ApprovedAt,
                 FilesCount: myFiles.Count,
-                PendingScanCount: myFiles.Count(f => string.Equals(f.ScanStatus, FileScanStatusValues.PendingScan, StringComparison.OrdinalIgnoreCase)),
+                PendingScanCount: pendingCount,
                 Requirements: reqProgress,
-                TraceId: traceId);
+                TraceId: traceId,
+                IsProtected: isProtected,
+                IsReadyForSubmission: isReady,
+                MissingRequiredTypesCount: missingRequiredTypes,
+                SubmissionBlockersAr: blockersAr,
+                SubmissionBlockersEn: blockersEn);
         }).ToList();
     }
 
@@ -1255,6 +2186,115 @@ public sealed class VersionsFilesService(
                 x.rf.UploadedAt,
                 traceId);
         }).ToList();
+    }
+
+    private async Task<IReadOnlyList<ApprovedChangeRequestSummaryDto>> LoadApprovedChangeRequestsAsync(
+        Guid integrationId,
+        CancellationToken cancellationToken)
+    {
+        var crs = await (
+            from cr in dbContext.ChangeRequests.AsNoTracking()
+            join ct in dbContext.ChangeTypes.AsNoTracking() on cr.ChangeTypeId equals ct.Id
+            where cr.IntegrationId == integrationId && cr.Status == "APPROVED"
+            orderby cr.CreatedAt descending
+            select new { cr, ct.Name })
+            .ToListAsync(cancellationToken);
+
+        if (crs.Count == 0)
+        {
+            return [];
+        }
+
+        var crIds = crs.Select(x => x.cr.Id).ToList();
+        var crFiles = await dbContext.ChangeRequestFiles.AsNoTracking()
+            .Where(f => crIds.Contains(f.ChangeRequestId))
+            .ToListAsync(cancellationToken);
+
+        return crs.Select(x => new ApprovedChangeRequestSummaryDto(
+            x.cr.Id,
+            x.cr.SourceRevisionId,
+            x.cr.ChangeTypeId,
+            x.Name,
+            x.cr.Reason,
+            crFiles.Where(f => f.ChangeRequestId == x.cr.Id).Select(f => f.SourceRevisionFileId).ToList(),
+            x.cr.CreatedAt)).ToList();
+    }
+
+    private async Task<IReadOnlyList<WordDerivativeRecordDto>> LoadWordDerivativeDtosForRevisionAsync(
+        Guid revisionId,
+        string traceId,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.WordDerivativeRecords.AsNoTracking()
+            .Where(w => w.RevisionId == revisionId)
+            .OrderByDescending(w => w.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var objIds = rows.SelectMany(r => new[] { (Guid?)r.SourceObjectId, r.DerivedObjectId })
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        var objMap = await dbContext.FileObjects.AsNoTracking()
+            .Where(fo => objIds.Contains(fo.Id))
+            .ToDictionaryAsync(fo => fo.Id, cancellationToken);
+
+        var userIds = rows.Select(r => r.CreatedBy).Distinct().ToList();
+        var userMap = await dbContext.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName, cancellationToken);
+
+        return rows.Select(r =>
+        {
+            objMap.TryGetValue(r.SourceObjectId, out var srcObj);
+            FileObjectEntity? derObj = null;
+            if (r.DerivedObjectId.HasValue)
+            {
+                objMap.TryGetValue(r.DerivedObjectId.Value, out derObj);
+            }
+
+            var matched = DeserializeList<WordFieldUpdateEntryDto>(r.MatchedFieldsJson);
+            var errors = DeserializeList<string>(r.ValidationErrorsJson);
+
+            return new WordDerivativeRecordDto(
+                r.Id,
+                r.RevisionId,
+                r.RevisionFileId,
+                r.SourceObjectId,
+                srcObj?.Sha256 ?? string.Empty,
+                r.DerivedObjectId,
+                derObj?.Sha256,
+                derObj?.SizeBytes,
+                r.Status,
+                r.TemplateKindDetected,
+                r.FieldsUpdatedCount,
+                matched,
+                errors,
+                r.ErrorMessage,
+                r.IsPublishable,
+                r.CreatedBy,
+                userMap.GetValueOrDefault(r.CreatedBy, string.Empty),
+                r.CreatedAt,
+                traceId);
+        }).ToList();
+    }
+
+    private static IReadOnlyList<T> DeserializeList<T>(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<T>>(json, JsonOpts) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private async Task<(string DerivedTitle, string ProviderName, string ConsumerName, string ApiGroupName)>

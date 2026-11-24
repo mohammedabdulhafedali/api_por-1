@@ -99,25 +99,25 @@ public sealed class DatabaseConnectivityIntegrationTests
             var zeroCount = await CountPublicDomainTablesAsync(migratorContext);
             Assert.Equal(0L, zeroCount);
 
-            // 2. Apply InitialBaselineSchema + AddIdentityAuthSessions (Up) -> 44 tables (43 domain + auth_sessions), 78 FKs
+            // 2. Apply InitialBaselineSchema + AddIdentityAuthSessions + AddS09RevisionConcurrencyAndWordDerivatives (Up) -> 45 tables (43 domain + auth_sessions + word_derivative_records), 83 FKs
             await migrator.MigrateAsync();
             var appliedCount = await CountPublicDomainTablesAsync(migratorContext);
-            Assert.Equal(44L, appliedCount);
+            Assert.Equal(45L, appliedCount);
 
             var fkCount = await CountForeignKeysAsync(migratorContext);
-            Assert.Equal(78L, fkCount);
+            Assert.Equal(83L, fkCount);
 
-            // 3. Test Rollback (Down to "0") -> must drop all 44 tables and OP-01 triggers cleanly
+            // 3. Test Rollback (Down to "0") -> must drop all 45 tables and OP-01 triggers cleanly
             await migrator.MigrateAsync("0");
             var rolledBackCount = await CountPublicDomainTablesAsync(migratorContext);
             var rolledBackTriggers = await CountPublicTriggersAsync(migratorContext);
             Assert.Equal(0L, rolledBackCount);
             Assert.Equal(0L, rolledBackTriggers);
 
-            // 4. Re-apply baseline migrations (Up) so isolated test DB has full S02 schema active
+            // 4. Re-apply migrations (Up) so isolated test DB has full active schema
             await migrator.MigrateAsync();
             var reappliedCount = await CountPublicDomainTablesAsync(migratorContext);
-            Assert.Equal(44L, reappliedCount);
+            Assert.Equal(45L, reappliedCount);
         }
 
         // 5. Updated F04 connectivity check aligned with F05: verify runtime least-privilege role + 43 tables
@@ -155,7 +155,7 @@ public sealed class DatabaseConnectivityIntegrationTests
         Assert.Equal("api_gov_app", reader.GetString(1));
         Assert.False(reader.GetBoolean(2));
         Assert.False(reader.GetBoolean(3));
-        Assert.Equal(44L, reader.GetInt64(4));
+        Assert.Equal(45L, reader.GetInt64(4));
     }
 
     [Fact]

@@ -15,15 +15,21 @@ import {
 import {
   createDraftDocumentRevision,
   createIntegrationVersion,
+  createWorkingCopyRevision,
   deleteDraftRevisionFile,
+  downloadBinaryFileVerified,
+  generateWordDerivative,
   getIntegrationFilesWorkspace,
   getRevisionFileDownloadUrl,
+  getWordDerivativeDownloadUrl,
   IntegrationFilesWorkspaceResponse,
   IntegrationVersionsResponse,
   listIntegrationVersions,
   rescanRevisionFile,
   RevisionFileItem,
+  submitDocumentRevision,
   uploadRevisionFile,
+  WordDerivativeRecordItem,
 } from '../../api/versionsFilesApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
@@ -49,7 +55,14 @@ interface IntegrationsPageProps {
   onSessionExpired: () => void;
 }
 
-type PageMode = 'list' | 'create' | 'details' | 'assign-devs' | 'create-version' | 'upload-file';
+type PageMode =
+  | 'list'
+  | 'create'
+  | 'details'
+  | 'assign-devs'
+  | 'create-version'
+  | 'upload-file'
+  | 'create-working-copy';
 type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'audit';
 
 interface ModalState {
@@ -232,6 +245,64 @@ const COPY = {
     fileRemovedMsg: 'تم حذف ارتباط الملف من مسودة المراجعة وتسجيل الحدث.',
     draftCreatedTitle: 'تمت تهيئة مسودة المراجعة',
     draftCreatedMsg: 'تم فتح مسودة حزمة توثيق (#1) مستقلة عن رقم إصدار API لرفع الملفات.',
+    // S09 V05-V08 Strings (AR)
+    submitRevisionBtn: 'تقديم المراجعة للاعتماد (V05)',
+    submitRevisionConfirmTitle: 'تأكيد تقديم حزمة التوثيق (V05)',
+    submitRevisionConfirmMsg: (revNum: number) =>
+      `سيتم التحقق من اكتمال جميع الملفات الإلزامية وحالة الفحص ثم قفل المراجعة #${revNum} بحالة SUBMITTED وإحالتها لمسار المراجعة. هل تريد المتابعة؟`,
+    submitRevisionSuccessTitle: 'تم تقديم المراجعة بنجاح',
+    submitRevisionSuccessMsg: (revNum: number, cleanCount: number) =>
+      `تم تقديم حزمة التوثيق #${revNum} بحالة SUBMITTED مع ${cleanCount} ملفًا سليمًا، وأصبحت المراجعة محمية من التعديل (V06).`,
+    requirementsChecklistTitle: 'تقدم استيفاء الملفات الإلزامية قبل التقديم (V05)',
+    reqSatisfiedBadge: 'مكتمل',
+    reqMissingBadge: 'ناقص',
+    reqExceedsBadge: 'تجاوز الحد الأقصى',
+    protectedRevisionBanner: (status: string) =>
+      `هذه المراجعة في حالة ${status} ومحمية بالكامل من رفع أو حذف أو تعديل الملفات (V06). لبدء تعديل بعد الاعتماد، أنشئ نسخة عمل جديدة مرتبطة بطلب تغيير معتمد.`,
+    createWorkingCopyBtn: 'إنشاء نسخة عمل جديدة (V06)',
+    workingCopyBadge: 'نسخة عمل من مراجعة معتمدة · UI-11 / V06 · OP-05',
+    workingCopyTitle: 'إنشاء نسخة عمل جديدة من مراجعة معتمدة',
+    workingCopySub:
+      'تُفتح نسخة العمل (#التالي) استنادًا إلى مراجعة معتمدة (APPROVED) وطلب تغيير معتمد، مع نسخ الملفات السليمة غير المشمولة بالتغيير ومنع فتح أكثر من مسودة نشطة لنفس الإصدار (OP-05).',
+    workingCopyBaseLabel: 'المراجعة المرجعية المعتمدة (Base Revision)',
+    workingCopyCrLabel: 'طلب التغيير المعتمد (Approved Change Request)',
+    workingCopyNoApprovedBase: 'لا توجد مراجعة معتمدة (APPROVED) لهذا الإصدار بعد.',
+    workingCopyNoApprovedCr: 'لا توجد طلبات تغيير معتمدة مرتبطة بمراجعة معتمدة لهذا الإصدار بعد.',
+    workingCopySubmitBtn: 'فتح نسخة العمل',
+    workingCopyCreatedTitle: 'تم فتح نسخة العمل بنجاح',
+    workingCopyCreatedMsg: (revNum: number) =>
+      `تم إنشاء مسودة نسخة العمل #${revNum} مع نسخ الملفات الموروثة من المراجعة المعتمدة وتسجيل الحدث.`,
+    workingCopyValidationMissing: 'يرجى اختيار المراجعة المعتمدة وطلب التغيير المعتمد قبل الإرسال.',
+    revisionsHistoryTitle: 'سجل مراجعات حزمة التوثيق لهذا الإصدار (UI-11 / V05–V06)',
+    colRevNumber: 'رقم المراجعة',
+    colRevStatus: 'الحالة والحماية',
+    colRevLineage: 'الأساس وطلب التغيير',
+    colRevFiles: 'الملفات السليمة / قيد الفحص',
+    selectRevisionBtn: 'فتح الحزمة',
+    selectedRevisionTag: 'المعروضة حاليًا',
+    protectedTag: 'محمية (قراءة فقط)',
+    editableDraftTag: 'مسودة قابلة للتعديل',
+    verifiedDownloadNotice: (name: string, sha: string) =>
+      `تم التحقق من الصلاحية وبصمة SHA-256 وتدقيق تنزيل (${name}) — ${sha.slice(0, 16)}…`,
+    wordUpdateBtn: 'تحديث حقول Word (V08)',
+    wordDerivativesTitle: 'نتائج إثبات جدوى تحديث حقول Word عبر Open XML SDK (V08)',
+    wordDerivativesNote:
+      'يتم تعديل نسخة مشتقة مستقلة مع بقاء الملف الأصلي سليمًا وبصمته دون أي مساس، ويُحظر تنزيل أي مشتق لم يجتز التحقق البنيوي والفحص الأمني (OP-03).',
+    wordStatusVerified: 'مشتق متحقق وقابل للتنزيل (VERIFIED)',
+    wordStatusNoFields: 'لا توجد حقول معرّفة (NO_RECOGNIZED_FIELDS)',
+    wordStatusPending: 'بانتظار الفحص الأمني (PENDING_SCAN)',
+    wordStatusFailed: 'فشل التوليد أو التحقق البنيوي (FAILED)',
+    wordStrategyLabel: 'الآلية المكتشفة',
+    wordFieldsCountLabel: 'عدد الحقول المحدّثة',
+    wordSourceShaLabel: 'بصمة الملف الأصلي (ثابتة)',
+    wordDerivedShaLabel: 'بصمة المشتق',
+    wordDownloadDerivedBtn: 'تنزيل المشتق المتحقق',
+    wordBlockedDownloadTag: 'محجوب من النشر والتنزيل (OP-03)',
+    wordGeneratedTitle: 'نتيجة معالجة مشتق Word (V08)',
+    wordGeneratedVerifiedMsg: (count: number, kind: string) =>
+      `تم توليد مشتق .docx متحقق واجتياز OpenXmlValidator والفحص الأمني دون تعديل الملف الأصلي.\nالآلية: ${kind} · الحقول المحدّثة: ${count}`,
+    wordGeneratedBlockedMsg: (status: string, detail: string) =>
+      `حُفظ سجل الفحص بحالة ${status} ومُنع نشر المشتق أو تنزيله (OP-03).\nالتفصيل: ${detail}`,
   },
   en: {
     pageTitle: 'Integrations Directory (UI-22)',
@@ -404,6 +475,64 @@ const COPY = {
     fileRemovedMsg: 'File link removed from the draft revision and audited.',
     draftCreatedTitle: 'Draft Revision Initialized',
     draftCreatedMsg: 'Initialized independent Documentation Revision (#1) for uploading files.',
+    // S09 V05-V08 Strings (EN)
+    submitRevisionBtn: 'Submit Revision (V05)',
+    submitRevisionConfirmTitle: 'Confirm Revision Submission (V05)',
+    submitRevisionConfirmMsg: (revNum: number) =>
+      `All mandatory files and security scan states will be verified, and Revision #${revNum} will be locked as SUBMITTED. Proceed?`,
+    submitRevisionSuccessTitle: 'Revision Submitted',
+    submitRevisionSuccessMsg: (revNum: number, cleanCount: number) =>
+      `Documentation package Revision #${revNum} submitted cleanly (${cleanCount} clean file(s)) and locked from edits (V06).`,
+    requirementsChecklistTitle: 'Mandatory File Readiness Checklist (V05)',
+    reqSatisfiedBadge: 'Complete',
+    reqMissingBadge: 'Missing',
+    reqExceedsBadge: 'Exceeds Max',
+    protectedRevisionBanner: (status: string) =>
+      `This revision is ${status} and strictly protected from file uploads, deletions, or edits (V06). To modify after approval, create a new working copy linked to an approved change request.`,
+    createWorkingCopyBtn: 'Create Working Copy (V06)',
+    workingCopyBadge: 'Working Copy from Approved Revision · UI-11 / V06 · OP-05',
+    workingCopyTitle: 'Create Working Copy from Approved Revision',
+    workingCopySub:
+      'Opens the next draft working copy (#N) branched from an APPROVED revision and an APPROVED change request, carrying forward unaffected clean files while enforcing a single active draft per version (OP-05).',
+    workingCopyBaseLabel: 'Approved Base Revision',
+    workingCopyCrLabel: 'Approved Change Request',
+    workingCopyNoApprovedBase: 'No APPROVED revision exists for this API version yet.',
+    workingCopyNoApprovedCr: 'No APPROVED change request exists for an approved revision on this version yet.',
+    workingCopySubmitBtn: 'Open Working Copy',
+    workingCopyCreatedTitle: 'Working Copy Opened',
+    workingCopyCreatedMsg: (revNum: number) =>
+      `Opened draft Working Copy Revision #${revNum} carrying forward unaffected approved files.`,
+    workingCopyValidationMissing: 'Please select both an approved base revision and an approved change request.',
+    revisionsHistoryTitle: 'Documentation Revisions Package History (UI-11 / V05–V06)',
+    colRevNumber: 'Revision #',
+    colRevStatus: 'Status & Protection',
+    colRevLineage: 'Base & Change Request',
+    colRevFiles: 'Clean / Pending Files',
+    selectRevisionBtn: 'Open Package',
+    selectedRevisionTag: 'Active View',
+    protectedTag: 'Protected (Read-Only)',
+    editableDraftTag: 'Editable Draft',
+    verifiedDownloadNotice: (name: string, sha: string) =>
+      `Verified permissions, SHA-256 integrity, and audit log for (${name}) — ${sha.slice(0, 16)}…`,
+    wordUpdateBtn: 'Update Word Fields (V08)',
+    wordDerivativesTitle: 'Open XML SDK Word Governance Derivative PoC (V08)',
+    wordDerivativesNote:
+      'Updates are written strictly to a separate derivative while keeping the original file and SHA-256 untouched. Unverified or failed derivatives are blocked from publishing/download (OP-03).',
+    wordStatusVerified: 'Verified & Publishable (VERIFIED)',
+    wordStatusNoFields: 'No Recognized Fields (NO_RECOGNIZED_FIELDS)',
+    wordStatusPending: 'Pending Security Scan (PENDING_SCAN)',
+    wordStatusFailed: 'Generation or Validation Failed (FAILED)',
+    wordStrategyLabel: 'Strategy Detected',
+    wordFieldsCountLabel: 'Fields Updated',
+    wordSourceShaLabel: 'Original SHA-256 (Unchanged)',
+    wordDerivedShaLabel: 'Derived SHA-256',
+    wordDownloadDerivedBtn: 'Download Verified Derivative',
+    wordBlockedDownloadTag: 'Publish / Download Blocked (OP-03)',
+    wordGeneratedTitle: 'Word Derivative PoC Result (V08)',
+    wordGeneratedVerifiedMsg: (count: number, kind: string) =>
+      `Generated verified .docx derivative passing OpenXmlValidator and security scan without modifying the original file.\nStrategy: ${kind} · Fields updated: ${count}`,
+    wordGeneratedBlockedMsg: (status: string, detail: string) =>
+      `Diagnostic recorded as ${status}; derivative publish & download remain blocked (OP-03).\nDetails: ${detail}`,
   },
 } as const;
 
@@ -448,16 +577,20 @@ export function IntegrationsPage({
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // S08 V01-V04 Versions & Files workspace state
+  // S08 / S09 Versions, Revisions & Files workspace state
   const [versionsData, setVersionsData] = useState<IntegrationVersionsResponse | null>(null);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [filesWorkspace, setFilesWorkspace] = useState<IntegrationFilesWorkspaceResponse | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
   const [selectedWorkspaceVersionId, setSelectedWorkspaceVersionId] = useState('');
+  const [selectedWorkspaceRevisionId, setSelectedWorkspaceRevisionId] = useState('');
   const [newVersionLabel, setNewVersionLabel] = useState('');
   const [selectedUploadFileTypeId, setSelectedUploadFileTypeId] = useState('');
   const [selectedLocalFile, setSelectedLocalFile] = useState<File | null>(null);
   const [fileInputResetKey, setFileInputResetKey] = useState(0);
+  const [workingCopyBaseRevisionId, setWorkingCopyBaseRevisionId] = useState('');
+  const [workingCopyChangeRequestId, setWorkingCopyChangeRequestId] = useState('');
+  const [verifiedDownloadNotice, setVerifiedDownloadNotice] = useState<string | null>(null);
 
   const handleApiError = useCallback(
     (err: unknown, fallbackTitle: string) => {
@@ -550,7 +683,7 @@ export function IntegrationsPage({
   );
 
   const loadFilesWorkspaceTab = useCallback(
-    async (integrationId: string, versionId?: string) => {
+    async (integrationId: string, versionId?: string, revisionId?: string) => {
       if (!canViewFilesGlobal) {
         setFilesWorkspace(null);
         return;
@@ -559,11 +692,12 @@ export function IntegrationsPage({
       try {
         const res = await getIntegrationFilesWorkspace(
           integrationId,
-          versionId ? { versionId } : {},
+          { versionId, revisionId },
           lang
         );
         setFilesWorkspace(res);
         setSelectedWorkspaceVersionId(res.selectedVersionId ?? '');
+        setSelectedWorkspaceRevisionId(res.selectedRevision?.id ?? '');
       } catch {
         setFilesWorkspace(null);
       } finally {
@@ -577,10 +711,22 @@ export function IntegrationsPage({
     if (mode !== 'details' || !details?.summary.id) return;
     if (activeTab === 'versions') {
       void loadVersionsTab(details.summary.id);
-    } else if (activeTab === 'files') {
-      void loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId || undefined);
+    } else if (activeTab === 'files' || activeTab === 'revisions') {
+      void loadFilesWorkspaceTab(
+        details.summary.id,
+        selectedWorkspaceVersionId || undefined,
+        selectedWorkspaceRevisionId || undefined
+      );
     }
-  }, [activeTab, details?.summary.id, loadFilesWorkspaceTab, loadVersionsTab, mode, selectedWorkspaceVersionId]);
+  }, [
+    activeTab,
+    details?.summary.id,
+    loadFilesWorkspaceTab,
+    loadVersionsTab,
+    mode,
+    selectedWorkspaceRevisionId,
+    selectedWorkspaceVersionId,
+  ]);
 
   const openDetails = async (integrationId: string, initialTab: DetailsTab = 'developers') => {
     setMode('details');
@@ -588,6 +734,8 @@ export function IntegrationsPage({
     setVersionsData(null);
     setFilesWorkspace(null);
     setSelectedWorkspaceVersionId('');
+    setSelectedWorkspaceRevisionId('');
+    setVerifiedDownloadNotice(null);
     setDetailsLoading(true);
     try {
       const full = await getIntegrationDetails(integrationId, lang);
@@ -819,6 +967,145 @@ export function IntegrationsPage({
         })();
       },
     });
+  };
+
+  const promptSubmitRevision = (revisionId: string, revisionNumber: number) => {
+    if (!details) return;
+    setModal({
+      variant: 'confirm',
+      title: c.submitRevisionConfirmTitle,
+      message: c.submitRevisionConfirmMsg(revisionNumber),
+      onConfirmAction: () => {
+        void (async () => {
+          setSubmitting(true);
+          try {
+            const result = await submitDocumentRevision(revisionId, lang);
+            setModal({
+              variant: 'success',
+              title: c.submitRevisionSuccessTitle,
+              message: c.submitRevisionSuccessMsg(result.revision.revisionNumber, result.cleanFilesCount),
+            });
+            const refreshed = await getIntegrationDetails(details.summary.id, lang);
+            setDetails(refreshed);
+            await loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId || undefined, result.revision.id);
+          } catch (err) {
+            handleApiError(err, c.submitRevisionConfirmTitle);
+          } finally {
+            setSubmitting(false);
+          }
+        })();
+      },
+    });
+  };
+
+  const openCreateWorkingCopy = (preferredBaseId?: string) => {
+    setFormError(null);
+    const approvedRevs = (filesWorkspace?.revisions ?? []).filter((r) => r.status === 'APPROVED');
+    const chosenBaseId =
+      preferredBaseId && approvedRevs.some((r) => r.id === preferredBaseId)
+        ? preferredBaseId
+        : approvedRevs[0]?.id ?? '';
+    setWorkingCopyBaseRevisionId(chosenBaseId);
+
+    const matchingCrs = (filesWorkspace?.approvedChangeRequests ?? []).filter(
+      (cr) => !chosenBaseId || cr.sourceRevisionId === chosenBaseId
+    );
+    setWorkingCopyChangeRequestId(matchingCrs[0]?.id ?? '');
+    setMode('create-working-copy');
+  };
+
+  const handleCreateWorkingCopySubmit = async () => {
+    if (!details || !selectedWorkspaceVersionId) return;
+    setFormError(null);
+    if (!workingCopyBaseRevisionId || !workingCopyChangeRequestId) {
+      setFormError(c.workingCopyValidationMissing);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const created = await createWorkingCopyRevision(
+        selectedWorkspaceVersionId,
+        workingCopyBaseRevisionId,
+        workingCopyChangeRequestId,
+        lang
+      );
+      setSelectedWorkspaceRevisionId(created.id);
+      setModal({
+        variant: 'success',
+        title: c.workingCopyCreatedTitle,
+        message: c.workingCopyCreatedMsg(created.revisionNumber),
+      });
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      setMode('details');
+      setActiveTab('files');
+      await loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId, created.id);
+    } catch (err) {
+      handleApiError(err, c.workingCopyTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDownloadRevisionFile = async (file: RevisionFileItem) => {
+    try {
+      const result = await downloadBinaryFileVerified(
+        getRevisionFileDownloadUrl(file.revisionId, file.id),
+        file.originalName,
+        lang
+      );
+      setVerifiedDownloadNotice(
+        c.verifiedDownloadNotice(result.filename || file.originalName, result.sha256 || file.sha256)
+      );
+    } catch (err) {
+      handleApiError(err, c.downloadBtn);
+    }
+  };
+
+  const handleGenerateWordDerivative = async (file: RevisionFileItem) => {
+    if (!details) return;
+    setSubmitting(true);
+    try {
+      const record = await generateWordDerivative(file.revisionId, file.id, lang);
+      if (record.isPublishable) {
+        setModal({
+          variant: 'success',
+          title: c.wordGeneratedTitle,
+          message: c.wordGeneratedVerifiedMsg(record.fieldsUpdatedCount, record.templateKindDetected),
+        });
+      } else {
+        const detail =
+          record.validationErrors.length > 0
+            ? record.validationErrors.join(' | ')
+            : record.errorMessage || record.templateKindDetected;
+        setModal({
+          variant: 'warning',
+          title: c.wordGeneratedTitle,
+          message: c.wordGeneratedBlockedMsg(record.status, detail),
+        });
+      }
+      await loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId || undefined, file.revisionId);
+    } catch (err) {
+      handleApiError(err, c.wordUpdateBtn);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDownloadWordDerivative = async (record: WordDerivativeRecordItem, fallbackName: string) => {
+    try {
+      const result = await downloadBinaryFileVerified(
+        getWordDerivativeDownloadUrl(record.revisionId, record.revisionFileId),
+        fallbackName,
+        lang
+      );
+      setVerifiedDownloadNotice(
+        c.verifiedDownloadNotice(result.filename || fallbackName, result.sha256 || record.derivedSha256 || '')
+      );
+    } catch (err) {
+      handleApiError(err, c.wordDownloadDerivedBtn);
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -1059,6 +1346,84 @@ export function IntegrationsPage({
             </FormField>
           </div>
         </StandaloneFormPage>
+      ) : mode === 'create-working-copy' && details && filesWorkspace ? (
+        <StandaloneFormPage
+          modeBadgeLabel={c.workingCopyBadge}
+          formTitle={`${c.workingCopyTitle}: ${details.summary.derivedTitle}`}
+          formSubtitle={c.workingCopySub}
+          backButtonLabel={c.backDetailsBtn}
+          submitButtonLabel={c.workingCopySubmitBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => setMode('details')}
+          onCancel={() => setMode('details')}
+          onSubmit={() => void handleCreateWorkingCopySubmit()}
+        >
+          {(() => {
+            const approvedRevs = filesWorkspace.revisions.filter((r) => r.status === 'APPROVED');
+            const matchingCrs = (filesWorkspace.approvedChangeRequests ?? []).filter(
+              (cr) => !workingCopyBaseRevisionId || cr.sourceRevisionId === workingCopyBaseRevisionId
+            );
+            const selectedCr = matchingCrs.find((cr) => cr.id === workingCopyChangeRequestId) ?? null;
+
+            return (
+              <div style={{ display: 'grid', gap: 14 }}>
+                {formError && (
+                  <p className="form-error-text" role="alert">
+                    {formError}
+                  </p>
+                )}
+                <FormField id="wc-base-rev" label={c.workingCopyBaseLabel} required>
+                  {approvedRevs.length === 0 ? (
+                    <p className="card-subtitle">{c.workingCopyNoApprovedBase}</p>
+                  ) : (
+                    <SelectInput
+                      id="wc-base-rev"
+                      value={workingCopyBaseRevisionId}
+                      onChange={(e) => {
+                        const nextBase = e.target.value;
+                        setWorkingCopyBaseRevisionId(nextBase);
+                        const nextCrs = (filesWorkspace.approvedChangeRequests ?? []).filter(
+                          (cr) => cr.sourceRevisionId === nextBase
+                        );
+                        setWorkingCopyChangeRequestId(nextCrs[0]?.id ?? '');
+                      }}
+                      options={approvedRevs.map((r) => ({
+                        value: r.id,
+                        label: `#${r.revisionNumber} · ${r.versionLabel} (${r.filesCount} files)`,
+                      }))}
+                    />
+                  )}
+                </FormField>
+
+                <FormField id="wc-change-req" label={c.workingCopyCrLabel} required>
+                  {matchingCrs.length === 0 ? (
+                    <p className="card-subtitle">{c.workingCopyNoApprovedCr}</p>
+                  ) : (
+                    <SelectInput
+                      id="wc-change-req"
+                      value={workingCopyChangeRequestId}
+                      onChange={(e) => setWorkingCopyChangeRequestId(e.target.value)}
+                      options={matchingCrs.map((cr) => ({
+                        value: cr.id,
+                        label: `${cr.changeTypeName} — ${cr.reason.slice(0, 70)}`,
+                      }))}
+                    />
+                  )}
+                </FormField>
+
+                {selectedCr && (
+                  <div className="slot-stat-box">
+                    <div className="slot-stat-label">{selectedCr.changeTypeName}</div>
+                    <div className="slot-stat-value" style={{ fontSize: '0.92rem' }}>
+                      {selectedCr.reason}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </StandaloneFormPage>
       ) : mode === 'assign-devs' && details ? (
         <StandaloneFormPage
           modeBadgeLabel={c.assignBadge}
@@ -1297,7 +1662,7 @@ export function IntegrationsPage({
                           ) : (
                             <>
                               <div className="button-row" style={{ marginBottom: 12, alignItems: 'flex-end' }}>
-                                <div style={{ minWidth: 260 }}>
+                                <div style={{ minWidth: 220 }}>
                                   <FormField id="ws-version-select" label={c.filesSelectVersionLabel}>
                                     <SelectInput
                                       id="ws-version-select"
@@ -1305,6 +1670,7 @@ export function IntegrationsPage({
                                       onChange={(e) => {
                                         const verId = e.target.value;
                                         setSelectedWorkspaceVersionId(verId);
+                                        setSelectedWorkspaceRevisionId('');
                                         if (details) {
                                           void loadFilesWorkspaceTab(details.summary.id, verId);
                                         }
@@ -1317,13 +1683,85 @@ export function IntegrationsPage({
                                   </FormField>
                                 </div>
 
+                                {filesWorkspace.revisions.length > 1 && filesWorkspace.selectedRevision && (
+                                  <div style={{ minWidth: 210 }}>
+                                    <FormField id="ws-revision-select" label={c.colRevNumber}>
+                                      <SelectInput
+                                        id="ws-revision-select"
+                                        value={filesWorkspace.selectedRevision.id}
+                                        onChange={(e) => {
+                                          const revId = e.target.value;
+                                          setSelectedWorkspaceRevisionId(revId);
+                                          if (details) {
+                                            void loadFilesWorkspaceTab(
+                                              details.summary.id,
+                                              selectedWorkspaceVersionId || undefined,
+                                              revId
+                                            );
+                                          }
+                                        }}
+                                        options={filesWorkspace.revisions.map((rev) => ({
+                                          value: rev.id,
+                                          label: `#${rev.revisionNumber} · ${rev.status}`,
+                                        }))}
+                                      />
+                                    </FormField>
+                                  </div>
+                                )}
+
                                 {filesWorkspace.selectedRevision ? (
-                                  <StatusBadge variant="info">
-                                    {c.filesDraftInfoBadge(
-                                      filesWorkspace.selectedRevision.revisionNumber,
-                                      filesWorkspace.selectedRevision.status
-                                    )}
-                                  </StatusBadge>
+                                  <div className="button-row" style={{ alignItems: 'center' }}>
+                                    <StatusBadge
+                                      variant={
+                                        filesWorkspace.selectedRevision.status === 'APPROVED'
+                                          ? 'success'
+                                          : filesWorkspace.selectedRevision.status === 'DRAFT'
+                                            ? 'info'
+                                            : 'warning'
+                                      }
+                                    >
+                                      {c.filesDraftInfoBadge(
+                                        filesWorkspace.selectedRevision.revisionNumber,
+                                        filesWorkspace.selectedRevision.status
+                                      )}
+                                    </StatusBadge>
+
+                                    {filesWorkspace.selectedRevision.status === 'DRAFT' &&
+                                      filesWorkspace.canSubmitRevision && (
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          disabled={submitting || filesWorkspace.selectedRevision.isReadyForSubmission === false}
+                                          onClick={() =>
+                                            promptSubmitRevision(
+                                              filesWorkspace.selectedRevision!.id,
+                                              filesWorkspace.selectedRevision!.revisionNumber
+                                            )
+                                          }
+                                        >
+                                          {c.submitRevisionBtn}
+                                        </Button>
+                                      )}
+
+                                    {filesWorkspace.canCreateWorkingCopy &&
+                                      filesWorkspace.revisions.some((r) => r.status === 'APPROVED') &&
+                                      !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() =>
+                                            openCreateWorkingCopy(
+                                              filesWorkspace.selectedRevision?.status === 'APPROVED'
+                                                ? filesWorkspace.selectedRevision.id
+                                                : undefined
+                                            )
+                                          }
+                                        >
+                                          {c.createWorkingCopyBtn}
+                                        </Button>
+                                      )}
+                                  </div>
                                 ) : (
                                   filesWorkspace.canCreateDraftRevision &&
                                   selectedWorkspaceVersionId && (
@@ -1338,6 +1776,74 @@ export function IntegrationsPage({
                                   )
                                 )}
                               </div>
+
+                              {filesWorkspace.selectedRevision &&
+                                (filesWorkspace.selectedRevision.isProtected ||
+                                  filesWorkspace.selectedRevision.status !== 'DRAFT') && (
+                                  <div
+                                    className="slot-stat-box"
+                                    style={{ marginBottom: 12, borderInlineStart: '4px solid var(--brand-gold, #c68d28)' }}
+                                  >
+                                    <div className="slot-stat-label">{c.protectedTag}</div>
+                                    <div className="slot-stat-value" style={{ fontSize: '0.9rem' }}>
+                                      {c.protectedRevisionBanner(filesWorkspace.selectedRevision.status)}
+                                    </div>
+                                  </div>
+                                )}
+
+                              {filesWorkspace.selectedRevision &&
+                                filesWorkspace.selectedRevision.requirements.length > 0 && (
+                                  <div className="slot-stat-box" style={{ marginBottom: 12 }}>
+                                    <div className="slot-stat-label" style={{ marginBottom: 8 }}>
+                                      {c.requirementsChecklistTitle}
+                                    </div>
+                                    <div className="badge-wrap-list">
+                                      {filesWorkspace.selectedRevision.requirements.map((req) => {
+                                        const isDone =
+                                          req.isSatisfied ??
+                                          (req.requirementMode.toUpperCase() !== 'REQUIRED' ||
+                                            req.uploadedCleanCount >= req.minCount);
+                                        const exceeds = req.exceedsMaxCount ?? req.uploadedCleanCount > req.maxCount;
+                                        return (
+                                          <StatusBadge
+                                            key={req.fileTypeId}
+                                            variant={exceeds ? 'danger' : isDone ? 'success' : 'warning'}
+                                          >
+                                            {`${req.fileTypeName}: ${req.uploadedCleanCount}/${req.minCount}–${req.maxCount} (${
+                                              exceeds
+                                                ? c.reqExceedsBadge
+                                                : isDone
+                                                  ? c.reqSatisfiedBadge
+                                                  : c.reqMissingBadge
+                                            })`}
+                                          </StatusBadge>
+                                        );
+                                      })}
+                                    </div>
+                                    {filesWorkspace.selectedRevision.status === 'DRAFT' &&
+                                      (lang === 'ar'
+                                        ? filesWorkspace.selectedRevision.submissionBlockersAr
+                                        : filesWorkspace.selectedRevision.submissionBlockersEn
+                                      )?.length ? (
+                                      <ul style={{ marginTop: 8, marginBottom: 0, paddingInlineStart: 18, fontSize: '0.86rem' }}>
+                                        {(lang === 'ar'
+                                          ? filesWorkspace.selectedRevision.submissionBlockersAr ?? []
+                                          : filesWorkspace.selectedRevision.submissionBlockersEn ?? []
+                                        ).map((blocker, idx) => (
+                                          <li key={idx}>{blocker}</li>
+                                        ))}
+                                      </ul>
+                                    ) : null}
+                                  </div>
+                                )}
+
+                              {verifiedDownloadNotice && (
+                                <div className="slot-stat-box" style={{ marginBottom: 12 }}>
+                                  <div className="slot-stat-value" style={{ fontSize: '0.88rem' }}>
+                                    {verifiedDownloadNotice}
+                                  </div>
+                                </div>
+                              )}
 
                               {!filesWorkspace.selectedRevision ? (
                                 <p className="card-subtitle">{c.filesNoDraftNote}</p>
@@ -1356,65 +1862,167 @@ export function IntegrationsPage({
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {filesWorkspace.files.map((f) => (
-                                        <tr key={f.id}>
-                                          <td>
-                                            <strong>{f.originalName}</strong>
-                                          </td>
-                                          <td>{f.fileTypeName}</td>
-                                          <td>
-                                            <div>
-                                              <code className="ltr-code">{formatFileSize(f.sizeBytes)}</code>
-                                            </div>
-                                            <div className="muted-cell-text">
-                                              <code className="ltr-code">{f.sha256.slice(0, 16)}…</code>
-                                            </div>
-                                          </td>
-                                          <td>
-                                            <div className="badge-wrap-list">
-                                              {renderScanStatusBadge(f.scanStatus)}
-                                              <StatusBadge variant={f.isQuarantined ? 'warning' : 'neutral'}>
-                                                {f.isQuarantined ? c.tierQuarantine : c.tierPrivate}
-                                              </StatusBadge>
-                                            </div>
-                                          </td>
-                                          <td>
-                                            <div className="button-row">
-                                              {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
-                                                <Button
-                                                  variant="secondary"
-                                                  size="sm"
-                                                  disabled={submitting}
-                                                  onClick={() => void handleRescanFile(f)}
-                                                >
-                                                  {c.rescanBtn}
-                                                </Button>
-                                              )}
-                                              {f.isAvailableForUse && filesWorkspace.canDownloadFiles && (
-                                                <a
-                                                  className="btn btn-outline btn-sm"
-                                                  href={getRevisionFileDownloadUrl(f.revisionId, f.id)}
-                                                >
-                                                  {c.downloadBtn}
-                                                </a>
-                                              )}
-                                              {filesWorkspace.canDeleteFiles &&
-                                                filesWorkspace.selectedRevision?.status === 'DRAFT' && (
+                                      {filesWorkspace.files.map((f) => {
+                                        const isDocx = f.originalName.toLowerCase().endsWith('.docx');
+                                        return (
+                                          <tr key={f.id}>
+                                            <td>
+                                              <strong>{f.originalName}</strong>
+                                            </td>
+                                            <td>{f.fileTypeName}</td>
+                                            <td>
+                                              <div>
+                                                <code className="ltr-code">{formatFileSize(f.sizeBytes)}</code>
+                                              </div>
+                                              <div className="muted-cell-text">
+                                                <code className="ltr-code">{f.sha256.slice(0, 16)}…</code>
+                                              </div>
+                                            </td>
+                                            <td>
+                                              <div className="badge-wrap-list">
+                                                {renderScanStatusBadge(f.scanStatus)}
+                                                <StatusBadge variant={f.isQuarantined ? 'warning' : 'neutral'}>
+                                                  {f.isQuarantined ? c.tierQuarantine : c.tierPrivate}
+                                                </StatusBadge>
+                                              </div>
+                                            </td>
+                                            <td>
+                                              <div className="button-row">
+                                                {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
                                                   <Button
-                                                    variant="danger"
+                                                    variant="secondary"
                                                     size="sm"
                                                     disabled={submitting}
-                                                    onClick={() => promptRemoveFile(f)}
+                                                    onClick={() => void handleRescanFile(f)}
                                                   >
-                                                    {c.removeBtn}
+                                                    {c.rescanBtn}
                                                   </Button>
                                                 )}
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      ))}
+                                                {f.isAvailableForUse && filesWorkspace.canDownloadFiles && (
+                                                  <a
+                                                    className="btn btn-outline btn-sm"
+                                                    href={getRevisionFileDownloadUrl(f.revisionId, f.id)}
+                                                    onClick={(e) => {
+                                                      e.preventDefault();
+                                                      void handleDownloadRevisionFile(f);
+                                                    }}
+                                                  >
+                                                    {c.downloadBtn}
+                                                  </a>
+                                                )}
+                                                {f.isAvailableForUse &&
+                                                  isDocx &&
+                                                  filesWorkspace.canUploadFiles && (
+                                                    <Button
+                                                      variant="secondary"
+                                                      size="sm"
+                                                      disabled={submitting}
+                                                      onClick={() => void handleGenerateWordDerivative(f)}
+                                                    >
+                                                      {c.wordUpdateBtn}
+                                                    </Button>
+                                                  )}
+                                                {filesWorkspace.canDeleteFiles &&
+                                                  filesWorkspace.selectedRevision?.status === 'DRAFT' && (
+                                                    <Button
+                                                      variant="danger"
+                                                      size="sm"
+                                                      disabled={submitting}
+                                                      onClick={() => promptRemoveFile(f)}
+                                                    >
+                                                      {c.removeBtn}
+                                                    </Button>
+                                                  )}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
+                                </div>
+                              )}
+
+                              {(filesWorkspace.wordDerivatives ?? []).length > 0 && (
+                                <div style={{ marginTop: 18, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+                                  <h4 className="card-title heading-font">{c.wordDerivativesTitle}</h4>
+                                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
+                                    {c.wordDerivativesNote}
+                                  </p>
+                                  <div style={{ display: 'grid', gap: 10 }}>
+                                    {(filesWorkspace.wordDerivatives ?? []).map((wd) => {
+                                      const statusBadge =
+                                        wd.status === 'VERIFIED' ? (
+                                          <StatusBadge variant="success">{c.wordStatusVerified}</StatusBadge>
+                                        ) : wd.status === 'NO_RECOGNIZED_FIELDS' ? (
+                                          <StatusBadge variant="warning">{c.wordStatusNoFields}</StatusBadge>
+                                        ) : wd.status === 'PENDING_SCAN' ? (
+                                          <StatusBadge variant="warning">{c.wordStatusPending}</StatusBadge>
+                                        ) : (
+                                          <StatusBadge variant="danger">{c.wordStatusFailed}</StatusBadge>
+                                        );
+                                      const matchingSourceFile = filesWorkspace.files.find(
+                                        (f) => f.id === wd.revisionFileId
+                                      );
+                                      const derivedName = matchingSourceFile
+                                        ? `${matchingSourceFile.originalName.replace(/\.docx$/i, '')}-governance-updated.docx`
+                                        : 'governance-updated.docx';
+
+                                      return (
+                                        <div key={wd.id} className="slot-stat-box">
+                                          <div className="card-header-row" style={{ marginBottom: 6 }}>
+                                            <div className="badge-wrap-list">
+                                              {statusBadge}
+                                              <StatusBadge variant="neutral">
+                                                {`${c.wordStrategyLabel}: ${wd.templateKindDetected}`}
+                                              </StatusBadge>
+                                              <StatusBadge variant="info">
+                                                {`${c.wordFieldsCountLabel}: ${wd.fieldsUpdatedCount}`}
+                                              </StatusBadge>
+                                            </div>
+                                            {wd.isPublishable && filesWorkspace.canDownloadFiles ? (
+                                              <Button
+                                                variant="primary"
+                                                size="sm"
+                                                disabled={submitting}
+                                                onClick={() => void handleDownloadWordDerivative(wd, derivedName)}
+                                              >
+                                                {c.wordDownloadDerivedBtn}
+                                              </Button>
+                                            ) : (
+                                              <StatusBadge variant="danger">{c.wordBlockedDownloadTag}</StatusBadge>
+                                            )}
+                                          </div>
+                                          <div style={{ fontSize: '0.84rem', display: 'grid', gap: 4 }}>
+                                            <div>
+                                              {c.wordSourceShaLabel}:{' '}
+                                              <code className="ltr-code">{wd.sourceSha256}</code>
+                                            </div>
+                                            {wd.derivedSha256 && (
+                                              <div>
+                                                {c.wordDerivedShaLabel}:{' '}
+                                                <code className="ltr-code">{wd.derivedSha256}</code>
+                                              </div>
+                                            )}
+                                            {wd.matchedFields.length > 0 && (
+                                              <div className="badge-wrap-list" style={{ marginTop: 4 }}>
+                                                {wd.matchedFields.map((mf, i) => (
+                                                  <StatusBadge key={`${mf.fieldKey}-${i}`} variant="neutral">
+                                                    {`${mf.fieldKey} (${mf.mechanism} · ${mf.location})`}
+                                                  </StatusBadge>
+                                                ))}
+                                              </div>
+                                            )}
+                                            {wd.validationErrors.length > 0 && (
+                                              <div style={{ color: 'var(--status-danger, #b42318)' }}>
+                                                {wd.validationErrors.join(' · ')}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
                             </>
@@ -1428,6 +2036,123 @@ export function IntegrationsPage({
 
               {activeTab === 'revisions' && (
                 <div>
+                  {canViewFilesGlobal && filesWorkspace && filesWorkspace.versions.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div className="card-header-row" style={{ marginBottom: 10 }}>
+                        <h3 className="card-title heading-font">{c.revisionsHistoryTitle}</h3>
+                        {filesWorkspace.canCreateWorkingCopy &&
+                          filesWorkspace.revisions.some((r) => r.status === 'APPROVED') &&
+                          !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() => openCreateWorkingCopy()}
+                            >
+                              {c.createWorkingCopyBtn}
+                            </Button>
+                          )}
+                      </div>
+                      <div className="table-scroll-container">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>{c.colRevNumber}</th>
+                              <th>{c.colRevStatus}</th>
+                              <th>{c.colRevLineage}</th>
+                              <th>{c.colRevFiles}</th>
+                              <th>{c.colActions}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filesWorkspace.revisions.map((rev) => (
+                              <tr key={rev.id}>
+                                <td>
+                                  <code className="ltr-code">{`#${rev.revisionNumber}`}</code>{' '}
+                                  {filesWorkspace.selectedRevision?.id === rev.id && (
+                                    <StatusBadge variant="info">{c.selectedRevisionTag}</StatusBadge>
+                                  )}
+                                </td>
+                                <td>
+                                  <div className="badge-wrap-list">
+                                    <StatusBadge
+                                      variant={
+                                        rev.status === 'APPROVED'
+                                          ? 'success'
+                                          : rev.status === 'DRAFT'
+                                            ? 'info'
+                                            : 'warning'
+                                      }
+                                    >
+                                      {rev.status}
+                                    </StatusBadge>
+                                    <StatusBadge variant={rev.status === 'DRAFT' ? 'neutral' : 'warning'}>
+                                      {rev.status === 'DRAFT' ? c.editableDraftTag : c.protectedTag}
+                                    </StatusBadge>
+                                  </div>
+                                </td>
+                                <td>
+                                  <code className="ltr-code">
+                                    {rev.baseRevisionId ? `Base:${rev.baseRevisionId.slice(0, 8)}` : 'Initial'}
+                                    {rev.changeRequestId ? ` · CR:${rev.changeRequestId.slice(0, 8)}` : ''}
+                                  </code>
+                                </td>
+                                <td>
+                                  <code className="ltr-code">
+                                    {rev.filesCount} / {rev.pendingScanCount}
+                                  </code>
+                                </td>
+                                <td>
+                                  <div className="button-row">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedWorkspaceRevisionId(rev.id);
+                                        setActiveTab('files');
+                                        if (details) {
+                                          void loadFilesWorkspaceTab(
+                                            details.summary.id,
+                                            selectedWorkspaceVersionId || undefined,
+                                            rev.id
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      {c.selectRevisionBtn}
+                                    </Button>
+                                    {rev.status === 'DRAFT' && filesWorkspace.canSubmitRevision && (
+                                      <Button
+                                        variant="primary"
+                                        size="sm"
+                                        disabled={submitting || rev.isReadyForSubmission === false}
+                                        onClick={() => promptSubmitRevision(rev.id, rev.revisionNumber)}
+                                      >
+                                        {c.submitRevisionBtn}
+                                      </Button>
+                                    )}
+                                    {rev.status === 'APPROVED' &&
+                                      filesWorkspace.canCreateWorkingCopy &&
+                                      !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() => openCreateWorkingCopy(rev.id)}
+                                        >
+                                          {c.createWorkingCopyBtn}
+                                        </Button>
+                                      )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   <p className="card-subtitle" style={{ marginBottom: 10 }}>
                     {c.revisionsTabDesc}
                   </p>

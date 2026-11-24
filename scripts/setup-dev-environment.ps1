@@ -51,7 +51,8 @@ function ConvertFrom-SecurePlain([System.Security.SecureString]$Secure) {
 function New-RandomStrongPassword {
     $chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*"
     $bytes = New-Object byte[] 28
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     $sb = New-Object System.Text.StringBuilder
     foreach ($b in $bytes) { [void]$sb.Append($chars[$b % $chars.Length]) }
     return $sb.ToString()
@@ -65,7 +66,7 @@ Write-Host "==================================================================" 
 $null = Find-ToolPath "git"
 $dotnetExe = Find-ToolPath "dotnet"
 $npmCmd = Find-ToolPath "npm"
-$pgCandidates = @($PgBinDir, "C:\Program Files\PostgreSQL\18\bin", "C:\Program Files\PostgreSQL\17\bin")
+$pgCandidates = @($PgBinDir, "$env:LOCALAPPDATA\Programs\PostgreSQL\18\bin", "C:\Program Files\PostgreSQL\18\bin", "C:\Program Files\PostgreSQL\17\bin")
 $psqlExe = Find-ToolPath "psql" $pgCandidates
 Write-Host "[OK] Found git, dotnet, npm, psql."
 
@@ -77,7 +78,7 @@ $migratorPwd = New-RandomStrongPassword
 
 $env:PGPASSWORD = $pgPlainPwd
 try {
-    $testConn = & $psqlExe -h $PgHost -p $PgPort -U $PgSuperUser -d postgres -tAc "SELECT 1;"
+    $testConn = [string](& $psqlExe -h $PgHost -p $PgPort -U $PgSuperUser -d postgres -tAc "SELECT 1;")
     if ($LASTEXITCODE -ne 0 -or $testConn.Trim() -ne "1") {
         throw "Unable to connect to PostgreSQL at ${PgHost}:${PgPort} as '$PgSuperUser'."
     }
@@ -101,7 +102,7 @@ END \$\$;
     $sqlSetup | & $psqlExe -h $PgHost -p $PgPort -U $PgSuperUser -d postgres -v ON_ERROR_STOP=1 | Out-Null
 
     foreach ($dbName in @("api_governance_dev", "api_governance_test")) {
-        $exists = & $psqlExe -h $PgHost -p $PgPort -U $PgSuperUser -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$dbName';"
+        $exists = [string](& $psqlExe -h $PgHost -p $PgPort -U $PgSuperUser -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$dbName';")
         if ($exists.Trim() -ne "1") {
             & $psqlExe -h $PgHost -p $PgPort -U $PgSuperUser -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $dbName OWNER api_gov_migrator ENCODING 'UTF8';" | Out-Null
         }
