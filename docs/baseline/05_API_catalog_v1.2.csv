@@ -1,0 +1,100 @@
+﻿group,method,path,task,tables,access
+الحسابات والأدوار,GET,/api/v1/me,الهوية والأدوار والصلاحيات الفعلية,"users,user_roles,user_permission_overrides",مستخدم موثق
+الحسابات والأدوار,GET,/api/v1/users,قائمة المستخدمين,"users,user_roles",users.view
+الحسابات والأدوار,POST,/api/v1/users,إضافة مستخدم,"users,user_roles",users.create
+الحسابات والأدوار,PATCH,/api/v1/users/{userId},تعديل بيانات المستخدم وتفعيل الحساب,users,users.edit
+الحسابات والأدوار,PUT,/api/v1/users/{userId}/roles,استبدال مجموعة أدوار المستخدم ذرّيًا,user_roles,users.assign_roles
+الحسابات والأدوار,GET,/api/v1/users/{userId}/permissions,المصفوفة الفعلية والموروثة والاستثناءات,"roles,role_permissions,user_permission_overrides",permissions.view
+الحسابات والأدوار,PUT,/api/v1/users/{userId}/permission-overrides,منح وسحب استثناءات فردية,user_permission_overrides,permissions.manage
+الحسابات والأدوار,GET,/api/v1/roles,قائمة الأدوار,roles,roles.view
+الحسابات والأدوار,POST,/api/v1/roles,إنشاء دور,roles,roles.create
+الحسابات والأدوار,PATCH,/api/v1/roles/{roleId},تعديل الدور/تثبيته/تعطيله,roles,roles.edit
+الحسابات والأدوار,PUT,/api/v1/roles/{roleId}/permissions,استبدال منح الدور,role_permissions,permissions.manage
+الحسابات والأدوار,GET,/api/v1/permissions,قاموس الصلاحيات الدائم للقراءة,permissions,permissions.view
+التعريفات والتهيئة,GET,/api/v1/company-systems,عرض أنظمة الشركة,company_systems,company_systems.view
+التعريفات والتهيئة,POST,/api/v1/company-systems,إضافة نظام داخلي,company_systems,company_systems.create
+التعريفات والتهيئة,PATCH,/api/v1/company-systems/{systemId},تعديل/تعطيل نظام داخلي,company_systems,company_systems.edit
+التعريفات والتهيئة,GET,/api/v1/internal-providers,عرض الأنظمة الداخلية المزودة,"internal_provider_systems,company_systems",providers.view
+التعريفات والتهيئة,POST,/api/v1/internal-providers,تفعيل نظام شركة كمزود دون تكرار,internal_provider_systems,providers.create
+التعريفات والتهيئة,GET,/api/v1/external-providers,عرض المزودين الخارجيين,external_provider_systems,providers.view
+التعريفات والتهيئة,POST,/api/v1/external-providers,إضافة مزود خارجي,external_provider_systems,providers.create
+التعريفات والتهيئة,GET,/api/v1/consumer-categories,تصنيفات الجهات,consumer_categories,consumers.view
+التعريفات والتهيئة,POST,/api/v1/consumer-categories,إضافة تصنيف,consumer_categories,consumers.manage
+التعريفات والتهيئة,GET,/api/v1/consumers,قائمة الجهات المستهلكة,consumer_entities,consumers.view
+التعريفات والتهيئة,POST,/api/v1/consumers,إضافة جهة مستهلكة,consumer_entities,consumers.manage
+التعريفات والتهيئة,GET,/api/v1/api-groups,مجموعات API,api_groups,api_groups.view
+التعريفات والتهيئة,POST,/api/v1/api-groups,إنشاء مجموعة,api_groups,api_groups.manage
+التعريفات والتهيئة,GET,/api/v1/file-types,أنواع الملفات وامتداداتها,"file_types,file_type_extensions",file_types.view
+التعريفات والتهيئة,POST,/api/v1/file-types,تعريف نوع من كتالوج الأنواع المعتمد,"file_types,file_type_extensions",file_types.manage
+التعريفات والتهيئة,GET,/api/v1/requirement-templates,قوالب متطلبات الملفات,"file_requirement_templates,file_requirement_rules",requirements.view
+التعريفات والتهيئة,POST,/api/v1/requirement-templates,إنشاء قالب متطلبات وقيوده,"file_requirement_templates,file_requirement_rules",requirements.manage
+التعريفات والتهيئة,GET,/api/v1/approval-routes,قائمة مسارات الاعتماد ومراحلها,"approval_routes,approval_route_stages",routes.view
+التعريفات والتهيئة,POST,/api/v1/approval-routes,إنشاء مسار اعتماد,approval_routes,routes.manage
+التعريفات والتهيئة,PUT,/api/v1/approval-routes/{routeId}/stages,حفظ مراحل الدور مرتبة دون نوع مرحلة,approval_route_stages,routes.manage
+التعريفات والتهيئة,GET,/api/v1/change-types,أنواع طلبات التغيير ومساراتها,change_types,changes.config.view
+التعريفات والتهيئة,POST,/api/v1/change-types,إضافة نوع تغيير,change_types,changes.config.manage
+التعريفات والتهيئة,GET,/api/v1/change-policies,سياسات التغيير,"change_policies,change_policy_types",changes.config.view
+وثائق API والتفويض,GET,/api/v1/api-documents,وثائق مرئية للمستخدم فقط,"api_documents,document_user_permissions",api_documents.view + doc.view
+وثائق API والتفويض,POST,/api/v1/api-documents,إنشاء وثيقة مقيدة وعلاقاتها,"api_documents,document_developers",api_documents.create
+وثائق API والتفويض,GET,/api/v1/api-documents/{documentId},تفاصيل وثيقة محددة,api_documents,api_documents.view + doc.view
+وثائق API والتفويض,PATCH,/api/v1/api-documents/{documentId},تعديل الإعدادات وفق حالة الارتباط,api_documents,api_documents.edit + doc.edit
+وثائق API والتفويض,DELETE,/api/v1/api-documents/{documentId},حذف غير المرتبطة فقط/قواعد الأرشفة,"api_documents,integrations",api_documents.delete + doc.delete
+وثائق API والتفويض,GET,/api/v1/api-documents/{documentId}/access,قراءة مصفوفة صلاحيات الوثيقة,"document_role_permissions,document_user_permissions",documents.permissions.view + doc.access.manage
+وثائق API والتفويض,PUT,/api/v1/api-documents/{documentId}/access,منح وسحب الوثيقة لكل دور/مستخدم,"document_role_permissions,document_user_permissions",documents.permissions.manage + doc.access.manage
+وثائق API والتفويض,PUT,/api/v1/api-documents/{documentId}/developers,إسناد المطورين المخولين للوثيقة,document_developers,api_documents.assign_developer + doc.assign
+التكاملات والإصدارات والملفات,GET,/api/v1/integrations,قائمة التكاملات المسموحة,"integrations,api_documents",integrations.view + doc.view
+التكاملات والإصدارات والملفات,POST,/api/v1/integrations,إنشاء تكامل من وثيقة غير مرتبطة,integrations,integrations.create + doc.manage_integration
+التكاملات والإصدارات والملفات,GET,/api/v1/integrations/{integrationId},ملخص التكامل مع فحص الوثيقة,"integrations,api_documents",integrations.view + doc.view
+التكاملات والإصدارات والملفات,PUT,/api/v1/integrations/{integrationId}/developers,إسناد مطورين للتكامل,integration_developers,integrations.assign_developer + doc.assign
+التكاملات والإصدارات والملفات,GET,/api/v1/integrations/{integrationId}/versions,سرد إصدارات API اليدوية,api_versions,versions.view + doc.view
+التكاملات والإصدارات والملفات,POST,/api/v1/integrations/{integrationId}/versions,إنشاء إصدار حر بالرقم اليدوي,api_versions,versions.create + doc.version_manage + تعيين
+التكاملات والإصدارات والملفات,GET,/api/v1/versions/{versionId}/revisions,قائمة مراجعات التوثيق للإصدار,document_revisions,revisions.view + doc.view
+التكاملات والإصدارات والملفات,POST,/api/v1/versions/{versionId}/revisions,نسخة عمل أولية أو بعد طلب تغيير معتمد,"document_revisions,change_requests",revisions.create + doc.edit + تعيين
+التكاملات والإصدارات والملفات,GET,/api/v1/revisions/{revisionId},تفاصيل مراجعة حزمة الملفات,"document_revisions,revision_file_requirements",revisions.view + doc.view
+التكاملات والإصدارات والملفات,POST,/api/v1/revisions/{revisionId}/files,رفع ملف جديد مع الفحص والقيود,"file_objects,revision_files",files.upload + doc.files_manage + تعيين
+التكاملات والإصدارات والملفات,DELETE,/api/v1/revisions/{revisionId}/files/{fileId},إزالة ربط الملف في مسودة قابلة للتعديل,revision_files,files.delete + doc.files_manage + تعيين
+التكاملات والإصدارات والملفات,GET,/api/v1/revisions/{revisionId}/files/{fileId}/download,تنزيل مرخص من تخزين خاص,"revision_files,file_objects",files.download + doc.view
+التكاملات والإصدارات والملفات,POST,/api/v1/revisions/{revisionId}/submit,إرسال حزمة مكتملة للمراجعة,"workflow_runs,workflow_run_stages",revisions.submit + doc.edit + تعيين
+طلبات التغيير وسير العمل,GET,/api/v1/integrations/{integrationId}/change-requests,عرض طلبات تغيير التكامل,change_requests,changes.view + doc.view
+طلبات التغيير وسير العمل,POST,/api/v1/integrations/{integrationId}/change-requests,إنشاء طلب تغيير للملفات المعتمدة,"change_requests,change_request_files",changes.create + doc.change + تعيين
+طلبات التغيير وسير العمل,POST,/api/v1/change-requests/{requestId}/submit,بدء مسار موافقة الطلب,"workflow_runs,workflow_run_stages",changes.submit + doc.change + تعيين
+طلبات التغيير وسير العمل,GET,/api/v1/workflows/inbox,الطلبات المنتظرة حسب جميع الأدوار,"workflow_run_stages,workflow_runs",workflows.view + أهلية
+طلبات التغيير وسير العمل,GET,/api/v1/workflows/{runId},تفاصيل المسار والقرار ونسخة المراحل,"workflow_runs,workflow_run_stages,workflow_decisions",workflows.view + doc.view
+طلبات التغيير وسير العمل,POST,/api/v1/workflows/{runId}/stages/{stageId}/decisions,موافقة أو إعادة أو رفض من عضو واحد مؤهل,"workflow_decisions,workflow_run_stages",workflows.decide + دور المرحلة + doc.review
+طلبات التغيير وسير العمل,GET,/api/v1/workflows/{runId}/history,سجل قرارات المحاولات,workflow_decisions,workflows.view + doc.view
+النشر والبوابة,POST,/api/v1/revisions/{revisionId}/publications,نشر ملفات مختارة من مراجعة معتمدة,"publications,publication_files",publications.create + doc.publish
+النشر والبوابة,POST,/api/v1/publications/{publicationId}/withdraw,إيقاف نشر مع إبقاء السجل,publications,publications.withdraw + doc.publish
+النشر والبوابة,GET,/api/v1/integrations/{integrationId}/consumer-version,الإصدار الجاري استخدامه,consumer_version_usage,versions.usage.view + doc.view
+النشر والبوابة,PUT,/api/v1/integrations/{integrationId}/consumer-version,تعيين إصدار واحد منشور للاستخدام,consumer_version_usage,versions.usage.manage + doc.publish
+النشر والبوابة,GET,/api/v1/portal/integrations,قائمة المنشور لجهة المستهلك الموثقة,"publications,api_documents",بوابة: جهة المستخدم + نشر نشط
+النشر والبوابة,GET,/api/v1/portal/publications/{publicationId}/files,ملفات منشورة مسموحة للجهة,"publication_files,publications",بوابة: جهة المستخدم + ملف منشور
+النشر والبوابة,GET,/api/v1/portal/publications/{publicationId}/files/{fileId}/download,تنزيل ملف منشور مع تدقيق,"publication_files,file_objects",بوابة: جهة المستخدم + نشر نشط
+المراقبة والتدقيق,GET,/api/v1/notifications,إشعارات المستخدم الحالي,notifications,المستخدم نفسه
+المراقبة والتدقيق,POST,/api/v1/notifications/{notificationId}/read,تحديد إشعار مقروءًا,notifications,المستخدم نفسه
+المراقبة والتدقيق,GET,/api/v1/audit-events,عرض أحداث التدقيق وفق نطاق التصريح,audit_events,audit.view
+المراقبة والتدقيق,GET,/api/v1/search,بحث مصفّى بإذن الوثيقة,"api_documents,integrations",search.view + doc.view
+المراقبة والتدقيق,GET,/api/v1/dashboard,إحصاءات مبنية على البيانات المصرح بها,"api_documents,integrations,workflow_runs",dashboard.view + نطاق البيانات
+الحسابات والأدوار,DELETE,/api/v1/roles/{roleId},إزالة دور غير مستخدم وفق قواعد الأرشفة؛ لا يحذف قاموس الصلاحيات,roles,roles.delete
+التعريفات والتهيئة,PATCH,/api/v1/internal-providers/{providerId},تفعيل أو تعطيل مزود داخلي مع الحفاظ على أصل نظام الشركة,internal_provider_systems,providers.edit
+التعريفات والتهيئة,PATCH,/api/v1/external-providers/{providerId},تعديل أو تعطيل مزود خارجي,external_provider_systems,providers.edit
+التعريفات والتهيئة,PATCH,/api/v1/consumer-categories/{categoryId},تعديل تصنيف جهة,consumer_categories,consumers.manage
+التعريفات والتهيئة,PATCH,/api/v1/consumers/{consumerId},تعديل أو تعطيل جهة مستهلكة,consumer_entities,consumers.manage
+التعريفات والتهيئة,PATCH,/api/v1/api-groups/{groupId},تعديل أو تعطيل مجموعة API,api_groups,api_groups.manage
+التعريفات والتهيئة,PATCH,/api/v1/file-types/{fileTypeId},تعديل حجم نوع الملف أو تفعيله وإعدادات القالب وفق كتالوج الامتدادات,"file_types,file_type_extensions",file_types.manage
+التعريفات والتهيئة,PATCH,/api/v1/requirement-templates/{templateId},تعديل قالب متطلبات ملف قبل استخدامه مع حفظ اللقطات التاريخية,"file_requirement_templates,file_requirement_rules",requirements.manage
+التعريفات والتهيئة,PATCH,/api/v1/approval-routes/{routeId},تعديل اسم المسار أو حالته دون التأثير في المعاملات الجارية,approval_routes,routes.manage
+التعريفات والتهيئة,PATCH,/api/v1/change-types/{typeId},تعديل نوع تغيير أو ربطه بمسار,change_types,changes.config.manage
+التعريفات والتهيئة,POST,/api/v1/change-policies,إنشاء سياسة تغيير,"change_policies,change_policy_types",changes.config.manage
+التعريفات والتهيئة,PATCH,/api/v1/change-policies/{policyId},تعديل سياسة تغيير للوثائق الجديدة أو المخوّلة,"change_policies,change_policy_types",changes.config.manage
+وثائق API والتفويض,GET,/api/v1/api-documents/{documentId}/developers,قراءة المطورين المعيّنين,document_developers,api_documents.view + doc.view
+التكاملات والإصدارات والملفات,GET,/api/v1/integrations/{integrationId}/developers,قراءة المطورين المعيّنين للتكامل,integration_developers,integrations.view + doc.view
+التكاملات والإصدارات والملفات,GET,/api/v1/revisions/{revisionId}/files,قائمة الملفات ومتطلباتها والحالة,"revision_files,revision_file_requirements",files.view + doc.view
+طلبات التغيير وسير العمل,GET,/api/v1/change-requests/{requestId},تفاصيل الطلب وملفاته ومساره,"change_requests,change_request_files",changes.view + doc.view
+طلبات التغيير وسير العمل,PATCH,/api/v1/change-requests/{requestId},تعديل طلب في حالة المسودة قبل الإرسال,"change_requests,change_request_files",changes.edit + doc.change + تعيين
+النشر والبوابة,GET,/api/v1/integrations/{integrationId}/publications,تاريخ النشر بحسب الإصدار,"publications,publication_files",publications.view + doc.view
+المصادقة المحلية,GET,/api/v1/auth/csrf,رمز حماية CSRF,—,طلب من origin نفسه؛ لا جلسة لازمة
+المصادقة المحلية,POST,/api/v1/auth/login,دخول محلي,"users, identity credentials, sessions, audit_events",CSRF؛ حساب نشط؛ تقييد المحاولات
+المصادقة المحلية,POST,/api/v1/auth/logout,خروج وإبطال الجلسة,"sessions,audit_events",جلسة نشطة + CSRF
+المصادقة المحلية,POST,/api/v1/auth/password/change,تغيير كلمة المرور,"identity credentials,sessions,audit_events",جلسة + CSRF + كلمة المرور الحالية
+المصادقة المحلية,POST,/api/v1/users/{userId}/password/reset,بدء إعادة تعيين أو تفعيل,"users, identity credentials,audit_events",users.password.reset + CSRF؛ نطاق إدارة الحساب
+المصادقة المحلية,POST,/api/v1/auth/password/reset/complete,إكمال إعادة التعيين,"identity credentials,sessions,audit_events",CSRF + رمز محدود الغرض وصالح؛ تقييد المحاولات

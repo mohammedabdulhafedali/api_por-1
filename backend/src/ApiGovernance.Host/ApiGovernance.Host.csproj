@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>ApiGovernance.Host</RootNamespace>
+    <AssemblyName>ApiGovernance.Host</AssemblyName>
+    <UserSecretsId>ApiGovernance.Host.LocalDev</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Shared\ApiGovernance.Shared\ApiGovernance.Shared.csproj" />
+    <ProjectReference Include="..\Modules\IdentityAccess\ApiGovernance.Modules.IdentityAccess.csproj" />
+    <ProjectReference Include="..\Modules\MasterData\ApiGovernance.Modules.MasterData.csproj" />
+    <ProjectReference Include="..\Modules\Configuration\ApiGovernance.Modules.Configuration.csproj" />
+    <ProjectReference Include="..\Modules\Documents\ApiGovernance.Modules.Documents.csproj" />
+    <ProjectReference Include="..\Modules\Integrations\ApiGovernance.Modules.Integrations.csproj" />
+    <ProjectReference Include="..\Modules\VersionsFiles\ApiGovernance.Modules.VersionsFiles.csproj" />
+    <ProjectReference Include="..\Modules\Changes\ApiGovernance.Modules.Changes.csproj" />
+    <ProjectReference Include="..\Modules\Workflow\ApiGovernance.Modules.Workflow.csproj" />
+    <ProjectReference Include="..\Modules\PublishingPortal\ApiGovernance.Modules.PublishingPortal.csproj" />
+    <ProjectReference Include="..\Modules\AuditNotifications\ApiGovernance.Modules.AuditNotifications.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ApiGovernance.Modules.IdentityAccess</RootNamespace>
+    <AssemblyName>ApiGovernance.Modules.IdentityAccess</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ApiGovernance.Shared\ApiGovernance.Shared.csproj" />
+  </ItemGroup>
+</Project>

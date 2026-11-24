@@ -1,0 +1,41 @@
+# Dependencies and generated artifacts
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+**/bin/
+**/obj/
+TestResults/
+playwright-report/
+*.log
+# IDE and operating system
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+# Local settings and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+# Runtime files: never commit live uploads or database exports
+/uploads/
+/storage/
+/backups/
+**/uploads/
+**/backups/
+MigrationBackup*/
+ApiGovernance_Backup*/
+*.dump
+*.bak

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ApiGovernance.Modules.MasterData</RootNamespace>
+    <AssemblyName>ApiGovernance.Modules.MasterData</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ApiGovernance.Shared\ApiGovernance.Shared.csproj" />
+  </ItemGroup>
+</Project>
+

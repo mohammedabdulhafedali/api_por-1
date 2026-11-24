@@ -1,0 +1,39 @@
+﻿الشاشة,مسار API المبدئي
+تسجيل الدخول,/api/v1/me
+لوحة التحكم,/api/v1/dashboard
+البحث,/api/v1/search
+أنظمة الشركة,/api/v1/company-systems
+الأنظمة المزودة الداخلية,/api/v1/internal-providers
+الأنظمة المزودة الخارجية,/api/v1/external-providers
+تصنيفات الجهات المستهلكة,/api/v1/consumer-categories
+الجهات المستهلكة,/api/v1/consumers
+مجموعات API,/api/v1/api-groups
+أنواع الملفات,/api/v1/file-types
+قوالب متطلبات الملفات,/api/v1/requirement-templates
+مسارات الاعتماد,/api/v1/approval-routes
+إدارة مراحل المسار,/api/v1/approval-routes/{routeId}/stages
+أنواع التغيير,/api/v1/change-types
+سياسات التغيير,/api/v1/change-policies
+قائمة وثائق API,/api/v1/api-documents
+إضافة وثيقة API,/api/v1/api-documents
+صلاحيات الوثيقة,/api/v1/api-documents/{documentId}/access
+قائمة التكاملات,/api/v1/integrations
+إنشاء تكامل,/api/v1/integrations
+تفاصيل التكامل,/api/v1/integrations/{integrationId}
+ملفات التكامل,/api/v1/revisions/{revisionId}/files
+المراجعات والاعتمادات,/api/v1/workflows/inbox
+الإصدارات,/api/v1/integrations/{integrationId}/versions
+طلبات التغيير,/api/v1/integrations/{integrationId}/change-requests
+النشر,/api/v1/revisions/{revisionId}/publications
+بوابة المستهلك,/api/v1/portal/integrations
+المستخدمون,/api/v1/users
+صلاحيات المستخدم,/api/v1/users/{userId}/permissions
+الأدوار والصلاحيات,/api/v1/roles
+سجل التدقيق,/api/v1/audit-events
+الإشعارات,/api/v1/notifications
+تسجيل الدخول/إدارة الحساب — رمز حماية CSRF,/api/v1/auth/csrf
+تسجيل الدخول/إدارة الحساب — دخول محلي,/api/v1/auth/login
+تسجيل الدخول/إدارة الحساب — خروج وإبطال الجلسة,/api/v1/auth/logout
+تسجيل الدخول/إدارة الحساب — تغيير كلمة المرور,/api/v1/auth/password/change
+تسجيل الدخول/إدارة الحساب — بدء إعادة تعيين أو تفعيل,/api/v1/users/{userId}/password/reset
+تسجيل الدخول/إدارة الحساب — إكمال إعادة التعيين,/api/v1/auth/password/reset/complete

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ApiGovernance.Modules.Configuration</RootNamespace>
+    <AssemblyName>ApiGovernance.Modules.Configuration</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ApiGovernance.Shared\ApiGovernance.Shared.csproj" />
+  </ItemGroup>
+</Project>
+

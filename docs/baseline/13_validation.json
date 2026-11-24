@@ -1,0 +1,19 @@
+{
+  "scope": "فحص بنيوي للوثائق، دون تشغيل التطبيق",
+  "checks": {
+    "93 original endpoints preserved": true,
+    "99 unique method-path pairs": true,
+    "security coverage matches all endpoint pairs": true,
+    "all UI paths in API catalog": true,
+    "59 unique planned tasks": true,
+    "14 sprints": true,
+    "15 gaps tracked": true,
+    "25 UI ids retained": true,
+    "auth local decision recorded": true,
+    "document conflict decision recorded": true,
+    "reference archives readable": true,
+    "G3 conditional not claimed passed": true
+  },
+  "passed": 12,
+  "total": 12
+}
