@@ -31,6 +31,17 @@ import {
   uploadRevisionFile,
   WordDerivativeRecordItem,
 } from '../../api/versionsFilesApi';
+import {
+  getWorkflowHistory,
+  getWorkflowInbox,
+  getWorkflowRunDetails,
+  submitWorkflowStageDecision,
+  WorkflowDecisionHistoryEntry,
+  WorkflowDecisionKind,
+  WorkflowInboxItem,
+  WorkflowRunDetails,
+  WorkflowRunStageItem,
+} from '../../api/workflowsApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
@@ -62,7 +73,9 @@ type PageMode =
   | 'assign-devs'
   | 'create-version'
   | 'upload-file'
-  | 'create-working-copy';
+  | 'create-working-copy'
+  | 'workflow-inbox'
+  | 'decide-stage';
 type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'audit';
 
 interface ModalState {
@@ -303,6 +316,44 @@ const COPY = {
       `تم توليد مشتق .docx متحقق واجتياز OpenXmlValidator والفحص الأمني دون تعديل الملف الأصلي.\nالآلية: ${kind} · الحقول المحدّثة: ${count}`,
     wordGeneratedBlockedMsg: (status: string, detail: string) =>
       `حُفظ سجل الفحص بحالة ${status} ومُنع نشر المشتق أو تنزيله (OP-03).\nالتفصيل: ${detail}`,
+    // S10 W01-W04 Workflow Strings (AR)
+    workflowInboxBtn: 'صندوق المراجعات بانتظار قراري (W01–W04)',
+    workflowInboxBadge: 'صندوق سير العمل المتسلسل · UI-11 / W01–W04',
+    workflowInboxTitle: 'طلبات المراجعة النشطة ضمن أدواري',
+    workflowInboxSub:
+      'يعرض فقط المراحل النشطة (ACTIVE) المسندة لأي دور نشط تملكه ضمن الوثائق المصرح لك بالوصول إليها (ADR-01). يكفي قرار عضو مؤهل واحد لإتمام المرحلة.',
+    workflowInboxEmpty: 'لا توجد حاليًا مراحل اعتماد نشطة بانتظار قرار من أدوارك.',
+    colWfIntegration: 'التكامل والوثيقة',
+    colWfRevision: 'الإصدار / المراجعة',
+    colWfStage: 'المرحلة النشطة والدور',
+    colWfSubmittedBy: 'مُقدَّمة من',
+    openReviewDetailsBtn: 'فتح التبويب',
+    decideStageBtn: 'اتخاذ قرار المرحلة (W02)',
+    workflowRunTitle: 'مسار الاعتماد التنفيذي المجمد (W01–W04)',
+    workflowSnapshotNote:
+      'ملاحظة W01: نسخة المراحل هنا مجمدة لحظة التقديم، ولا تتأثر بأي تعديل لاحق في إعدادات مسار الاعتماد.',
+    workflowActiveStageTag: 'المرحلة النشطة حاليًا',
+    workflowReworkAlertTitle: 'إعادة للعمل (RETURNED — W04)',
+    workflowRejectedAlertTitle: 'مرفوضة نهائيًا (REJECTED — W04)',
+    workflowReworkInstruction:
+      'يمكنك تعديل ملفات هذه المراجعة أو استبدالها ثم إعادة التقديم لتشغيل دورة مراجعة جديدة مع بقاء السجل السابق.',
+    workflowDecisionBadge: 'تسجيل قرار مرحلة الاعتماد · UI-11 / W02–W04',
+    workflowDecisionTitle: 'اتخاذ قرار ذري على المرحلة النشطة',
+    workflowDecisionSub:
+      'قرار واحد ذري لكل مرحلة. اختيار الإعادة للعمل (RETURN) أو الرفض (REJECT) يتطلب كتابة ملاحظات إلزامية.',
+    decisionChoiceLabel: 'القرار المطلوب',
+    decisionApproveOpt: 'اعتماد المرحلة والانتقال / الإكمال (APPROVE)',
+    decisionReturnOpt: 'إعادة للعمل بملاحظات إلزامية (RETURN)',
+    decisionRejectOpt: 'رفض نهائي بملاحظات إلزامية (REJECT)',
+    decisionNotesLabel: 'ملاحظات المراجع (إلزامية عند الإعادة أو الرفض)',
+    decisionNotesPlaceholder: 'اذكر التعديلات المطلوبة أو أسباب الرفض بوضوح...',
+    decisionSubmitBtn: 'تأكيد وتسجيل القرار',
+    decisionNotesRequiredErr: 'الملاحظات إلزامية عند اختيار الإعادة للعمل أو الرفض (W04).',
+    decisionRecordedTitle: 'تم تسجيل قرار المرحلة بنجاح',
+    decisionRecordedMsg: (outcome: string) =>
+      `تم تسجيل القرار الذري للمرحلة وتحديث حالة التشغيل والمراجعة إلى: ${outcome}`,
+    workflowHistoryTitle: 'سجل قرارات المراحل ومحاولات المراجعة (W04)',
+    workflowHistoryEmpty: 'لم تُسجل قرارات مراحل على هذه المراجعة بعد.',
   },
   en: {
     pageTitle: 'Integrations Directory (UI-22)',
@@ -533,6 +584,44 @@ const COPY = {
       `Generated verified .docx derivative passing OpenXmlValidator and security scan without modifying the original file.\nStrategy: ${kind} · Fields updated: ${count}`,
     wordGeneratedBlockedMsg: (status: string, detail: string) =>
       `Diagnostic recorded as ${status}; derivative publish & download remain blocked (OP-03).\nDetails: ${detail}`,
+    // S10 W01-W04 Workflow Strings (EN)
+    workflowInboxBtn: 'Pending Approvals Inbox (W01–W04)',
+    workflowInboxBadge: 'Sequential Workflow Inbox · UI-11 / W01–W04',
+    workflowInboxTitle: 'Active Review Stages Across My Roles',
+    workflowInboxSub:
+      'Lists only ACTIVE workflow stages matching any of your active roles on authorized API documents (ADR-01). A single eligible member decision completes each stage.',
+    workflowInboxEmpty: 'No active workflow stages currently await a decision from your roles.',
+    colWfIntegration: 'Integration & Document',
+    colWfRevision: 'Version / Revision',
+    colWfStage: 'Active Stage & Role',
+    colWfSubmittedBy: 'Submitted By',
+    openReviewDetailsBtn: 'Open Tab',
+    decideStageBtn: 'Record Stage Decision (W02)',
+    workflowRunTitle: 'Frozen Approval Workflow Execution (W01–W04)',
+    workflowSnapshotNote:
+      'W01 Snapshot Guarantee: Stage order & assigned roles were frozen upon submission and remain immune to subsequent route template edits.',
+    workflowActiveStageTag: 'Currently Active Stage',
+    workflowReworkAlertTitle: 'Returned for Rework (RETURNED — W04)',
+    workflowRejectedAlertTitle: 'Workflow Rejected (REJECTED — W04)',
+    workflowReworkInstruction:
+      'You may update/replace files on this returned revision and re-submit to initiate a new review run while preserving prior decision history.',
+    workflowDecisionBadge: 'Record Stage Decision · UI-11 / W02–W04',
+    workflowDecisionTitle: 'Atomic Stage Decision',
+    workflowDecisionSub:
+      'Only one atomic decision is permitted per stage. Returning for rework (RETURN) or rejecting (REJECT) requires mandatory reviewer notes.',
+    decisionChoiceLabel: 'Stage Decision',
+    decisionApproveOpt: 'Approve & Advance / Complete (APPROVE)',
+    decisionReturnOpt: 'Return for Rework with Mandatory Notes (RETURN)',
+    decisionRejectOpt: 'Reject with Mandatory Notes (REJECT)',
+    decisionNotesLabel: 'Reviewer Notes (Mandatory for RETURN or REJECT)',
+    decisionNotesPlaceholder: 'Specify required fixes or rejection rationale...',
+    decisionSubmitBtn: 'Confirm & Submit Decision',
+    decisionNotesRequiredErr: 'Reviewer notes are mandatory when returning for rework or rejecting (W04).',
+    decisionRecordedTitle: 'Stage Decision Recorded',
+    decisionRecordedMsg: (outcome: string) =>
+      `Atomic stage decision saved cleanly. Current workflow / revision outcome: ${outcome}`,
+    workflowHistoryTitle: 'Stage Decisions & Rework Attempts History (W04)',
+    workflowHistoryEmpty: 'No stage decisions have been recorded for this revision yet.',
   },
 } as const;
 
@@ -550,6 +639,8 @@ export function IntegrationsPage({
   const canAssignGlobal = permSet.has('integrations.assign_developer');
   const canViewVersionsGlobal = permSet.has('versions.view');
   const canViewFilesGlobal = permSet.has('files.view');
+  const canViewWorkflowsGlobal = permSet.has('workflows.view');
+  const canDecideWorkflowsGlobal = permSet.has('workflows.decide');
 
   const [mode, setMode] = useState<PageMode>(initialMode);
   useEffect(() => {
@@ -591,6 +682,18 @@ export function IntegrationsPage({
   const [workingCopyBaseRevisionId, setWorkingCopyBaseRevisionId] = useState('');
   const [workingCopyChangeRequestId, setWorkingCopyChangeRequestId] = useState('');
   const [verifiedDownloadNotice, setVerifiedDownloadNotice] = useState<string | null>(null);
+  // S10 W01-W04 Workflow Engine state
+  const [workflowInbox, setWorkflowInbox] = useState<WorkflowInboxItem[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [selectedWorkflowRun, setSelectedWorkflowRun] = useState<WorkflowRunDetails | null>(null);
+  const [workflowHistory, setWorkflowHistory] = useState<WorkflowDecisionHistoryEntry[]>([]);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [decisionRunId, setDecisionRunId] = useState('');
+  const [decisionStage, setDecisionStage] = useState<WorkflowRunStageItem | null>(null);
+  const [decisionTitleContext, setDecisionTitleContext] = useState('');
+  const [decisionKind, setDecisionKind] = useState<WorkflowDecisionKind>('APPROVE');
+  const [decisionNotes, setDecisionNotes] = useState('');
+  const [decisionReturnTarget, setDecisionReturnTarget] = useState<'details' | 'workflow-inbox'>('details');
 
   const handleApiError = useCallback(
     (err: unknown, fallbackTitle: string) => {
@@ -682,10 +785,37 @@ export function IntegrationsPage({
     [canViewVersionsGlobal, lang]
   );
 
+  const loadWorkflowForRun = useCallback(
+    async (runId?: string | null) => {
+      if (!canViewWorkflowsGlobal || !runId) {
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
+        return;
+      }
+      setWorkflowLoading(true);
+      try {
+        const [runDetails, historyRes] = await Promise.all([
+          getWorkflowRunDetails(runId, lang),
+          getWorkflowHistory(runId, lang),
+        ]);
+        setSelectedWorkflowRun(runDetails);
+        setWorkflowHistory(historyRes.entries);
+      } catch {
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
+      } finally {
+        setWorkflowLoading(false);
+      }
+    },
+    [canViewWorkflowsGlobal, lang]
+  );
+
   const loadFilesWorkspaceTab = useCallback(
     async (integrationId: string, versionId?: string, revisionId?: string) => {
       if (!canViewFilesGlobal) {
         setFilesWorkspace(null);
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
         return;
       }
       setFilesLoading(true);
@@ -698,13 +828,16 @@ export function IntegrationsPage({
         setFilesWorkspace(res);
         setSelectedWorkspaceVersionId(res.selectedVersionId ?? '');
         setSelectedWorkspaceRevisionId(res.selectedRevision?.id ?? '');
+        await loadWorkflowForRun(res.selectedRevision?.latestWorkflowRunId);
       } catch {
         setFilesWorkspace(null);
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
       } finally {
         setFilesLoading(false);
       }
     },
-    [canViewFilesGlobal, lang]
+    [canViewFilesGlobal, lang, loadWorkflowForRun]
   );
 
   useEffect(() => {
@@ -1114,6 +1247,86 @@ export function IntegrationsPage({
     return `${bytes} B`;
   };
 
+  const loadWorkflowInbox = useCallback(async () => {
+    if (!canViewWorkflowsGlobal) return;
+    setInboxLoading(true);
+    try {
+      const res = await getWorkflowInbox(lang);
+      setWorkflowInbox(res.items);
+    } catch (err) {
+      handleApiError(err, c.workflowInboxTitle);
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [canViewWorkflowsGlobal, c.workflowInboxTitle, handleApiError, lang]);
+
+  const openWorkflowInbox = () => {
+    setMode('workflow-inbox');
+    void loadWorkflowInbox();
+  };
+
+  const openDecideStage = (
+    runId: string,
+    stage: WorkflowRunStageItem,
+    titleContext: string,
+    returnTarget: 'details' | 'workflow-inbox'
+  ) => {
+    setFormError(null);
+    setDecisionRunId(runId);
+    setDecisionStage(stage);
+    setDecisionTitleContext(titleContext);
+    setDecisionKind('APPROVE');
+    setDecisionNotes('');
+    setDecisionReturnTarget(returnTarget);
+    setMode('decide-stage');
+  };
+
+  const handleSubmitStageDecision = async () => {
+    if (!decisionRunId || !decisionStage) return;
+    setFormError(null);
+    const trimmed = decisionNotes.trim();
+    if ((decisionKind === 'RETURN' || decisionKind === 'REJECT') && !trimmed) {
+      setFormError(c.decisionNotesRequiredErr);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await submitWorkflowStageDecision(
+        decisionRunId,
+        decisionStage.id,
+        { decision: decisionKind, notes: trimmed || null },
+        lang
+      );
+      setModal({
+        variant: 'success',
+        title: c.decisionRecordedTitle,
+        message: c.decisionRecordedMsg(res.outcomeStatus),
+      });
+
+      if (decisionReturnTarget === 'workflow-inbox') {
+        setMode('workflow-inbox');
+        await loadWorkflowInbox();
+      } else if (details) {
+        const refreshed = await getIntegrationDetails(details.summary.id, lang);
+        setDetails(refreshed);
+        setMode('details');
+        setActiveTab('revisions');
+        await loadFilesWorkspaceTab(
+          details.summary.id,
+          selectedWorkspaceVersionId || undefined,
+          selectedWorkspaceRevisionId || undefined
+        );
+      } else {
+        setMode('list');
+      }
+    } catch (err) {
+      handleApiError(err, c.workflowDecisionTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const renderScanStatusBadge = (status: string) => {
     switch (status) {
       case 'CLEAN':
@@ -1424,6 +1637,157 @@ export function IntegrationsPage({
             );
           })()}
         </StandaloneFormPage>
+      ) : mode === 'decide-stage' && decisionStage ? (
+        <StandaloneFormPage
+          modeBadgeLabel={c.workflowDecisionBadge}
+          formTitle={`${c.workflowDecisionTitle}: ${decisionTitleContext}`}
+          formSubtitle={c.workflowDecisionSub}
+          backButtonLabel={c.backBtn}
+          submitButtonLabel={c.decisionSubmitBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => setMode(decisionReturnTarget)}
+          onCancel={() => setMode(decisionReturnTarget)}
+          onSubmit={() => void handleSubmitStageDecision()}
+        >
+          {formError && (
+            <p className="form-error-text" role="alert">
+              {formError}
+            </p>
+          )}
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div className="slot-stat-box">
+              <div className="slot-stat-label">{c.colWfStage}</div>
+              <div className="slot-stat-value">
+                {`#${decisionStage.position} · ${decisionStage.stageNameSnapshot} (${decisionStage.responsibleRoleName})`}
+              </div>
+            </div>
+
+            <FormField id="wf-decision-choice" label={c.decisionChoiceLabel} required>
+              <SelectInput
+                id="wf-decision-choice"
+                value={decisionKind}
+                onChange={(e) => setDecisionKind(e.target.value as WorkflowDecisionKind)}
+                options={[
+                  { value: 'APPROVE', label: c.decisionApproveOpt },
+                  { value: 'RETURN', label: c.decisionReturnOpt },
+                  { value: 'REJECT', label: c.decisionRejectOpt },
+                ]}
+              />
+            </FormField>
+
+            <FormField
+              id="wf-decision-notes"
+              label={c.decisionNotesLabel}
+              required={decisionKind === 'RETURN' || decisionKind === 'REJECT'}
+            >
+              <textarea
+                id="wf-decision-notes"
+                className="form-control"
+                rows={4}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}
+                value={decisionNotes}
+                placeholder={c.decisionNotesPlaceholder}
+                onChange={(e) => setDecisionNotes(e.target.value)}
+              />
+            </FormField>
+          </div>
+        </StandaloneFormPage>
+      ) : mode === 'workflow-inbox' ? (
+        <section className="surface-card">
+          <div className="card-header-row">
+            <div>
+              <span className="mode-pill">{c.workflowInboxBadge}</span>
+              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+                {c.workflowInboxTitle}
+              </h2>
+              <p className="card-subtitle">{c.workflowInboxSub}</p>
+            </div>
+            <Button variant="outline" onClick={() => setMode('list')}>
+              {c.backBtn}
+            </Button>
+          </div>
+
+          {inboxLoading ? (
+            <LoadingState title={commonStrings.tableLoadingTitle} />
+          ) : workflowInbox.length === 0 ? (
+            <p className="card-subtitle">{c.workflowInboxEmpty}</p>
+          ) : (
+            <div className="table-scroll-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{c.colWfIntegration}</th>
+                    <th>{c.colWfRevision}</th>
+                    <th>{c.colWfStage}</th>
+                    <th>{c.colWfSubmittedBy}</th>
+                    <th>{c.colActions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workflowInbox.map((item) => (
+                    <tr key={item.stageId}>
+                      <td>
+                        <strong>{item.derivedTitle}</strong>
+                        <div className="muted-cell-text">
+                          <code className="ltr-code">{item.referenceCode}</code>
+                        </div>
+                      </td>
+                      <td>
+                        <code className="ltr-code">
+                          {`${item.versionLabel ?? '-'} · #${item.revisionNumber ?? '-'}`}
+                        </code>
+                      </td>
+                      <td>
+                        <div>
+                          <strong>{`#${item.stagePosition} · ${item.stageNameSnapshot}`}</strong>
+                        </div>
+                        <StatusBadge variant="info">{item.responsibleRoleName}</StatusBadge>
+                      </td>
+                      <td>{item.submittedByName}</td>
+                      <td>
+                        <div className="button-row">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void openDetails(item.integrationId, 'revisions')}
+                          >
+                            {c.openReviewDetailsBtn}
+                          </Button>
+                          {item.canDecide && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() =>
+                                openDecideStage(
+                                  item.runId,
+                                  {
+                                    id: item.stageId,
+                                    runId: item.runId,
+                                    position: item.stagePosition,
+                                    stageNameSnapshot: item.stageNameSnapshot,
+                                    responsibleRoleIdSnapshot: item.responsibleRoleIdSnapshot,
+                                    responsibleRoleName: item.responsibleRoleName,
+                                    status: 'ACTIVE',
+                                  },
+                                  `${item.derivedTitle} (#${item.revisionNumber ?? ''})`,
+                                  'workflow-inbox'
+                                )
+                              }
+                            >
+                              {c.decideStageBtn}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       ) : mode === 'assign-devs' && details ? (
         <StandaloneFormPage
           modeBadgeLabel={c.assignBadge}
@@ -1645,7 +2009,8 @@ export function IntegrationsPage({
                           )}
                         </div>
                         {filesWorkspace?.selectedRevision &&
-                          filesWorkspace.selectedRevision.status === 'DRAFT' &&
+                          (filesWorkspace.selectedRevision.status === 'DRAFT' ||
+                            filesWorkspace.selectedRevision.status === 'RETURNED') &&
                           filesWorkspace.canUploadFiles && (
                             <Button variant="primary" size="sm" disabled={submitting} onClick={openUploadFile}>
                               {c.filesUploadBtn}
@@ -1726,7 +2091,8 @@ export function IntegrationsPage({
                                       )}
                                     </StatusBadge>
 
-                                    {filesWorkspace.selectedRevision.status === 'DRAFT' &&
+                                    {(filesWorkspace.selectedRevision.status === 'DRAFT' ||
+                                      filesWorkspace.selectedRevision.status === 'RETURNED') &&
                                       filesWorkspace.canSubmitRevision && (
                                         <Button
                                           variant="primary"
@@ -1778,8 +2144,9 @@ export function IntegrationsPage({
                               </div>
 
                               {filesWorkspace.selectedRevision &&
-                                (filesWorkspace.selectedRevision.isProtected ||
-                                  filesWorkspace.selectedRevision.status !== 'DRAFT') && (
+                                (filesWorkspace.selectedRevision.isProtected ??
+                                  (filesWorkspace.selectedRevision.status !== 'DRAFT' &&
+                                    filesWorkspace.selectedRevision.status !== 'RETURNED')) && (
                                   <div
                                     className="slot-stat-box"
                                     style={{ marginBottom: 12, borderInlineStart: '4px solid var(--brand-gold, #c68d28)' }}
@@ -1790,6 +2157,23 @@ export function IntegrationsPage({
                                     </div>
                                   </div>
                                 )}
+
+                              {filesWorkspace.selectedRevision?.status === 'RETURNED' && (
+                                <div
+                                  className="slot-stat-box"
+                                  style={{ marginBottom: 12, borderInlineStart: '4px solid var(--brand-gold, #c68d28)' }}
+                                >
+                                  <div className="slot-stat-label">{c.workflowReworkAlertTitle}</div>
+                                  {filesWorkspace.selectedRevision.latestDecisionNotes && (
+                                    <div className="slot-stat-value" style={{ fontSize: '0.9rem' }}>
+                                      {filesWorkspace.selectedRevision.latestDecisionNotes}
+                                    </div>
+                                  )}
+                                  <p className="card-subtitle" style={{ marginTop: 4, marginBottom: 0 }}>
+                                    {c.workflowReworkInstruction}
+                                  </p>
+                                </div>
+                              )}
 
                               {filesWorkspace.selectedRevision &&
                                 filesWorkspace.selectedRevision.requirements.length > 0 && (
@@ -1923,7 +2307,8 @@ export function IntegrationsPage({
                                                     </Button>
                                                   )}
                                                 {filesWorkspace.canDeleteFiles &&
-                                                  filesWorkspace.selectedRevision?.status === 'DRAFT' && (
+                                                  (filesWorkspace.selectedRevision?.status === 'DRAFT' ||
+                                                    filesWorkspace.selectedRevision?.status === 'RETURNED') && (
                                                     <Button
                                                       variant="danger"
                                                       size="sm"
@@ -2086,8 +2471,14 @@ export function IntegrationsPage({
                                     >
                                       {rev.status}
                                     </StatusBadge>
-                                    <StatusBadge variant={rev.status === 'DRAFT' ? 'neutral' : 'warning'}>
-                                      {rev.status === 'DRAFT' ? c.editableDraftTag : c.protectedTag}
+                                    <StatusBadge
+                                      variant={
+                                        rev.status === 'DRAFT' || rev.status === 'RETURNED' ? 'neutral' : 'warning'
+                                      }
+                                    >
+                                      {rev.status === 'DRAFT' || rev.status === 'RETURNED'
+                                        ? c.editableDraftTag
+                                        : c.protectedTag}
                                     </StatusBadge>
                                   </div>
                                 </td>
@@ -2121,16 +2512,17 @@ export function IntegrationsPage({
                                     >
                                       {c.selectRevisionBtn}
                                     </Button>
-                                    {rev.status === 'DRAFT' && filesWorkspace.canSubmitRevision && (
-                                      <Button
-                                        variant="primary"
-                                        size="sm"
-                                        disabled={submitting || rev.isReadyForSubmission === false}
-                                        onClick={() => promptSubmitRevision(rev.id, rev.revisionNumber)}
-                                      >
-                                        {c.submitRevisionBtn}
-                                      </Button>
-                                    )}
+                                    {(rev.status === 'DRAFT' || rev.status === 'RETURNED') &&
+                                      filesWorkspace.canSubmitRevision && (
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          disabled={submitting || rev.isReadyForSubmission === false}
+                                          onClick={() => promptSubmitRevision(rev.id, rev.revisionNumber)}
+                                        >
+                                          {c.submitRevisionBtn}
+                                        </Button>
+                                      )}
                                     {rev.status === 'APPROVED' &&
                                       filesWorkspace.canCreateWorkingCopy &&
                                       !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
@@ -2150,6 +2542,178 @@ export function IntegrationsPage({
                           </tbody>
                         </table>
                       </div>
+
+                      {filesWorkspace.selectedRevision?.latestDecisionNotes &&
+                        (filesWorkspace.selectedRevision.status === 'RETURNED' ||
+                          filesWorkspace.selectedRevision.status === 'REJECTED') && (
+                          <div
+                            className="slot-stat-box"
+                            style={{
+                              marginTop: 14,
+                              borderInlineStart:
+                                filesWorkspace.selectedRevision.status === 'RETURNED'
+                                  ? '4px solid var(--brand-gold, #c68d28)'
+                                  : '4px solid var(--status-danger, #b42318)',
+                            }}
+                          >
+                            <div className="slot-stat-label">
+                              {filesWorkspace.selectedRevision.status === 'RETURNED'
+                                ? c.workflowReworkAlertTitle
+                                : c.workflowRejectedAlertTitle}
+                            </div>
+                            <div className="slot-stat-value" style={{ fontSize: '0.92rem' }}>
+                              {filesWorkspace.selectedRevision.latestDecisionNotes}
+                            </div>
+                            {filesWorkspace.selectedRevision.status === 'RETURNED' && (
+                              <p className="card-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                                {c.workflowReworkInstruction}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                      {canViewWorkflowsGlobal && selectedWorkflowRun && (
+                        <div style={{ marginTop: 18, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+                          <div className="card-header-row" style={{ marginBottom: 8 }}>
+                            <div>
+                              <h4 className="card-title heading-font">{c.workflowRunTitle}</h4>
+                              <p className="card-subtitle">{c.workflowSnapshotNote}</p>
+                            </div>
+                            <StatusBadge
+                              variant={
+                                selectedWorkflowRun.status === 'APPROVED'
+                                  ? 'success'
+                                  : selectedWorkflowRun.status === 'REJECTED'
+                                    ? 'danger'
+                                    : selectedWorkflowRun.status === 'RETURNED'
+                                      ? 'warning'
+                                      : 'info'
+                              }
+                            >
+                              {selectedWorkflowRun.status}
+                            </StatusBadge>
+                          </div>
+
+                          {workflowLoading ? (
+                            <LoadingState title={commonStrings.tableLoadingTitle} />
+                          ) : (
+                            <>
+                              <div className="table-scroll-container" style={{ marginBottom: 14 }}>
+                                <table className="data-table">
+                                  <thead>
+                                    <tr>
+                                      <th>{c.colStageOrder}</th>
+                                      <th>{c.colStageName}</th>
+                                      <th>{c.colStageRole}</th>
+                                      <th>{c.colRevStatus}</th>
+                                      <th>{c.colActions}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedWorkflowRun.stages.map((st) => (
+                                      <tr key={st.id}>
+                                        <td>
+                                          <code className="ltr-code">{st.position}</code>
+                                        </td>
+                                        <td>
+                                          <strong>{st.stageNameSnapshot}</strong>
+                                          {st.decision && (
+                                            <div className="muted-cell-text">
+                                              {`${st.decision.decision} · ${st.decision.actorUserName}${
+                                                st.decision.notes ? ` — ${st.decision.notes}` : ''
+                                              }`}
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td>{st.responsibleRoleName}</td>
+                                        <td>
+                                          <StatusBadge
+                                            variant={
+                                              st.status === 'APPROVED'
+                                                ? 'success'
+                                                : st.status === 'ACTIVE'
+                                                  ? 'info'
+                                                  : st.status === 'REJECTED'
+                                                    ? 'danger'
+                                                    : 'neutral'
+                                            }
+                                          >
+                                            {st.status === 'ACTIVE' ? c.workflowActiveStageTag : st.status}
+                                          </StatusBadge>
+                                        </td>
+                                        <td>
+                                          {st.status === 'ACTIVE' &&
+                                            selectedWorkflowRun.canCurrentUserDecideActiveStage &&
+                                            canDecideWorkflowsGlobal && (
+                                              <Button
+                                                variant="primary"
+                                                size="sm"
+                                                disabled={submitting}
+                                                onClick={() =>
+                                                  openDecideStage(
+                                                    selectedWorkflowRun.id,
+                                                    st,
+                                                    `${selectedWorkflowRun.derivedTitle} (#${selectedWorkflowRun.revisionNumber ?? ''})`,
+                                                    'details'
+                                                  )
+                                                }
+                                              >
+                                                {c.decideStageBtn}
+                                              </Button>
+                                            )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              <h4 className="card-title heading-font" style={{ marginBottom: 8 }}>
+                                {c.workflowHistoryTitle}
+                              </h4>
+                              {workflowHistory.length === 0 ? (
+                                <p className="card-subtitle">{c.workflowHistoryEmpty}</p>
+                              ) : (
+                                <div className="table-scroll-container">
+                                  <table className="data-table">
+                                    <thead>
+                                      <tr>
+                                        <th>{c.colStageOrder}</th>
+                                        <th>{c.colStageName}</th>
+                                        <th>{c.colAuditActor}</th>
+                                        <th>{c.colAuditRes}</th>
+                                        <th>{c.colAuditTime}</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {workflowHistory.map((h) => (
+                                        <tr key={h.decision.id}>
+                                          <td>
+                                            <code className="ltr-code">{h.stagePosition}</code>
+                                          </td>
+                                          <td>{`${h.stageNameSnapshot} (${h.responsibleRoleName})`}</td>
+                                          <td>{h.decision.actorUserName}</td>
+                                          <td>
+                                            <strong>{h.decision.decision}</strong>
+                                            {h.decision.notes && (
+                                              <div className="muted-cell-text">{h.decision.notes}</div>
+                                            )}
+                                          </td>
+                                          <td>
+                                            <code className="ltr-code">
+                                              {new Date(h.decision.decidedAt).toISOString().replace('T', ' ').slice(0, 19)}
+                                            </code>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2428,11 +2992,18 @@ export function IntegrationsPage({
               <h2 className="card-title heading-font">{c.pageTitle}</h2>
               <p className="card-subtitle">{c.pageDesc}</p>
             </div>
-            {canCreateGlobal && (
-              <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                {c.addBtn}
-              </Button>
-            )}
+            <div className="button-row">
+              {canViewWorkflowsGlobal && (
+                <Button variant="secondary" disabled={submitting} onClick={openWorkflowInbox}>
+                  {c.workflowInboxBtn}
+                </Button>
+              )}
+              {canCreateGlobal && (
+                <Button variant="primary" disabled={submitting} onClick={openCreate}>
+                  {c.addBtn}
+                </Button>
+              )}
+            </div>
           </div>
 
           <SearchFilterBar

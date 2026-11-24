@@ -128,7 +128,10 @@ public sealed record DocumentRevisionDto(
     bool IsReadyForSubmission,
     int MissingRequiredTypesCount,
     IReadOnlyList<string> SubmissionBlockersAr,
-    IReadOnlyList<string> SubmissionBlockersEn);
+    IReadOnlyList<string> SubmissionBlockersEn,
+    Guid? LatestWorkflowRunId = null,
+    string? LatestWorkflowRunStatus = null,
+    string? LatestDecisionNotes = null);
 
 public sealed record RevisionFileDto(
     Guid Id,
@@ -216,7 +219,8 @@ public sealed record RevisionDetailsResponse(
 public sealed record SubmitRevisionResponse(
     DocumentRevisionDto Revision,
     int CleanFilesCount,
-    string TraceId);
+    string TraceId,
+    Guid? WorkflowRunId = null);
 
 public sealed record IntegrationFilesWorkspaceResponse(
     Guid IntegrationId,

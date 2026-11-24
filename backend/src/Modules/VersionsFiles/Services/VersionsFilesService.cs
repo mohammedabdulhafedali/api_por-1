@@ -144,10 +144,15 @@ public sealed class VersionsFilesService(
     IFileSecurityScanner fileScanner,
     FileUploadContentValidator contentValidator,
     IWordGovernanceDerivativeService wordDerivativeService,
+    IWorkflowRunStarter workflowRunStarter,
     IOptions<FileStorageOptions> storageOptions) : IVersionsFilesService
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
     private readonly FileStorageOptions _storageOptions = storageOptions.Value;
+
+    private static bool IsEditableRevisionStatus(string status) =>
+        string.Equals(status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status, RevisionStatusValues.Returned, StringComparison.OrdinalIgnoreCase);
 
     public async Task<IntegrationVersionsResponse> GetIntegrationVersionsAsync(
         ClaimsPrincipal actorPrincipal,
@@ -696,7 +701,7 @@ public sealed class VersionsFilesService(
                 messageEn: "Cannot submit a documentation revision for an archived API document.");
         }
 
-        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
+        if (!IsEditableRevisionStatus(revision.Status))
         {
             await serverAuthorization.WriteAuditEventAsync(
                 access.Actor.Id,
@@ -708,8 +713,8 @@ public sealed class VersionsFilesService(
                 cancellationToken);
 
             throw ApiContractException.UnprocessableEntity(
-                messageAr: $"لا يمكن تقديم هذه المراجعة لأنها محمية في حالة ({revision.Status}) وليست مسودة (DRAFT).",
-                messageEn: $"Cannot submit revision because it is protected in '{revision.Status}' status and not a DRAFT.");
+                messageAr: $"لا يمكن تقديم هذه المراجعة لأنها محمية في حالة ({revision.Status}) وليست مسودة (DRAFT) أو معادة للعمل (RETURNED).",
+                messageEn: $"Cannot submit revision because it is protected in '{revision.Status}' status and not editable.");
         }
 
         var precheckDtos = await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
@@ -745,27 +750,40 @@ public sealed class VersionsFilesService(
                 });
         }
 
-        var updatedRows = await dbContext.DocumentRevisions
-            .Where(r => r.Id == revision.Id && r.Status == RevisionStatusValues.Draft)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RevisionStatusValues.Submitted), cancellationToken);
-
-        if (updatedRows == 0)
+        Guid workflowRunId;
+        await using (var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken))
         {
-            throw ApiContractException.Conflict(
-                messageAr: "تم تعديل حالة هذه المراجعة بالتزامن من طلب آخر؛ يرجى التحديث وإعادة التحقق.",
-                messageEn: "Revision status was modified concurrently by another request.");
+            var updatedRows = await dbContext.DocumentRevisions
+                .Where(r => r.Id == revision.Id &&
+                            (r.Status == RevisionStatusValues.Draft || r.Status == RevisionStatusValues.Returned))
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RevisionStatusValues.Submitted), cancellationToken);
+
+            if (updatedRows == 0)
+            {
+                throw ApiContractException.Conflict(
+                    messageAr: "تم تعديل حالة هذه المراجعة بالتزامن من طلب آخر؛ يرجى التحديث وإعادة التحقق.",
+                    messageEn: "Revision status was modified concurrently by another request.");
+            }
+
+            workflowRunId = await workflowRunStarter.StartRevisionWorkflowRunAsync(
+                revision.Id,
+                access.Document.ApprovalRouteId,
+                access.Actor.Id,
+                integration.Id,
+                cancellationToken);
+
+            dbContext.ReleaseHistoryEvents.Add(new ReleaseHistoryEventEntity
+            {
+                Id = Guid.NewGuid(),
+                RevisionId = revision.Id,
+                EventType = "REVISION_SUBMITTED",
+                ActorUserId = access.Actor.Id,
+                ChangeRequestId = revision.ChangeRequestId,
+                RecordedAt = DateTimeOffset.UtcNow
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
         }
-
-        dbContext.ReleaseHistoryEvents.Add(new ReleaseHistoryEventEntity
-        {
-            Id = Guid.NewGuid(),
-            RevisionId = revision.Id,
-            EventType = "REVISION_SUBMITTED",
-            ActorUserId = access.Actor.Id,
-            ChangeRequestId = revision.ChangeRequestId,
-            RecordedAt = DateTimeOffset.UtcNow
-        });
-        await dbContext.SaveChangesAsync(cancellationToken);
 
         await serverAuthorization.WriteAuditEventAsync(
             access.Actor.Id,
@@ -779,13 +797,14 @@ public sealed class VersionsFilesService(
                 apiVersionId = version.Id,
                 version.VersionLabel,
                 revision.RevisionNumber,
+                workflowRunId,
                 cleanFilesCount = revDto.FilesCount
             },
             cancellationToken);
 
         var updatedDtos = await LoadRevisionDtosAsync(version.Id, traceId, cancellationToken);
         var updatedDto = updatedDtos.First(r => r.Id == revision.Id);
-        return new SubmitRevisionResponse(updatedDto, revDto.FilesCount, traceId);
+        return new SubmitRevisionResponse(updatedDto, revDto.FilesCount, traceId, workflowRunId);
     }
 
     public async Task<IReadOnlyList<RevisionFileDto>> GetRevisionFilesAsync(
@@ -821,7 +840,7 @@ public sealed class VersionsFilesService(
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
+        if (!IsEditableRevisionStatus(revision.Status))
         {
             await serverAuthorization.WriteAuditEventAsync(
                 access.Actor.Id,
@@ -1148,7 +1167,7 @@ public sealed class VersionsFilesService(
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
+        if (!IsEditableRevisionStatus(revision.Status))
         {
             await serverAuthorization.WriteAuditEventAsync(
                 access.Actor.Id,
@@ -1275,7 +1294,7 @@ public sealed class VersionsFilesService(
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(revision.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase))
+        if (!IsEditableRevisionStatus(revision.Status))
         {
             await serverAuthorization.WriteAuditEventAsync(
                 access.Actor.Id,
@@ -2042,6 +2061,26 @@ public sealed class VersionsFilesService(
                 .GroupBy(e => e.FileTypeId)
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(x => x.Extension).ToList());
 
+        var latestRunsByRevision = (await dbContext.WorkflowRuns.AsNoTracking()
+            .Where(r => r.RevisionId.HasValue && revIds.Contains(r.RevisionId.Value))
+            .OrderByDescending(r => r.StartedAt)
+            .ToListAsync(cancellationToken))
+            .GroupBy(r => r.RevisionId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var latestRunIds = latestRunsByRevision.Values.Select(r => r.Id).ToList();
+        var latestRunDecisionNotes = latestRunIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : (await (
+                from st in dbContext.WorkflowRunStages.AsNoTracking()
+                join dec in dbContext.WorkflowDecisions.AsNoTracking() on st.Id equals dec.RunStageId
+                where latestRunIds.Contains(st.RunId) && dec.Notes != null
+                orderby dec.DecidedAt descending
+                select new { st.RunId, dec.Notes })
+                .ToListAsync(cancellationToken))
+                .GroupBy(x => x.RunId)
+                .ToDictionary(g => g.Key, g => g.First().Notes!);
+
         return revisions.Select(rev =>
         {
             var myReqs = reqRows.Where(r => r.RevisionId == rev.Id).ToList();
@@ -2114,8 +2153,12 @@ public sealed class VersionsFilesService(
                 blockersEn.Add("At least one CLEAN file is required in the documentation package prior to submission.");
             }
 
-            var isProtected = !string.Equals(rev.Status, RevisionStatusValues.Draft, StringComparison.OrdinalIgnoreCase);
+            var isProtected = !IsEditableRevisionStatus(rev.Status);
             var isReady = !isProtected && blockersAr.Count == 0;
+            latestRunsByRevision.TryGetValue(rev.Id, out var latestRun);
+            var latestNotes = latestRun is not null && latestRunDecisionNotes.TryGetValue(latestRun.Id, out var noteText)
+                ? noteText
+                : null;
 
             return new DocumentRevisionDto(
                 rev.Id,
@@ -2137,7 +2180,10 @@ public sealed class VersionsFilesService(
                 IsReadyForSubmission: isReady,
                 MissingRequiredTypesCount: missingRequiredTypes,
                 SubmissionBlockersAr: blockersAr,
-                SubmissionBlockersEn: blockersEn);
+                SubmissionBlockersEn: blockersEn,
+                LatestWorkflowRunId: latestRun?.Id,
+                LatestWorkflowRunStatus: latestRun?.Status,
+                LatestDecisionNotes: latestNotes);
         }).ToList();
     }
 
