@@ -93,6 +93,9 @@ public sealed class ApiGovernanceDbContext : DbContext
     // Infrastructure Identity Session Ticket Store (Task I01)
     public DbSet<AuthSessionEntity> AuthSessions => Set<AuthSessionEntity>();
 
+    // Sprint S09 (V08): Word OpenXML governance derivative & OP-03 verification records
+    public DbSet<WordDerivativeRecordEntity> WordDerivativeRecords => Set<WordDerivativeRecordEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

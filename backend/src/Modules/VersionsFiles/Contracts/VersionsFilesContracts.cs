@@ -10,6 +10,25 @@ public static class FileScanStatusValues
     public const string Invalid = "INVALID";
 }
 
+public static class RevisionStatusValues
+{
+    public const string Draft = "DRAFT";
+    public const string Submitted = "SUBMITTED";
+    public const string InReview = "IN_REVIEW";
+    public const string Approved = "APPROVED";
+    public const string Returned = "RETURNED";
+    public const string Rejected = "REJECTED";
+    public const string Superseded = "SUPERSEDED";
+}
+
+public static class WordDerivativeStatusValues
+{
+    public const string Verified = "VERIFIED";
+    public const string PendingScan = "PENDING_SCAN";
+    public const string NoRecognizedFields = "NO_RECOGNIZED_FIELDS";
+    public const string Failed = "FAILED";
+}
+
 public sealed record StagedFileWriteResult(
     string StagedFilePath,
     string Sha256,
@@ -68,6 +87,12 @@ public sealed record CreateApiVersionRequest : IValidatableObject
     }
 }
 
+public sealed record CreateDocumentRevisionRequest
+{
+    public Guid? BaseRevisionId { get; init; }
+    public Guid? ChangeRequestId { get; init; }
+}
+
 public sealed record RevisionRequirementProgressDto(
     Guid FileTypeId,
     string FileTypeName,
@@ -78,7 +103,10 @@ public sealed record RevisionRequirementProgressDto(
     int MinCount,
     int MaxCount,
     int UploadedCleanCount,
-    int UploadedPendingScanCount);
+    int UploadedPendingScanCount,
+    bool IsSatisfied,
+    int MissingRequiredCount,
+    bool ExceedsMaxCount);
 
 public sealed record DocumentRevisionDto(
     Guid Id,
@@ -95,7 +123,12 @@ public sealed record DocumentRevisionDto(
     int FilesCount,
     int PendingScanCount,
     IReadOnlyList<RevisionRequirementProgressDto> Requirements,
-    string TraceId);
+    string TraceId,
+    bool IsProtected,
+    bool IsReadyForSubmission,
+    int MissingRequiredTypesCount,
+    IReadOnlyList<string> SubmissionBlockersAr,
+    IReadOnlyList<string> SubmissionBlockersEn);
 
 public sealed record RevisionFileDto(
     Guid Id,
@@ -129,6 +162,62 @@ public sealed record FileScanStatusDto(
     DateTimeOffset CreatedAt,
     string TraceId);
 
+public sealed record ApprovedChangeRequestSummaryDto(
+    Guid Id,
+    Guid SourceRevisionId,
+    Guid ChangeTypeId,
+    string ChangeTypeName,
+    string Reason,
+    IReadOnlyList<Guid> AffectedSourceFileIds,
+    DateTimeOffset CreatedAt);
+
+public sealed record WordFieldUpdateEntryDto(
+    string FieldKey,
+    string Mechanism,
+    string ValueApplied,
+    string Location);
+
+public sealed record WordDerivativeRecordDto(
+    Guid Id,
+    Guid RevisionId,
+    Guid RevisionFileId,
+    Guid SourceObjectId,
+    string SourceSha256,
+    Guid? DerivedObjectId,
+    string? DerivedSha256,
+    long? DerivedSizeBytes,
+    string Status,
+    string TemplateKindDetected,
+    int FieldsUpdatedCount,
+    IReadOnlyList<WordFieldUpdateEntryDto> MatchedFields,
+    IReadOnlyList<string> ValidationErrors,
+    string? ErrorMessage,
+    bool IsPublishable,
+    Guid CreatedBy,
+    string CreatedByName,
+    DateTimeOffset CreatedAt,
+    string TraceId);
+
+public sealed record RevisionDetailsResponse(
+    DocumentRevisionDto Revision,
+    Guid IntegrationId,
+    Guid DocumentId,
+    string ReferenceCode,
+    string DerivedTitle,
+    bool CanSubmit,
+    bool CanCreateWorkingCopy,
+    bool CanUploadFiles,
+    bool CanDeleteFiles,
+    bool CanDownloadFiles,
+    IReadOnlyList<RevisionFileDto> Files,
+    IReadOnlyList<WordDerivativeRecordDto> WordDerivatives,
+    string TraceId);
+
+public sealed record SubmitRevisionResponse(
+    DocumentRevisionDto Revision,
+    int CleanFilesCount,
+    string TraceId);
+
 public sealed record IntegrationFilesWorkspaceResponse(
     Guid IntegrationId,
     Guid DocumentId,
@@ -147,5 +236,8 @@ public sealed record IntegrationFilesWorkspaceResponse(
     IReadOnlyList<DocumentRevisionDto> Revisions,
     DocumentRevisionDto? SelectedRevision,
     IReadOnlyList<RevisionFileDto> Files,
-    string TraceId);
-
+    string TraceId,
+    bool CanSubmitRevision,
+    bool CanCreateWorkingCopy,
+    IReadOnlyList<ApprovedChangeRequestSummaryDto> ApprovedChangeRequests,
+    IReadOnlyList<WordDerivativeRecordDto> WordDerivatives);
