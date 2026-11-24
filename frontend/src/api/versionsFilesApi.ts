@@ -63,6 +63,9 @@ export interface DocumentRevisionItem {
   missingRequiredTypesCount?: number;
   submissionBlockersAr?: string[];
   submissionBlockersEn?: string[];
+  latestWorkflowRunId?: string | null;
+  latestWorkflowRunStatus?: string | null;
+  latestDecisionNotes?: string | null;
 }
 
 export interface RevisionFileItem {
@@ -144,6 +147,7 @@ export interface SubmitRevisionResponse {
   revision: DocumentRevisionItem;
   cleanFilesCount: number;
   traceId?: string;
+  workflowRunId?: string | null;
 }
 
 export interface IntegrationFilesWorkspaceResponse {
