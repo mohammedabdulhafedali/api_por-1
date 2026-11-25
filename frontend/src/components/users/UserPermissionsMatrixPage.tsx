@@ -206,6 +206,25 @@ export function UserPermissionsMatrixPage({
     return list;
   }, [matrix, lang]);
 
+  const setPermissionsChecked = (perms: UserPermissionEntry[], checked: boolean) => {
+    setDraftOverrides((prev) => {
+      const next = { ...prev };
+      for (const perm of perms) {
+        if (checked) {
+          next[perm.permissionId] = perm.isInherited ? 'INHERIT' : 'GRANT';
+        } else {
+          next[perm.permissionId] = perm.isInherited ? 'REVOKE' : 'INHERIT';
+        }
+      }
+      return next;
+    });
+  };
+
+  const isPermEffectiveAllowed = (perm: UserPermissionEntry) => {
+    const state = draftOverrides[perm.permissionId] ?? 'INHERIT';
+    return state === 'REVOKE' ? false : state === 'GRANT' ? true : perm.isInherited;
+  };
+
   const handleResetAllToInherited = () => {
     if (!matrix) return;
     const resetDraft: Record<string, CellOverrideState> = {};
@@ -390,39 +409,95 @@ export function UserPermissionsMatrixPage({
             <table className="permission-matrix selection-matrix">
               <thead>
                 <tr>
-                  <th className="perm-screen matrix-sticky-col matrix-corner-header">{copy.screenColHeader}</th>
-                  {matrix.columns.map((col) => (
-                    <th key={col.id} className="matrix-col-header">
-                      <span className="col-title matrix-col-title">
-                        {lang === 'ar' ? col.labelAr : col.labelEn}
-                      </span>
-                    </th>
-                  ))}
+                  <th className="perm-screen matrix-sticky-col matrix-corner-header">
+                    <label className="check-everything">
+                      <input
+                        type="checkbox"
+                        className="perm-check"
+                        disabled={!canManage}
+                        checked={
+                          matrix.permissions.length > 0 &&
+                          matrix.permissions.every((p) => isPermEffectiveAllowed(p))
+                        }
+                        onChange={(e) => setPermissionsChecked(matrix.permissions, e.target.checked)}
+                      />
+                      <span>{copy.screenColHeader}</span>
+                    </label>
+                  </th>
+                  {matrix.columns.map((col) => {
+                    const colPerms = matrix.permissions.filter((p) => p.columnId === col.id);
+                    const colAllChecked =
+                      colPerms.length > 0 && colPerms.every((p) => isPermEffectiveAllowed(p));
+                    const colLabel = lang === 'ar' ? col.labelAr : col.labelEn;
+                    return (
+                      <th key={col.id} className="matrix-col-header">
+                        <span className="col-title matrix-col-title">{colLabel}</span>
+                        <input
+                          type="checkbox"
+                          className="perm-check"
+                          disabled={!canManage || colPerms.length === 0}
+                          aria-label={`${lang === 'ar' ? 'تحديد عمود' : 'Select column'} ${colLabel}`}
+                          checked={colAllChecked}
+                          onChange={(e) => setPermissionsChecked(colPerms, e.target.checked)}
+                        />
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {groups.map((group) => (
-                  <Fragment key={group.groupId}>
-                    <tr className="perm-group matrix-group-row">
-                      <td colSpan={matrix.columns.length + 1}>
-                        <div className="matrix-group-bar">
+                {groups.map((group) => {
+                  const groupScreenIds = new Set(group.screens.map((s) => s.id));
+                  const groupPerms = matrix.permissions.filter((p) => groupScreenIds.has(p.screenId));
+                  const groupAllChecked =
+                    groupPerms.length > 0 && groupPerms.every((p) => isPermEffectiveAllowed(p));
+                  return (
+                    <Fragment key={group.groupId}>
+                      <tr className="perm-group matrix-group-row">
+                        <td colSpan={matrix.columns.length + 1}>
                           <span className="section-name heading-font">{group.groupLabel}</span>
-                        </div>
-                      </td>
-                    </tr>
-                    {group.screens.map((screenRow) => {
-                      const screenTitle = lang === 'ar' ? screenRow.titleAr : screenRow.titleEn;
-                      return (
-                        <tr key={screenRow.id}>
-                          <td className="perm-screen matrix-sticky-col matrix-row-header">
-                            <div className="all-row-toggle matrix-header-row-between" style={{ gap: 8 }}>
-                              <div className="row-title">
-                                <b className="matrix-row-title">{screenTitle}</b>
-                                <span className="perm-path matrix-row-path ltr-code">
-                                  {screenRow.technicalPath}
-                                </span>
+                          <label className="group-choice">
+                            <input
+                              type="checkbox"
+                              className="perm-check"
+                              disabled={!canManage || groupPerms.length === 0}
+                              checked={groupAllChecked}
+                              onChange={(e) => setPermissionsChecked(groupPerms, e.target.checked)}
+                            />
+                            <span>
+                              {lang === 'ar' ? 'تحديد القسم بالكامل' : 'Select Entire Section'}
+                            </span>
+                          </label>
+                        </td>
+                      </tr>
+                      {group.screens.map((screenRow) => {
+                        const screenTitle = lang === 'ar' ? screenRow.titleAr : screenRow.titleEn;
+                        const rowPerms = matrix.permissions.filter((p) => p.screenId === screenRow.id);
+                        const rowAllChecked =
+                          rowPerms.length > 0 && rowPerms.every((p) => isPermEffectiveAllowed(p));
+                        const rowHasOverrides = rowPerms.some(
+                          (p) => (draftOverrides[p.permissionId] ?? 'INHERIT') !== 'INHERIT'
+                        );
+                        return (
+                          <tr key={screenRow.id}>
+                            <td className="perm-screen matrix-sticky-col matrix-row-header">
+                              <div className="all-row-toggle matrix-header-row-between" style={{ gap: 8 }}>
+                                <div className="row-title">
+                                  <b className="matrix-row-title">{screenTitle}</b>
+                                  <span className="perm-path matrix-row-path ltr-code">
+                                    {screenRow.technicalPath}
+                                  </span>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  className="perm-check"
+                                  disabled={!canManage || rowPerms.length === 0}
+                                  aria-label={`${lang === 'ar' ? 'تحديد جميع صلاحيات' : 'Select all for'} ${screenTitle}`}
+                                  checked={rowAllChecked}
+                                  onChange={(e) => setPermissionsChecked(rowPerms, e.target.checked)}
+                                />
                               </div>
-                              {canManage && (
+                              {canManage && rowHasOverrides && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -431,105 +506,73 @@ export function UserPermissionsMatrixPage({
                                   {copy.resetRowBtn}
                                 </Button>
                               )}
-                            </div>
-                          </td>
-                          {matrix.columns.map((col) => {
-                            const entry = entryByCell.get(`${screenRow.id}::${col.id}`);
-                            if (!entry) {
+                            </td>
+                            {matrix.columns.map((col) => {
+                              const entry = entryByCell.get(`${screenRow.id}::${col.id}`);
+                              if (!entry) {
+                                return (
+                                  <td key={col.id} className="not-applicable matrix-cell-na" aria-disabled="true">
+                                    —
+                                  </td>
+                                );
+                              }
+
+                              const state = draftOverrides[entry.permissionId] ?? 'INHERIT';
+                              const effectiveAllowed =
+                                state === 'REVOKE'
+                                  ? false
+                                  : state === 'GRANT'
+                                    ? true
+                                    : entry.isInherited;
+
+                              const isOverridden = state !== 'INHERIT';
+                              const overrideShortLabel =
+                                state === 'GRANT'
+                                  ? lang === 'ar'
+                                    ? 'منح فردي'
+                                    : 'Individual Grant'
+                                  : state === 'REVOKE'
+                                    ? lang === 'ar'
+                                      ? 'سحب فردي'
+                                      : 'Individual Revocation'
+                                    : '';
+
+                              const colLabel = lang === 'ar' ? col.labelAr : col.labelEn;
+
                               return (
-                                <td key={col.id} className="not-applicable matrix-cell-na" aria-disabled="true">
-                                  —
-                                </td>
-                              );
-                            }
-
-                            const state = draftOverrides[entry.permissionId] ?? 'INHERIT';
-                            const effectiveAllowed =
-                              state === 'REVOKE'
-                                ? false
-                                : state === 'GRANT'
-                                  ? true
-                                  : entry.isInherited;
-
-                            const sourceLabel =
-                              state === 'REVOKE'
-                                ? copy.sourceRevoke
-                                : state === 'GRANT'
-                                  ? copy.sourceGrant
-                                  : entry.isInherited
-                                    ? `${copy.sourceInherited}: ${entry.inheritedFromRoles
-                                        .map((r) => r.name)
-                                        .join(', ')}`
-                                    : copy.sourceDenied;
-
-                            const colLabel = lang === 'ar' ? col.labelAr : col.labelEn;
-
-                            return (
-                              <td
-                                key={col.id}
-                                className={`matrix-cell ${state !== 'INHERIT' ? 'perm-override' : 'perm-inherited'}`}
-                                style={{ minWidth: 145, padding: '8px 6px' }}
-                              >
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 4,
-                                    alignItems: 'center',
-                                  }}
+                                <td
+                                  key={col.id}
+                                  className={`matrix-cell ${isOverridden ? 'perm-override' : 'perm-inherited'}`}
                                 >
-                                  <StatusBadge
-                                    variant={effectiveAllowed ? 'success' : 'danger'}
-                                  >
-                                    {effectiveAllowed ? copy.effectiveAllowed : copy.effectiveDenied}
-                                  </StatusBadge>
-                                  <select
+                                  <input
+                                    type="checkbox"
+                                    className="perm-check"
                                     aria-label={`${screenTitle} - ${colLabel}`}
                                     disabled={!canManage}
-                                    value={state}
-                                    onChange={(e) => {
-                                      const val = e.target.value as CellOverrideState;
-                                      setDraftOverrides((prev) => ({
-                                        ...prev,
-                                        [entry.permissionId]: val,
-                                      }));
-                                    }}
-                                    style={{
-                                      fontSize: 11.5,
-                                      padding: '3px 6px',
-                                      borderRadius: 6,
-                                      border: '1px solid var(--border-color)',
-                                      background: 'var(--bg-input)',
-                                      color: 'var(--text-primary)',
-                                      maxWidth: 140,
-                                    }}
-                                  >
-                                    <option value="INHERIT">
-                                      {entry.isInherited
-                                        ? copy.optInheritAllowed
-                                        : copy.optInheritDenied}
-                                    </option>
-                                    <option value="GRANT">{copy.optGrant}</option>
-                                    <option value="REVOKE">{copy.optRevoke}</option>
-                                  </select>
-                                  <span
-                                    style={{
-                                      fontSize: 10.5,
-                                      color: 'var(--text-muted)',
-                                      textAlign: 'center',
-                                    }}
-                                  >
-                                    {sourceLabel}
-                                  </span>
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </Fragment>
-                ))}
+                                    checked={effectiveAllowed}
+                                    title={
+                                      isOverridden
+                                        ? overrideShortLabel
+                                        : entry.isInherited
+                                          ? copy.sourceInherited
+                                          : copy.sourceDenied
+                                    }
+                                    onChange={(e) => setPermissionsChecked([entry], e.target.checked)}
+                                  />
+                                  {isOverridden && (
+                                    <span className="perm-key" style={{ display: 'block', fontSize: 10, marginTop: 4 }}>
+                                      {overrideShortLabel}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -371,13 +371,18 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     fireEvent.click(screen.getByRole('button', { name: 'الصلاحيات' }));
     expect(await screen.findByText(/مصفوفة الصلاحيات الفردية للمستخدم/)).toBeInTheDocument();
 
-    // Revoke inherited 'users.view' and Grant 'roles.view'
-    const usersViewSelect = (await screen.findByLabelText('المستخدمون - عرض')) as HTMLSelectElement;
-    const rolesViewSelect = screen.getByLabelText('الأدوار التنظيمية - عرض') as HTMLSelectElement;
+    // Revoke inherited 'users.view' (uncheck) and Grant 'roles.view' (check)
+    const usersViewCheckbox = (await screen.findByLabelText('المستخدمون - عرض')) as HTMLInputElement;
+    const rolesViewCheckbox = screen.getByLabelText('الأدوار التنظيمية - عرض') as HTMLInputElement;
 
-    fireEvent.change(usersViewSelect, { target: { value: 'REVOKE' } });
-    fireEvent.change(rolesViewSelect, { target: { value: 'GRANT' } });
+    expect(usersViewCheckbox).toBeChecked();
+    expect(rolesViewCheckbox).not.toBeChecked();
 
+    fireEvent.click(usersViewCheckbox);
+    fireEvent.click(rolesViewCheckbox);
+
+    expect(usersViewCheckbox).not.toBeChecked();
+    expect(rolesViewCheckbox).toBeChecked();
     expect(screen.getByText(/سحب فردي \(REVOKE\): 1/)).toBeInTheDocument();
     expect(screen.getByText(/منح فردي \(GRANT\): 1/)).toBeInTheDocument();
 
@@ -396,8 +401,8 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
 
     // Reset all overrides back to inherited state and save empty overrides array
     fireEvent.click(screen.getByRole('button', { name: 'إعادة الكل إلى الموروث' }));
-    expect(usersViewSelect.value).toBe('INHERIT');
-    expect(rolesViewSelect.value).toBe('INHERIT');
+    expect(usersViewCheckbox).toBeChecked();
+    expect(rolesViewCheckbox).not.toBeChecked();
 
     fireEvent.click(screen.getByRole('button', { name: 'حفظ الصلاحيات الفردية' }));
     const confirmResetModal = await screen.findByRole('dialog');

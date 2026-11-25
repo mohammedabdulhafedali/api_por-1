@@ -194,6 +194,24 @@ export function DocumentAccessMatrixPage({
     return { allowed: false, label: c.srcDefaultDeny };
   };
 
+  const isUserRoleInheritedOnDoc = (userId: string, permCode: string) => {
+    const rIds = roleIdsByUserId[userId] ?? [];
+    const roleDecisions = rIds
+      .map((rid) => roleDraft[rid]?.[permCode] ?? null)
+      .filter((d): d is DocumentAclDecision => d !== null);
+    if (roleDecisions.includes('REVOKE')) return false;
+    return roleDecisions.includes('GRANT');
+  };
+
+  const toggleUserDocCheckbox = (userId: string, code: string, checked: boolean) => {
+    const viaRole = isUserRoleInheritedOnDoc(userId, code);
+    if (checked) {
+      setUserCell(userId, code, viaRole ? null : 'GRANT');
+    } else {
+      setUserCell(userId, code, viaRole ? 'REVOKE' : null);
+    }
+  };
+
   const setRoleCell = (roleId: string, code: string, decision: DocumentAclDecision | null) => {
     setRoleDraft((prev) => ({
       ...prev,
@@ -384,24 +402,20 @@ export function DocumentAccessMatrixPage({
                     </div>
                   </td>
                   {matrix.permissions.map((col) => {
-                    const current = roleDraft[role.roleId]?.[col.code] ?? '';
+                    const current = roleDraft[role.roleId]?.[col.code] ?? null;
+                    const isChecked = current === 'GRANT';
                     return (
                       <td key={`${role.roleId}-${col.code}`}>
-                        <select
-                          aria-label={`${role.roleName} ${col.code}`}
-                          className="control ui-select"
-                          style={{ minWidth: 112, padding: '4px 6px', fontSize: 12 }}
+                        <input
+                          type="checkbox"
+                          className="perm-check"
+                          aria-label={`${role.roleName} — ${lang === 'ar' ? col.labelAr : col.labelEn}`}
                           disabled={!canManageAcl}
-                          value={current}
-                          onChange={(e) => {
-                            const v = e.target.value as DocumentAclDecision | '';
-                            setRoleCell(role.roleId, col.code, v === '' ? null : v);
-                          }}
-                        >
-                          <option value="">{c.optInherit}</option>
-                          <option value="GRANT">{c.optGrant}</option>
-                          <option value="REVOKE">{c.optRevoke}</option>
-                        </select>
+                          checked={isChecked}
+                          onChange={(e) =>
+                            setRoleCell(role.roleId, col.code, e.target.checked ? 'GRANT' : null)
+                          }
+                        />
                       </td>
                     );
                   })}
@@ -464,30 +478,27 @@ export function DocumentAccessMatrixPage({
                     </div>
                   </td>
                   {matrix.permissions.map((col) => {
-                    const explicitVal = userDraft[user.userId]?.[col.code] ?? '';
+                    const explicitVal = userDraft[user.userId]?.[col.code] ?? null;
                     const preview = evaluatePreviewCell(user.userId, col.code);
+                    const isOverridden = explicitVal === 'GRANT' || explicitVal === 'REVOKE';
                     return (
-                      <td key={`${user.userId}-${col.code}`} className={explicitVal ? 'acl-overridden' : ''}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120 }}>
-                          <StatusBadge variant={preview.allowed ? 'success' : 'danger'}>
-                            {`${preview.allowed ? c.effectiveAllow : c.effectiveDeny} · ${preview.label}`}
-                          </StatusBadge>
-                          <select
-                            aria-label={`${user.fullName} ${col.code}`}
-                            className="control ui-select"
-                            style={{ padding: '4px 6px', fontSize: 12 }}
-                            disabled={!canManageAcl}
-                            value={explicitVal}
-                            onChange={(e) => {
-                              const v = e.target.value as DocumentAclDecision | '';
-                              setUserCell(user.userId, col.code, v === '' ? null : v);
-                            }}
-                          >
-                            <option value="">{c.optInherit}</option>
-                            <option value="GRANT">{c.optGrant}</option>
-                            <option value="REVOKE">{c.optRevoke}</option>
-                          </select>
-                        </div>
+                      <td key={`${user.userId}-${col.code}`} className={isOverridden ? 'acl-overridden' : ''}>
+                        <input
+                          type="checkbox"
+                          className="perm-check"
+                          aria-label={`${user.fullName} — ${lang === 'ar' ? col.labelAr : col.labelEn}`}
+                          disabled={!canManageAcl}
+                          checked={preview.allowed}
+                          title={preview.label}
+                          onChange={(e) =>
+                            toggleUserDocCheckbox(user.userId, col.code, e.target.checked)
+                          }
+                        />
+                        {isOverridden && (
+                          <span className="perm-key" style={{ display: 'block', fontSize: 10, marginTop: 4 }}>
+                            {explicitVal === 'GRANT' ? c.srcUserGrant : c.srcUserRevoke}
+                          </span>
+                        )}
                       </td>
                     );
                   })}
