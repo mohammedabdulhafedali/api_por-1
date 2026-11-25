@@ -450,26 +450,34 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               enabled={initialAuthenticatedUser === undefined}
               onNavigateToScreen={navigateByNavId}
             />
-            <span className="topbar-user-pill" data-testid="authenticated-user-pill">
-              <strong>{sessionUser.fullName}</strong>
-              <code className="ltr-code">{sessionUser.email}</code>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowChangePassword(true)}
-            >
-              {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void handleLogout();
-              }}
-            >
-              {lang === 'ar' ? 'تسجيل الخروج' : 'Logout'}
-            </Button>
+            <div className="account-avatar-wrapper">
+              <div
+                className="avatar"
+                title={`${sessionUser.fullName} (${sessionUser.email})`}
+                data-testid="authenticated-user-pill"
+              >
+                <span>{(sessionUser.fullName || 'م').trim().charAt(0).toUpperCase()}</span>
+                <span className="sr-only">
+                  {sessionUser.fullName} {sessionUser.email}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowChangePassword(true)}
+              >
+                {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  void handleLogout();
+                }}
+              >
+                {lang === 'ar' ? 'تسجيل الخروج' : 'Logout'}
+              </Button>
+            </div>
           </div>
         }
       >

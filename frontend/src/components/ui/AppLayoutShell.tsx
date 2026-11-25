@@ -204,30 +204,30 @@ export function AppLayoutShell({
   children,
 }: AppLayoutShellProps) {
   return (
-    <div className="app-shell">
+    <div className="app-shell app">
       <div
-        className={`mobile-backdrop ${mobileSidebarOpen ? 'open' : ''}`}
+        className={`mobile-backdrop mobile-curtain ${mobileSidebarOpen ? 'open' : ''}`}
         onClick={onCloseMobileSidebar}
         aria-hidden="true"
       />
 
       <aside
-        className={`app-sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}
+        className={`app-sidebar sidebar ${mobileSidebarOpen ? 'mobile-open open' : ''}`}
         aria-label="Sidebar Navigation"
       >
-        <div className="brand-header">
+        <div className="brand-header brand">
           <div className="brand-mark" aria-hidden="true">
             <ReferenceIcon name="network" size={22} />
             <span className="sr-only">AG</span>
           </div>
           <div>
-            <div className="brand-title heading-font">{brandTitle}</div>
-            <div className="brand-subtitle">{brandSubtitle}</div>
+            <div className="brand-title brand-name heading-font">{brandTitle}</div>
+            <div className="brand-subtitle brand-sub">{brandSubtitle}</div>
           </div>
         </div>
 
         <div className="nav-section-caption sr-only">{standaloneSectionTitle}</div>
-        <div className="nav-standalone-list">
+        <div className="nav-standalone-list nav-direct">
           {standaloneNavItems.map((item) => {
             const isActive = activeNavItem.id === item.id;
             return (
@@ -235,7 +235,8 @@ export function AppLayoutShell({
                 key={item.id}
                 type="button"
                 data-screen-id={item.id}
-                className={`nav-item-btn ${isActive ? 'active' : ''}`}
+                className={`nav-item-btn nav-item ${isActive ? 'active' : ''}`}
+                aria-current={isActive ? 'page' : undefined}
                 onClick={() => onSelectNavItem(item)}
               >
                 <span className="nav-item-main">
@@ -249,29 +250,29 @@ export function AppLayoutShell({
         </div>
 
         <div className="nav-section-caption sr-only">{collapsibleSectionTitle}</div>
-        <nav className="nav-accordion-list" aria-label={collapsibleSectionTitle}>
+        <nav id="sidebar-navigation" className="nav-accordion-list" aria-label={collapsibleSectionTitle}>
           {sidebarGroups.map((group) => {
             const isExpanded = openGroupId === group.id;
             const hasActiveChild = group.items.some((it) => it.id === activeNavItem.id);
             return (
-              <div key={group.id} className="nav-group">
+              <div key={group.id} className="nav-group nav-accordion">
                 <button
                   type="button"
                   data-nav-group={group.id}
-                  className={`nav-group-toggle heading-font ${isExpanded ? 'expanded' : ''} ${hasActiveChild ? 'active-section' : ''}`}
+                  className={`nav-group-toggle nav-toggle heading-font ${isExpanded ? 'expanded' : ''} ${hasActiveChild ? 'active-section' : ''}`}
                   aria-expanded={isExpanded}
                   onClick={() => onToggleGroup(group.id)}
                 >
                   <span className="nav-item-main">
                     <ReferenceIcon name={NAV_ICON_BY_ID[group.id] ?? 'layers'} size={17} />
-                    <span>{group.label[lang]}</span>
+                    <span className="nav-group-label">{group.label[lang]}</span>
                   </span>
                   <span className="nav-chevron" aria-hidden="true">
                     <ReferenceIcon name="down" size={15} />
                   </span>
                 </button>
                 {isExpanded && (
-                  <div className="nav-group-items">
+                  <div className="nav-group-items nav-children">
                     {group.items.map((item) => {
                       const isActive = activeNavItem.id === item.id;
                       return (
@@ -279,7 +280,8 @@ export function AppLayoutShell({
                           key={item.id}
                           type="button"
                           data-screen-id={item.id}
-                          className={`nav-item-btn ${isActive ? 'active' : ''}`}
+                          className={`nav-item-btn nav-item ${isActive ? 'active' : ''}`}
+                          aria-current={isActive ? 'page' : undefined}
                           onClick={() => onSelectNavItem(item)}
                         >
                           <span className="nav-item-main">
@@ -298,12 +300,12 @@ export function AppLayoutShell({
         </nav>
       </aside>
 
-      <div className="app-main">
-        <header className="app-topbar">
-          <div className="topbar-start">
+      <div className="app-main main-area">
+        <header className="app-topbar topbar">
+          <div className="topbar-start top-right">
             <button
               type="button"
-              className="mobile-menu-btn"
+              className="mobile-menu-btn icon-btn mobile-menu"
               aria-label={mobileMenuAriaLabel}
               aria-expanded={mobileSidebarOpen}
               onClick={onToggleMobileSidebar}
@@ -311,16 +313,15 @@ export function AppLayoutShell({
               <ReferenceIcon name="menu" size={17} />
             </button>
             <div className="topbar-titles">
-              <div className="topbar-crumb">
+              <div className="topbar-crumb crumb">
                 {topbarBreadcrumb.replace(/\s*·\s*UI-\d+[A-Z]?/g, '')}
                 <span className="sr-only"> · <span className="ltr-code">{activeNavItem.id}</span></span>
               </div>
-              <h1 className="topbar-page-title heading-font">{topbarPageTitle}</h1>
+              <h1 className="topbar-page-title page-name heading-font">{topbarPageTitle}</h1>
             </div>
           </div>
 
           <div className="topbar-actions top-actions">
-            {userActions}
             <div className="preference-controls">
               <div className="lang-switch-group language-switch" role="group" aria-label={langToggleAriaLabel}>
                 <button
@@ -351,10 +352,11 @@ export function AppLayoutShell({
                 <span className="sr-only">{theme === 'light' ? themeDarkLabel : themeLightLabel}</span>
               </button>
             </div>
+            {userActions}
           </div>
         </header>
 
-        <main className="app-content">{children}</main>
+        <main id="main" className="app-content content">{children}</main>
       </div>
     </div>
   );

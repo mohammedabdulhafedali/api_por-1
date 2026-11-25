@@ -420,13 +420,9 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{copy.title}</h2>
-              <p className="card-subtitle">{copy.desc}</p>
-            </div>
-            {canManage && (
+        <>
+          {canManage && (
+            <div className="page-actions">
               <Button
                 variant="primary"
                 onClick={() => {
@@ -442,8 +438,15 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
               >
                 {copy.addBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">{copy.title}</h2>
+                <p className="panel-desc">{copy.desc}</p>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={search}
@@ -498,7 +501,8 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={mode === 'create' ? copy.createBadge : copy.editBadge}

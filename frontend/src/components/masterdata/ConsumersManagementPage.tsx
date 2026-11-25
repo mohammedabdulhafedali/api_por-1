@@ -453,7 +453,27 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
   return (
     <>
       {mode === 'list' ? (
-        <div className={tab === 'consumers' ? 'consumers-cols' : ''}>
+        <>
+          {canManage && (
+            <div className="page-actions">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditingId(null);
+                  setFormCategoryId(
+                    categoryFilter || (allCategories.find((c) => c.isActive)?.id ?? '')
+                  );
+                  setFormName('');
+                  setFormActive(true);
+                  setFieldErrors({});
+                  setMode('create');
+                }}
+              >
+                {tab === 'consumers' ? copy.addConsBtn : copy.addCatBtn}
+              </Button>
+            </div>
+          )}
+          <div className={tab === 'consumers' ? 'consumers-cols' : ''}>
           {tab === 'consumers' && (
             <section className="surface-card panel">
               <div className="panel-head">
@@ -532,32 +552,15 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
               </button>
             </div>
 
-            <div className="card-header-row">
+            <div className="panel-head">
               <div>
-                <h2 className="card-title heading-font">
+                <h2 className="panel-title heading-font">
                   {tab === 'consumers' ? copy.consTitle : copy.catTitle}
                 </h2>
-                <p className="card-subtitle">
+                <p className="panel-desc">
                   {tab === 'consumers' ? copy.consDesc : copy.catDesc}
                 </p>
               </div>
-              {canManage && (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setEditingId(null);
-                    setFormCategoryId(
-                      categoryFilter || (allCategories.find((c) => c.isActive)?.id ?? '')
-                    );
-                    setFormName('');
-                    setFormActive(true);
-                    setFieldErrors({});
-                    setMode('create');
-                  }}
-                >
-                  {tab === 'consumers' ? copy.addConsBtn : copy.addCatBtn}
-                </Button>
-              )}
             </div>
 
           <SearchFilterBar
@@ -631,7 +634,8 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
             </>
           )}
           </section>
-        </div>
+          </div>
+        </>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={

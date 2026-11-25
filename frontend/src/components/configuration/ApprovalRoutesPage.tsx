@@ -595,18 +595,21 @@ export function ApprovalRoutesPage({
           )}
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
-            {canManage && (
+        <>
+          {canManage && (
+            <div className="page-actions">
               <Button variant="primary" disabled={submitting} onClick={openCreate}>
                 {c.addBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">{c.pageTitle}</h2>
+                <p className="panel-desc">{c.pageDesc}</p>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={searchQuery}
@@ -670,8 +673,13 @@ export function ApprovalRoutesPage({
                             <Button variant="outline" size="sm" onClick={() => openEditRouteName(row)}>
                               {c.editRouteBtn}
                             </Button>
-                            <Button variant="secondary" size="sm" onClick={() => openManageStages(row)}>
-                              {c.manageStagesBtn}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              aria-label={c.manageStagesBtn}
+                              onClick={() => openManageStages(row)}
+                            >
+                              {c.manageStagesBtn.replace(/\s*\(UI-\d+[A-Z]?\)/g, '')}
                             </Button>
                             <Button
                               variant={row.isActive ? 'danger' : 'secondary'}
@@ -715,7 +723,8 @@ export function ApprovalRoutesPage({
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       )}
 
       <CentralModalDialog

@@ -70,6 +70,7 @@ import {
   FormField,
   LoadingState,
   PaginationBar,
+  ReferenceIcon,
   SearchFilterBar,
   SelectInput,
   StandaloneFormPage,
@@ -2512,63 +2513,119 @@ export function IntegrationsPage({
           )}
         </StandaloneFormPage>
       ) : mode === 'details' ? (
-        <section className="surface-card">
+        <div>
           {detailsLoading || !details ? (
-            <LoadingState title={commonStrings.tableLoadingTitle} />
+            <section className="surface-card panel">
+              <LoadingState title={commonStrings.tableLoadingTitle} />
+            </section>
           ) : (
             <>
-              <div className="card-header-row">
-                <div>
-                  <span className="mode-pill">{c.detailsBadge}</span>
-                  <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
-                    {details.summary.derivedTitle} ·{' '}
-                    <code className="ltr-code">{details.summary.referenceCode}</code>
-                  </h2>
-                  <div className="badge-wrap-list" style={{ marginTop: 6 }}>
-                    <StatusBadge variant={details.summary.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
-                      {details.summary.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
-                    </StatusBadge>
-                    <StatusBadge variant="neutral">
+              {/* Reference intHeader() top actions + header panel */}
+              <div className="page-actions">
+                <Button variant="outline" onClick={() => setMode('list')}>
+                  {c.backBtn}
+                </Button>
+              </div>
+
+              <div className="panel">
+                <div className="row between wrap">
+                  <div>
+                    <div className="eyebrow">
+                      <code className="ltr-code">{details.summary.referenceCode}</code>
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: 850 }}>{details.summary.derivedTitle}</div>
+                    <div className="item-sub">
+                      {`${c.groupLabel}: ${details.summary.apiGroupName} · `}
                       {c.countsSummary(
                         details.summary.versionsCount,
                         details.revisionsCount,
                         details.changeRequestsCount,
                         details.publicationsCount
                       )}
+                    </div>
+                    <div className="item-sub" style={{ marginTop: 9 }}>
+                      <b>{lang === 'ar' ? 'المطورون المسؤولون:' : 'Responsible Developers:'}</b>{' '}
+                      {details.summary.assignedDevelopers.length === 0
+                        ? c.noDevsLabel
+                        : details.summary.assignedDevelopers.map((d) => d.fullName).join('، ')}
+                    </div>
+                  </div>
+                  <div className="row wrap">
+                    <StatusBadge variant={details.summary.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
+                      {details.summary.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
+                    </StatusBadge>
+                    <StatusBadge variant={formatStateBadge(details.summary.documentState).variant}>
+                      {formatStateBadge(details.summary.documentState).label}
                     </StatusBadge>
                   </div>
                 </div>
-                <div className="button-row">
-                  <Button variant="outline" onClick={() => setMode('list')}>
-                    {c.backBtn}
-                  </Button>
+
+                {/* UI-09 Tab Navigation inside intHeader */}
+                <div className="tabs" style={{ marginTop: 18, marginBottom: 0 }}>
+                  {(
+                    [
+                      ['developers', c.tabDevelopers],
+                      ['files', c.tabFiles],
+                      ['revisions', c.tabRevisions],
+                      ['versions', c.tabVersions],
+                      ['changes', c.tabChanges],
+                      ['publishing', c.tabPublishing],
+                      ['audit', c.tabAudit],
+                    ] as Array<[DetailsTab, string]>
+                  ).map(([tabKey, label]) => {
+                    const cleanLabel = label.replace(/\s*\(UI-\d+[A-Z]?\)/g, '');
+                    return (
+                      <button
+                        key={tabKey}
+                        type="button"
+                        aria-label={label}
+                        className={`tab ${activeTab === tabKey ? 'active' : ''}`}
+                        onClick={() => setActiveTab(tabKey)}
+                      >
+                        {cleanLabel}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Persistent Read-Only Party & Governance Summary + Lifecycle Workflow (intHeader) */}
+              {/* Persistent Read-Only Party & Governance Summary + Lifecycle Workflow */}
               <div className="grid-2" style={{ marginBottom: 18 }}>
                 <div className="panel" style={{ marginBottom: 0 }}>
                   <div className="panel-title" style={{ marginBottom: 10 }}>
-                    {lang === 'ar' ? 'بيانات التكامل' : 'Integration Data'}
+                    {lang === 'ar' ? 'بيانات التكامل' : 'Integration Information'}
                   </div>
-                  <div className="grid-3">
-                    <div className="slot-stat-box">
-                      <div className="slot-stat-label">{c.providerLabel}</div>
-                      <div className="slot-stat-value">{details.summary.providerName}</div>
+                  <div className="grid-2">
+                    <div>
+                      <div className="field">
+                        <label>{c.providerLabel}</label>
+                        <div className="bold">{details.summary.providerName}</div>
+                      </div>
+                      <div className="field">
+                        <label>{c.groupLabel}</label>
+                        <div className="bold">{details.summary.apiGroupName}</div>
+                      </div>
                     </div>
-                    <div className="slot-stat-box">
-                      <div className="slot-stat-label">{c.consumerLabel}</div>
-                      <div className="slot-stat-value">{details.summary.consumerName}</div>
-                    </div>
-                    <div className="slot-stat-box">
-                      <div className="slot-stat-label">{c.groupLabel}</div>
-                      <div className="slot-stat-value">{details.summary.apiGroupName}</div>
+                    <div>
+                      <div className="field">
+                        <label>{c.consumerLabel}</label>
+                        <div className="bold">{details.summary.consumerName}</div>
+                      </div>
+                      <div className="field">
+                        <label>{c.routeLabel}</label>
+                        <div className="bold">{details.summary.approvalRouteName}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div className="panel" style={{ marginBottom: 0 }}>
-                  <div className="panel-title" style={{ marginBottom: 10 }}>
-                    {lang === 'ar' ? 'حالة دورة الحياة والحوكمة' : 'Lifecycle & Governance'}
+                  <div className="panel-head" style={{ marginBottom: 6 }}>
+                    <div className="panel-title">
+                      {lang === 'ar' ? 'حالة دورة الحياة' : 'Lifecycle State'}
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={() => setActiveTab('versions')}>
+                      {lang === 'ar' ? 'إدارة الإصدارات' : 'Manage Versions'}
+                    </Button>
                   </div>
                   <div className="workflow" style={{ marginBottom: 10 }}>
                     <span className="step on">{lang === 'ar' ? 'وثيقة API' : 'API Doc'}</span>
@@ -2587,37 +2644,16 @@ export function IntegrationsPage({
                       {lang === 'ar' ? 'نشر' : 'Publish'}
                     </span>
                   </div>
+                  <div className="divider" />
                   <div className="row wrap">
-                    <span className="tag">{`${c.reqTemplateLabel}: ${details.summary.requirementTemplateName}`}</span>
-                    <span className="tag">{`${c.routeLabel}: ${details.summary.approvalRouteName}`}</span>
-                    <span className="tag">{`${c.policyLabel}: ${details.summary.changePolicyName}`}</span>
+                    <span className="chip">{`${details.summary.versionsCount} ${lang === 'ar' ? 'إصدار' : 'versions'}`}</span>
+                    <span className="chip">{`${details.changeRequestsCount} ${lang === 'ar' ? 'طلب تغيير' : 'changes'}`}</span>
+                    <span className="chip">{`${details.publicationsCount} ${lang === 'ar' ? 'إصدار منشور' : 'published'}`}</span>
                   </div>
                 </div>
               </div>
 
-              {/* UI-09 Tab Navigation */}
-              <div className="tabs" style={{ marginBottom: 18 }}>
-                {(
-                  [
-                    ['developers', c.tabDevelopers],
-                    ['files', c.tabFiles],
-                    ['revisions', c.tabRevisions],
-                    ['versions', c.tabVersions],
-                    ['changes', c.tabChanges],
-                    ['publishing', c.tabPublishing],
-                    ['audit', c.tabAudit],
-                  ] as Array<[DetailsTab, string]>
-                ).map(([tabKey, label]) => (
-                  <button
-                    key={tabKey}
-                    type="button"
-                    className={`tab ${activeTab === tabKey ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tabKey)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <section className="surface-card panel">
 
               {/* Tab Content */}
               {activeTab === 'developers' && (
@@ -3840,9 +3876,10 @@ export function IntegrationsPage({
                   )}
                 </div>
               )}
+              </section>
             </>
           )}
-        </section>
+        </div>
       ) : mode === 'create' ? (
         <StandaloneFormPage
           modeBadgeLabel={c.createBadge}
@@ -3923,127 +3960,147 @@ export function IntegrationsPage({
           </div>
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
-            <div className="button-row">
-              <Button variant="outline" disabled={submitting} onClick={openNotificationsCenter}>
-                {c.notificationsBtn}
+        <>
+          <div className="page-actions">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={c.notificationsBtn}
+              disabled={submitting}
+              onClick={openNotificationsCenter}
+            >
+              {lang === 'ar' ? 'الإشعارات الداخلية' : 'Notifications'}
+            </Button>
+            {canViewWorkflowsGlobal && (
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={c.workflowInboxBtn}
+                disabled={submitting}
+                onClick={openWorkflowInbox}
+              >
+                {lang === 'ar' ? 'صندوق المراجعات بانتظار قراري' : 'Pending Approvals Inbox'}
               </Button>
-              {canViewWorkflowsGlobal && (
-                <Button variant="secondary" disabled={submitting} onClick={openWorkflowInbox}>
-                  {c.workflowInboxBtn}
-                </Button>
-              )}
-              {canCreateGlobal && (
-                <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                  {c.addBtn}
-                </Button>
-              )}
-            </div>
+            )}
+            {canCreateGlobal && (
+              <Button variant="primary" disabled={submitting} onClick={openCreate}>
+                {c.addBtn}
+              </Button>
+            )}
           </div>
 
-          <SearchFilterBar
-            searchValue={searchQuery}
-            searchPlaceholder={c.searchPlaceholder}
-            searchAriaLabel={c.searchAria}
-            onSearchChange={(val) => {
-              setSearchQuery(val);
-              setPage(1);
-            }}
-            filterValue={scopeFilter}
-            filterAriaLabel={c.scopeFilterAria}
-            filterPlaceholder={c.scopeAll}
-            filterOptions={[{ value: 'assigned', label: c.scopeAssigned }]}
-            onFilterChange={(val) => {
-              setScopeFilter(val);
-              setPage(1);
-            }}
-          />
-
-          {errorMsg ? (
-            <ErrorState
-              title={commonStrings.tableErrorTitle}
-              message={errorMsg}
-              retryLabel={commonStrings.tableRetryBtn}
-              onRetry={() => void loadIntegrations()}
-            />
-          ) : loading ? (
-            <LoadingState title={c.loadingText} />
-          ) : items.length === 0 ? (
-            <div className="empty-state-box empty" role="status">
-              <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
-              <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">
+                  {lang === 'ar' ? 'قائمة التكاملات' : 'Integration List'}
+                </h2>
+                <span className="sr-only">{c.pageTitle}</span>
+              </div>
             </div>
-          ) : (
-            <>
-              <div className="stack" style={{ marginTop: 14 }}>
-                {items.map((row) => {
-                  const st = formatStateBadge(row.documentState);
-                  const myDocPerms = new Set(row.myDocumentPermissions ?? []);
-                  return (
-                    <div key={row.id} className="item-card">
-                      <div className="row between wrap">
+
+            <SearchFilterBar
+              searchValue={searchQuery}
+              searchPlaceholder={c.searchPlaceholder}
+              searchAriaLabel={c.searchAria}
+              onSearchChange={(val) => {
+                setSearchQuery(val);
+                setPage(1);
+              }}
+              filterValue={scopeFilter}
+              filterAriaLabel={c.scopeFilterAria}
+              filterPlaceholder={c.scopeAll}
+              filterOptions={[{ value: 'assigned', label: c.scopeAssigned }]}
+              onFilterChange={(val) => {
+                setScopeFilter(val);
+                setPage(1);
+              }}
+            />
+
+            {errorMsg ? (
+              <ErrorState
+                title={commonStrings.tableErrorTitle}
+                message={errorMsg}
+                retryLabel={commonStrings.tableRetryBtn}
+                onRetry={() => void loadIntegrations()}
+              />
+            ) : loading ? (
+              <LoadingState title={c.loadingText} />
+            ) : items.length === 0 ? (
+              <div className="empty-state-box empty" role="status">
+                <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
+                <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
+              </div>
+            ) : (
+              <>
+                <div className="stack" style={{ marginTop: 14 }}>
+                  {items.map((row) => {
+                    const st = formatStateBadge(row.documentState);
+                    const myDocPerms = new Set(row.myDocumentPermissions ?? []);
+                    const devsText =
+                      (row.assignedDevelopers ?? []).length === 0
+                        ? c.noDevsLabel
+                        : (row.assignedDevelopers ?? []).map((dev) => dev.fullName).join('، ');
+                    return (
+                      <div key={row.id} className="item-card">
                         <div>
-                          <div className="row wrap">
+                          <div className="row wrap" style={{ marginBottom: 7 }}>
                             <code className="tag ltr-code">{row.referenceCode}</code>
                             <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
-                            <StatusBadge variant={row.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
-                              {row.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
-                            </StatusBadge>
                           </div>
-                          <div className="item-title" style={{ marginTop: 6 }}>
+                          <div className="item-title">
                             <strong>{row.derivedTitle}</strong>
                           </div>
                           <div className="item-sub">
-                            {row.apiGroupName} · {c.colVersions}:{' '}
-                            <code className="ltr-code">{row.versionsCount}</code>
+                            {row.apiGroupName} ·{' '}
+                            <code className="ltr-code">{row.versionsCount}</code>{' '}
+                            {lang === 'ar' ? 'إصدار' : 'versions'}
                           </div>
-                          <div className="badge-wrap-list" style={{ marginTop: 6 }}>
-                            {(row.assignedDevelopers ?? []).length === 0 ? (
-                              <span className="muted-cell-text">{c.noDevsLabel}</span>
-                            ) : (
-                              (row.assignedDevelopers ?? []).map((dev) => (
-                                <StatusBadge key={dev.userId} variant="info">
-                                  {dev.fullName}
-                                </StatusBadge>
-                              ))
-                            )}
+                          <div className="item-sub">
+                            <b>{lang === 'ar' ? 'المطورون المسؤولون:' : 'Responsible Developers:'}</b>{' '}
+                            {devsText}
                           </div>
                         </div>
-                        <div className="button-row">
-                          <Button variant="outline" size="sm" onClick={() => void openDetails(row.id)}>
-                            {c.detailsBtn}
+                        <div className="row wrap button-row">
+                          <Button
+                            variant="secondary"
+                            aria-label={c.detailsBtn}
+                            onClick={() => void openDetails(row.id)}
+                          >
+                            <span>{lang === 'ar' ? 'عرض التكامل' : 'Open Integration'}</span>
+                            <ReferenceIcon name="left" size={14} />
                           </Button>
                           {canAssignGlobal && myDocPerms.has('doc.assign') && (
-                            <Button variant="secondary" size="sm" onClick={() => void openAssignDevelopers(row)}>
-                              {c.assignDevsBtn}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label={c.assignDevsBtn}
+                              onClick={() => void openAssignDevelopers(row)}
+                            >
+                              {lang === 'ar' ? 'تعيين المطورين' : 'Manage Developers'}
                             </Button>
                           )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {totalCount > 0 && (
-                <PaginationBar
-                  currentPage={page}
-                  totalPages={totalPages}
-                  totalItems={totalCount}
-                  pageLabel={`${c.pageWord} ${page} ${c.ofWord} ${totalPages}`}
-                  previousLabel={commonStrings.paginationPrev}
-                  nextLabel={commonStrings.paginationNext}
-                  onPageChange={setPage}
-                />
-              )}
-            </>
-          )}
-        </section>
+                {totalCount > 0 && (
+                  <PaginationBar
+                    currentPage={page}
+                    totalPages={totalPages}
+                    totalItems={totalCount}
+                    pageLabel={`${c.pageWord} ${page} ${c.ofWord} ${totalPages}`}
+                    previousLabel={commonStrings.paginationPrev}
+                    nextLabel={commonStrings.paginationNext}
+                    onPageChange={setPage}
+                  />
+                )}
+              </>
+            )}
+          </section>
+        </>
       )}
 
       <CentralModalDialog

@@ -344,8 +344,8 @@ export function DocumentAccessMatrixPage({
         <h3 className="card-title heading-font" style={{ marginTop: 18, marginBottom: 10 }}>
           {c.rolesSectionTitle}
         </h3>
-        <div className="matrix-scroll-wrapper" style={{ marginBottom: 24 }}>
-          <table className="selection-matrix-table">
+        <div className="permission-matrix-scroll acl-scroll matrix-scroll-wrapper" style={{ marginBottom: 24 }}>
+          <table className="data-table acl-table selection-matrix-table">
             <thead>
               <tr>
                 <th className="matrix-sticky-col">{c.roleCol}</th>
@@ -389,7 +389,7 @@ export function DocumentAccessMatrixPage({
                       <td key={`${role.roleId}-${col.code}`}>
                         <select
                           aria-label={`${role.roleName} ${col.code}`}
-                          className="ui-select"
+                          className="control ui-select"
                           style={{ minWidth: 112, padding: '4px 6px', fontSize: 12 }}
                           disabled={!canManageAcl}
                           value={current}
@@ -415,8 +415,8 @@ export function DocumentAccessMatrixPage({
         <h3 className="card-title heading-font" style={{ marginTop: 18, marginBottom: 10 }}>
           {c.usersSectionTitle}
         </h3>
-        <div className="matrix-scroll-wrapper">
-          <table className="selection-matrix-table">
+        <div className="permission-matrix-scroll acl-scroll matrix-scroll-wrapper">
+          <table className="data-table acl-table selection-matrix-table">
             <thead>
               <tr>
                 <th className="matrix-sticky-col">{c.userCol}</th>
@@ -434,7 +434,7 @@ export function DocumentAccessMatrixPage({
                   <td className="matrix-sticky-col">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <strong>{user.fullName}</strong>
-                      <code className="ltr-code" style={{ fontSize: 11 }}>{user.email}</code>
+                      <code className="ltr-code acl-subtitle" style={{ fontSize: 11 }}>{user.email}</code>
                       <div className="badge-wrap-list">
                         {user.isAssignedDeveloper && (
                           <StatusBadge variant="info">{c.assignedDevBadge}</StatusBadge>
@@ -467,14 +467,14 @@ export function DocumentAccessMatrixPage({
                     const explicitVal = userDraft[user.userId]?.[col.code] ?? '';
                     const preview = evaluatePreviewCell(user.userId, col.code);
                     return (
-                      <td key={`${user.userId}-${col.code}`}>
+                      <td key={`${user.userId}-${col.code}`} className={explicitVal ? 'acl-overridden' : ''}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120 }}>
                           <StatusBadge variant={preview.allowed ? 'success' : 'danger'}>
                             {`${preview.allowed ? c.effectiveAllow : c.effectiveDeny} · ${preview.label}`}
                           </StatusBadge>
                           <select
                             aria-label={`${user.fullName} ${col.code}`}
-                            className="ui-select"
+                            className="control ui-select"
                             style={{ padding: '4px 6px', fontSize: 12 }}
                             disabled={!canManageAcl}
                             value={explicitVal}

@@ -693,18 +693,21 @@ export function RequirementTemplatesPage({
           </div>
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
-            {canManage && (
+        <>
+          {canManage && (
+            <div className="page-actions">
               <Button variant="primary" disabled={submitting} onClick={openCreate}>
                 {c.addBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">{c.pageTitle}</h2>
+                <p className="panel-desc">{c.pageDesc}</p>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={searchQuery}
@@ -827,7 +830,8 @@ export function RequirementTemplatesPage({
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       )}
 
       <CentralModalDialog

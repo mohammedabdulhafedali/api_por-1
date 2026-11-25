@@ -84,17 +84,17 @@ export function SelectionMatrix({
   }
 
   return (
-    <div className="matrix-scroll-container">
-      <table className="selection-matrix">
+    <div className="permission-matrix-scroll matrix-scroll-container">
+      <table className="permission-matrix selection-matrix">
         <thead>
           <tr>
-            <th className="matrix-sticky-col matrix-corner-header">
-              <div className="matrix-header-row-between">
+            <th className="perm-screen matrix-sticky-col matrix-corner-header">
+              <div className="check-everything matrix-header-row-between">
                 <span>{rowHeaderLabel}</span>
                 <label className="matrix-inline-check">
                   <input
                     type="checkbox"
-                    className="matrix-checkbox"
+                    className="perm-check matrix-checkbox"
                     aria-label={selectAllLabel}
                     checked={allSelected}
                     onChange={(e) => onToggleAll(e.target.checked)}
@@ -114,10 +114,10 @@ export function SelectionMatrix({
               return (
                 <th key={col.id} className="matrix-col-header">
                   <div className="matrix-col-header-stack">
-                    <span className="matrix-col-title">{col.label}</span>
+                    <span className="col-title matrix-col-title">{col.label}</span>
                     <input
                       type="checkbox"
-                      className="matrix-checkbox"
+                      className="perm-check matrix-checkbox"
                       aria-label={`${selectColAriaPrefix}: ${col.label}`}
                       checked={colAllSelected}
                       onChange={(e) => onToggleColumn(col.id, e.target.checked)}
@@ -144,14 +144,14 @@ export function SelectionMatrix({
 
             return (
               <Fragment key={group.groupId}>
-                <tr className="matrix-group-row">
+                <tr className="perm-group matrix-group-row">
                   <td colSpan={columns.length + 1}>
                     <div className="matrix-group-bar">
-                      <span className="heading-font">{group.groupLabel}</span>
-                      <label className="matrix-inline-check">
+                      <span className="section-name heading-font">{group.groupLabel}</span>
+                      <label className="group-choice matrix-inline-check">
                         <input
                           type="checkbox"
-                          className="matrix-checkbox"
+                          className="perm-check matrix-checkbox"
                           aria-label={`${selectGroupLabel}: ${group.groupLabel}`}
                           checked={groupAllSelected}
                           onChange={(e) => onToggleGroup(group.groupId, e.target.checked)}
@@ -171,17 +171,17 @@ export function SelectionMatrix({
 
                   return (
                     <tr key={row.id}>
-                      <td className="matrix-sticky-col matrix-row-header">
-                        <div className="matrix-header-row-between">
-                          <div>
-                            <div className="matrix-row-title">{row.title}</div>
+                      <td className="perm-screen matrix-sticky-col matrix-row-header">
+                        <div className="all-row-toggle matrix-header-row-between">
+                          <div className="row-title">
+                            <b className="matrix-row-title">{row.title}</b>
                             {row.technicalPath && (
-                              <span className="matrix-row-path ltr-code">{row.technicalPath}</span>
+                              <span className="perm-path matrix-row-path ltr-code">{row.technicalPath}</span>
                             )}
                           </div>
                           <input
                             type="checkbox"
-                            className="matrix-checkbox"
+                            className="perm-check matrix-checkbox"
                             aria-label={`${selectRowAriaPrefix}: ${row.title}`}
                             checked={rowAllSelected}
                             onChange={(e) => onToggleRow(row.id, e.target.checked)}
@@ -192,7 +192,7 @@ export function SelectionMatrix({
                         const applicable = isCellApplicable(row, col.id);
                         if (!applicable) {
                           return (
-                            <td key={col.id} className="matrix-cell-na" aria-disabled="true">
+                            <td key={col.id} className="not-applicable matrix-cell-na" aria-disabled="true">
                               {notApplicableSymbol}
                             </td>
                           );
@@ -203,7 +203,7 @@ export function SelectionMatrix({
                           <td key={col.id} className="matrix-cell">
                             <input
                               type="checkbox"
-                              className="matrix-checkbox"
+                              className="perm-check matrix-checkbox"
                               aria-label={`${row.title} - ${col.label}`}
                               checked={checked}
                               onChange={() => onToggleCell(row.id, col.id)}
