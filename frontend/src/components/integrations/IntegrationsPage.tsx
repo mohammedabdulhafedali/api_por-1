@@ -53,6 +53,15 @@ import {
   submitChangeRequest,
   updateChangeRequest,
 } from '../../api/changesAndNotificationsApi';
+import {
+  ConsumerVersionResponse,
+  getIntegrationConsumerVersion,
+  getIntegrationPublications,
+  IntegrationPublicationsResponse,
+  publishApprovedRevision,
+  setIntegrationConsumerVersion,
+  withdrawPublication,
+} from '../../api/publishingPortalApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
@@ -89,8 +98,9 @@ type PageMode =
   | 'decide-stage'
   | 'create-change-request'
   | 'edit-change-request'
-  | 'notifications';
-type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'audit';
+  | 'notifications'
+  | 'publish-revision';
+type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'publishing' | 'audit';
 
 interface ModalState {
   variant: 'success' | 'warning' | 'error' | 'confirm';
@@ -406,6 +416,40 @@ const COPY = {
     markReadBtn: 'تحديد كمقروء',
     readTag: 'مقروء',
     unreadTag: 'جديد (غير مقروء)',
+    // S12 P01-P03 Publishing & Consumer Version Usage (AR)
+    tabPublishing: 'النشر وإصدار المستهلك (UI-14)',
+    publishingWorkspaceTitle: 'حزم النشر للجهة المستهلكة وإصدار الاستخدام الحالي (UI-14 / P01–P03)',
+    publishRevisionBtn: 'نشر انتقائي لمراجعة معتمدة (P01)',
+    publishBadge: 'نشر انتقائي لمراجعة معتمدة · UI-14 / P01',
+    publishTitle: 'نشر حزمة توثيق انتقائية من مراجعة معتمدة',
+    publishSub:
+      'يُشترط أن تكون المراجعة بحالة APPROVED وجميع الملفات المختارة سليمة (CLEAN). لن تظهر الملفات غير المختارة للمستهلك.',
+    publishRevLabel: 'المراجعة المعتمدة المستهدفة',
+    publishFilesLabel: 'الملفات السليمة المتاحة للنشر الانتقائي',
+    publishSubmitBtn: 'تأكيد النشر وإتاحته للمستهلك',
+    publishValidationMissing: 'يرجى اختيار مراجعة معتمدة وملف سليم واحد على الأقل.',
+    publishSuccessTitle: 'تم نشر الحزمة بنجاح',
+    publishSuccessMsg: (verLabel: string, count: number) =>
+      `تم نشر حزمة الإصدار (${verLabel}) مع ${count} ملفًا مختارًا وبحالة PUBLISHED.`,
+    withdrawBtn: 'إيقاف النشر (P02)',
+    withdrawConfirmTitle: 'تأكيد إيقاف النشر (P02)',
+    withdrawConfirmMsg: (verLabel: string, revNum: number) =>
+      `سيتم تحويل حزمة الإصدار (${verLabel} · المراجعة #${revNum}) إلى WITHDRAWN وحجبها عن بوابة المستهلك مع بقاء سجلها للتدقيق.`,
+    withdrawSuccessTitle: 'تم إيقاف النشر',
+    withdrawSuccessMsg: 'تم تحويل حالة الحزمة إلى WITHDRAWN وحجبها عن بوابة المستهلك.',
+    consumerVersionTitle: 'إصدار API المعتمد للاستخدام حاليًا لدى المستهلك (UI-12 / P03)',
+    consumerVersionCurrentLabel: 'الإصدار النشط حاليًا',
+    consumerVersionUnset: 'لم يتم تحديد إصدار نشط بعد',
+    consumerVersionSelectLabel: 'تعيين / تحديث الإصدار النشط (من الإصدارات المنشورة فقط)',
+    consumerVersionSaveBtn: 'اعتماد الإصدار النشط (P03)',
+    consumerVersionSavedTitle: 'تم تحديث إصدار الاستخدام الحالي',
+    consumerVersionSavedMsg: (verLabel: string) =>
+      `أصبح (${verLabel}) هو الإصدار الوحيد النشط للاستخدام الحالي لدى المستهلك مع إغلاق السجل السابق تاريخيًا.`,
+    emptyPublications: 'لا توجد حزم منشورة مسجلة لهذا التكامل بعد.',
+    colPubVersion: 'الإصدار والمراجعة',
+    colPubState: 'حالة النشر',
+    colPubFiles: 'الملفات المنشورة',
+    colPubActorDate: 'الناشر والتاريخ',
   },
   en: {
     pageTitle: 'Integrations Directory (UI-22)',
@@ -712,6 +756,40 @@ const COPY = {
     markReadBtn: 'Mark as Read',
     readTag: 'Read',
     unreadTag: 'Unread',
+    // S12 P01-P03 Publishing & Consumer Version Usage (EN)
+    tabPublishing: 'Publishing & Usage (UI-14)',
+    publishingWorkspaceTitle: 'Publications & Active Consumer Version (UI-14 / P01–P03)',
+    publishRevisionBtn: 'Selective Publish Approved Revision (P01)',
+    publishBadge: 'Publish Approved Revision · UI-14 / P01',
+    publishTitle: 'Publish Selective Files from Approved Revision',
+    publishSub:
+      'Target revision must be APPROVED and every selected file must have CLEAN scan status.',
+    publishRevLabel: 'Target Approved Revision',
+    publishFilesLabel: 'Select CLEAN Files to Publish',
+    publishSubmitBtn: 'Confirm & Publish Package',
+    publishValidationMissing: 'Select an approved revision and at least one CLEAN file.',
+    publishSuccessTitle: 'Package Published',
+    publishSuccessMsg: (verLabel: string, count: number) =>
+      `Published version (${verLabel}) with ${count} selected files in PUBLISHED state.`,
+    withdrawBtn: 'Withdraw (P02)',
+    withdrawConfirmTitle: 'Confirm Publication Withdrawal (P02)',
+    withdrawConfirmMsg: (verLabel: string, revNum: number) =>
+      `Publication (${verLabel} · Rev #${revNum}) will transition to WITHDRAWN and disappear from the consumer portal while retaining audit history.`,
+    withdrawSuccessTitle: 'Publication Withdrawn',
+    withdrawSuccessMsg: 'Publication marked as WITHDRAWN and hidden from the consumer portal.',
+    consumerVersionTitle: 'Current Consumer API Version Usage (UI-12 / P03)',
+    consumerVersionCurrentLabel: 'Active Version',
+    consumerVersionUnset: 'Not assigned yet',
+    consumerVersionSelectLabel: 'Set Active Version (Published versions only)',
+    consumerVersionSaveBtn: 'Save Active Consumer Version (P03)',
+    consumerVersionSavedTitle: 'Active Consumer Version Updated',
+    consumerVersionSavedMsg: (verLabel: string) =>
+      `Set (${verLabel}) as the single active consumer version and closed prior usage window.`,
+    emptyPublications: 'No publications recorded for this integration yet.',
+    colPubVersion: 'Version & Revision',
+    colPubState: 'State',
+    colPubFiles: 'Published Files',
+    colPubActorDate: 'Publisher & Timestamp',
   },
 } as const;
 
@@ -732,6 +810,8 @@ export function IntegrationsPage({
   const canViewWorkflowsGlobal = permSet.has('workflows.view');
   const canDecideWorkflowsGlobal = permSet.has('workflows.decide');
   const canViewChangesGlobal = permSet.has('changes.view');
+  const canViewPublicationsGlobal = permSet.has('publications.view');
+  const canViewConsumerUsageGlobal = permSet.has('versions.usage.view');
 
   const [mode, setMode] = useState<PageMode>(initialMode);
   useEffect(() => {
@@ -796,6 +876,21 @@ export function IntegrationsPage({
   const [crSelectedFileIds, setCrSelectedFileIds] = useState<Set<string>>(new Set());
   const [notificationsData, setNotificationsData] = useState<NotificationsListResponse | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  // S12 P01-P03 Publishing & Consumer Version Usage state
+  const [publicationsData, setPublicationsData] = useState<IntegrationPublicationsResponse | null>(null);
+  const [consumerVersionData, setConsumerVersionData] = useState<ConsumerVersionResponse | null>(null);
+  const [publishingLoading, setPublishingLoading] = useState(false);
+  const [selectedConsumerVerId, setSelectedConsumerVerId] = useState('');
+  const [publishRevisionsPool, setPublishRevisionsPool] = useState<
+    Array<{
+      revisionId: string;
+      versionLabel: string;
+      revisionNumber: number;
+      files: RevisionFileItem[];
+    }>
+  >([]);
+  const [publishRevisionId, setPublishRevisionId] = useState('');
+  const [publishSelectedFileIds, setPublishSelectedFileIds] = useState<Set<string>>(new Set());
 
   const handleApiError = useCallback(
     (err: unknown, fallbackTitle: string) => {
@@ -961,6 +1056,49 @@ export function IntegrationsPage({
     [canViewChangesGlobal, lang]
   );
 
+  const loadPublishingTab = useCallback(
+    async (integrationId: string) => {
+      if (!canViewPublicationsGlobal && !canViewConsumerUsageGlobal) {
+        setPublicationsData(null);
+        setConsumerVersionData(null);
+        return;
+      }
+      setPublishingLoading(true);
+      try {
+        const [pubsRes, usageRes, versRes] = await Promise.all([
+          canViewPublicationsGlobal
+            ? getIntegrationPublications(integrationId, lang)
+            : Promise.resolve(null),
+          canViewConsumerUsageGlobal
+            ? getIntegrationConsumerVersion(integrationId, lang)
+            : Promise.resolve(null),
+          canViewVersionsGlobal
+            ? listIntegrationVersions(integrationId, lang)
+            : Promise.resolve(null),
+        ]);
+        setPublicationsData(pubsRes);
+        setConsumerVersionData(usageRes);
+        if (versRes) {
+          setVersionsData(versRes);
+        }
+        if (usageRes?.activeUsage?.apiVersionId) {
+          setSelectedConsumerVerId(usageRes.activeUsage.apiVersionId);
+        } else if (pubsRes?.publications?.some((p) => p.state === 'PUBLISHED')) {
+          const firstPublishedVer = pubsRes.publications.find((p) => p.state === 'PUBLISHED');
+          setSelectedConsumerVerId(firstPublishedVer?.apiVersionId ?? '');
+        } else {
+          setSelectedConsumerVerId('');
+        }
+      } catch {
+        setPublicationsData(null);
+        setConsumerVersionData(null);
+      } finally {
+        setPublishingLoading(false);
+      }
+    },
+    [canViewConsumerUsageGlobal, canViewPublicationsGlobal, canViewVersionsGlobal, lang]
+  );
+
   useEffect(() => {
     if (mode !== 'details' || !details?.summary.id) return;
     if (activeTab === 'versions') {
@@ -973,12 +1111,15 @@ export function IntegrationsPage({
       );
     } else if (activeTab === 'changes') {
       void loadChangesTab(details.summary.id);
+    } else if (activeTab === 'publishing') {
+      void loadPublishingTab(details.summary.id);
     }
   }, [
     activeTab,
     details?.summary.id,
     loadChangesTab,
     loadFilesWorkspaceTab,
+    loadPublishingTab,
     loadVersionsTab,
     mode,
     selectedWorkspaceRevisionId,
@@ -1565,6 +1706,134 @@ export function IntegrationsPage({
       await loadNotificationsCenter();
     } catch (err) {
       handleApiError(err, c.notificationsTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openPublishRevisionForm = async () => {
+    if (!details) return;
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const vers = versionsData ?? (await listIntegrationVersions(details.summary.id, lang));
+      const pool: Array<{
+        revisionId: string;
+        versionLabel: string;
+        revisionNumber: number;
+        files: RevisionFileItem[];
+      }> = [];
+
+      for (const ver of vers.versions) {
+        const ws = await getIntegrationFilesWorkspace(details.summary.id, { versionId: ver.id }, lang);
+        for (const rev of ws.revisions) {
+          if (rev.status === 'APPROVED') {
+            const revWs =
+              ws.selectedRevision?.id === rev.id
+                ? ws
+                : await getIntegrationFilesWorkspace(
+                    details.summary.id,
+                    { versionId: ver.id, revisionId: rev.id },
+                    lang
+                  );
+            const cleanFiles = revWs.files.filter((f) => f.scanStatus === 'CLEAN');
+            if (cleanFiles.length > 0) {
+              pool.push({
+                revisionId: rev.id,
+                versionLabel: ver.versionLabel,
+                revisionNumber: rev.revisionNumber,
+                files: cleanFiles,
+              });
+            }
+          }
+        }
+      }
+
+      setPublishRevisionsPool(pool);
+      const first = pool[0];
+      setPublishRevisionId(first?.revisionId ?? '');
+      setPublishSelectedFileIds(new Set(first ? first.files.map((f) => f.id) : []));
+      setMode('publish-revision');
+    } catch (err) {
+      handleApiError(err, c.publishTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitPublishRevision = async () => {
+    if (!details) return;
+    if (!publishRevisionId || publishSelectedFileIds.size === 0) {
+      setFormError(c.publishValidationMissing);
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const created = await publishApprovedRevision(
+        publishRevisionId,
+        Array.from(publishSelectedFileIds),
+        lang
+      );
+      setModal({
+        variant: 'success',
+        title: c.publishSuccessTitle,
+        message: c.publishSuccessMsg(created.versionLabel, created.files.length),
+      });
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      setMode('details');
+      setActiveTab('publishing');
+      await loadPublishingTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, c.publishTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRequestWithdrawPublication = (pubId: string, versionLabel: string, revisionNumber: number) => {
+    if (!details) return;
+    const integrationId = details.summary.id;
+    setModal({
+      variant: 'confirm',
+      title: c.withdrawConfirmTitle,
+      message: c.withdrawConfirmMsg(versionLabel, revisionNumber),
+      onConfirmAction: () => {
+        void (async () => {
+          setSubmitting(true);
+          try {
+            await withdrawPublication(pubId, lang);
+            setModal({
+              variant: 'success',
+              title: c.withdrawSuccessTitle,
+              message: c.withdrawSuccessMsg,
+            });
+            await loadPublishingTab(integrationId);
+          } catch (err) {
+            handleApiError(err, c.withdrawBtn);
+          } finally {
+            setSubmitting(false);
+          }
+        })();
+      },
+    });
+  };
+
+  const handleSaveConsumerVersion = async () => {
+    if (!details || !selectedConsumerVerId) return;
+    setSubmitting(true);
+    try {
+      const updated = await setIntegrationConsumerVersion(details.summary.id, selectedConsumerVerId, lang);
+      setConsumerVersionData(updated);
+      setModal({
+        variant: 'success',
+        title: c.consumerVersionSavedTitle,
+        message: c.consumerVersionSavedMsg(updated.activeUsage?.versionLabel ?? selectedConsumerVerId),
+      });
+      await loadPublishingTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, c.consumerVersionTitle);
     } finally {
       setSubmitting(false);
     }
@@ -2190,6 +2459,88 @@ export function IntegrationsPage({
             </div>
           )}
         </section>
+      ) : mode === 'publish-revision' && details ? (
+        <StandaloneFormPage
+          modeBadgeLabel={c.publishBadge}
+          formTitle={`${c.publishTitle}: ${details.summary.derivedTitle}`}
+          formSubtitle={c.publishSub}
+          backButtonLabel={c.backDetailsBtn}
+          submitButtonLabel={c.publishSubmitBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => {
+            setMode('details');
+            setActiveTab('publishing');
+          }}
+          onCancel={() => {
+            setMode('details');
+            setActiveTab('publishing');
+          }}
+          onSubmit={() => void handleSubmitPublishRevision()}
+        >
+          {formError && (
+            <p className="form-error-text" role="alert">
+              {formError}
+            </p>
+          )}
+          {(() => {
+            const selectedPoolItem =
+              publishRevisionsPool.find((r) => r.revisionId === publishRevisionId) ?? null;
+
+            return (
+              <>
+                <FormField id="publish-revision-select" label={c.publishRevLabel} required>
+                  <SelectInput
+                    id="publish-revision-select"
+                    value={publishRevisionId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setPublishRevisionId(nextId);
+                      const nextPool = publishRevisionsPool.find((r) => r.revisionId === nextId);
+                      setPublishSelectedFileIds(new Set(nextPool ? nextPool.files.map((f) => f.id) : []));
+                    }}
+                    options={publishRevisionsPool.map((r) => ({
+                      value: r.revisionId,
+                      label: `${r.versionLabel} · Rev #${r.revisionNumber} (${r.files.length} CLEAN)`,
+                    }))}
+                  />
+                </FormField>
+
+                {selectedPoolItem && (
+                  <div style={{ marginTop: 14 }}>
+                    <div className="field-label" style={{ marginBottom: 8 }}>
+                      {c.publishFilesLabel}
+                    </div>
+                    <div className="badge-wrap-list" style={{ gap: 10 }}>
+                      {selectedPoolItem.files.map((file) => (
+                        <label
+                          key={file.id}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={publishSelectedFileIds.has(file.id)}
+                            onChange={() =>
+                              setPublishSelectedFileIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(file.id)) next.delete(file.id);
+                                else next.add(file.id);
+                                return next;
+                              })
+                            }
+                          />
+                          <span>
+                            {file.originalName} ({file.fileTypeName})
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </StandaloneFormPage>
       ) : mode === 'assign-devs' && details ? (
         <StandaloneFormPage
           modeBadgeLabel={c.assignBadge}
@@ -2298,6 +2649,7 @@ export function IntegrationsPage({
                     ['revisions', c.tabRevisions],
                     ['versions', c.tabVersions],
                     ['changes', c.tabChanges],
+                    ['publishing', c.tabPublishing],
                     ['audit', c.tabAudit],
                   ] as Array<[DetailsTab, string]>
                 ).map(([tabKey, label]) => (
@@ -3363,6 +3715,154 @@ export function IntegrationsPage({
                         </tbody>
                       </table>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'publishing' && (
+                <div>
+                  {publishingLoading ? (
+                    <LoadingState title={commonStrings.tableLoadingTitle} />
+                  ) : (
+                    <>
+                      {/* P03: Single Active Consumer Version Usage */}
+                      {consumerVersionData && (
+                        <div className="surface-card" style={{ marginBottom: 18, borderStyle: 'dashed' }}>
+                          <div className="card-header-row" style={{ marginBottom: 10 }}>
+                            <div>
+                              <h3 className="card-title heading-font">{c.consumerVersionTitle}</h3>
+                              <p className="card-subtitle">
+                                {c.consumerVersionCurrentLabel}:{' '}
+                                {consumerVersionData.activeUsage ? (
+                                  <StatusBadge variant="success">
+                                    {consumerVersionData.activeUsage.versionLabel}
+                                  </StatusBadge>
+                                ) : (
+                                  <span>{c.consumerVersionUnset}</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          {consumerVersionData.canManage && publicationsData && (
+                            <div className="form-grid-2" style={{ alignItems: 'end' }}>
+                              <FormField
+                                id="consumer-active-version-select"
+                                label={c.consumerVersionSelectLabel}
+                              >
+                                <SelectInput
+                                  id="consumer-active-version-select"
+                                  value={selectedConsumerVerId}
+                                  onChange={(e) => setSelectedConsumerVerId(e.target.value)}
+                                  options={Array.from(
+                                    new Map(
+                                      publicationsData.publications
+                                        .filter((p) => p.state === 'PUBLISHED')
+                                        .map((p) => [p.apiVersionId, p.versionLabel])
+                                    ).entries()
+                                  ).map(([id, label]) => ({ value: id, label }))}
+                                />
+                              </FormField>
+                              <div>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={submitting || !selectedConsumerVerId}
+                                  onClick={() => void handleSaveConsumerVersion()}
+                                >
+                                  {c.consumerVersionSaveBtn}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* P01-P02: Selective Publications & Withdrawal */}
+                      <div className="card-header-row" style={{ marginBottom: 10 }}>
+                        <h3 className="card-title heading-font">{c.publishingWorkspaceTitle}</h3>
+                        {publicationsData?.canCreatePublication && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={submitting}
+                            onClick={() => void openPublishRevisionForm()}
+                          >
+                            {c.publishRevisionBtn}
+                          </Button>
+                        )}
+                      </div>
+
+                      {!publicationsData || publicationsData.publications.length === 0 ? (
+                        <p className="card-subtitle">{c.emptyPublications}</p>
+                      ) : (
+                        <div className="table-scroll-container">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>{c.colPubVersion}</th>
+                                <th>{c.colPubState}</th>
+                                <th>{c.colPubFiles}</th>
+                                <th>{c.colPubActorDate}</th>
+                                <th>{c.colActions}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {publicationsData.publications.map((pub) => (
+                                <tr key={pub.id}>
+                                  <td>
+                                    <code className="ltr-code">{pub.versionLabel}</code> · Rev #
+                                    <code className="ltr-code">{pub.revisionNumber}</code>
+                                  </td>
+                                  <td>
+                                    <StatusBadge
+                                      variant={pub.state === 'PUBLISHED' ? 'success' : 'warning'}
+                                    >
+                                      {pub.state}
+                                    </StatusBadge>
+                                  </td>
+                                  <td>
+                                    <div className="badge-wrap-list">
+                                      {pub.files.map((f) => (
+                                        <StatusBadge key={f.id} variant="neutral">
+                                          {f.originalName}
+                                        </StatusBadge>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div>{pub.publishedByName}</div>
+                                    <div>
+                                      <code className="ltr-code">
+                                        {new Date(pub.publishedAt).toISOString()}
+                                      </code>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    {publicationsData.canWithdrawPublication &&
+                                      pub.state === 'PUBLISHED' && (
+                                        <Button
+                                          variant="danger"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() =>
+                                            handleRequestWithdrawPublication(
+                                              pub.id,
+                                              pub.versionLabel,
+                                              pub.revisionNumber
+                                            )
+                                          }
+                                        >
+                                          {c.withdrawBtn}
+                                        </Button>
+                                      )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

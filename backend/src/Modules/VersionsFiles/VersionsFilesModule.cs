@@ -40,6 +40,8 @@ public sealed class VersionsFilesModule : IBackendModule
         services.Configure<FileScanningOptions>(configuration.GetSection(FileScanningOptions.SectionName));
 
         services.AddSingleton<IPrivateFileStore, LocalPrivateFileStore>();
+        services.AddSingleton<IPublishedObjectReadAccessor>(
+            sp => (LocalPrivateFileStore)sp.GetRequiredService<IPrivateFileStore>());
         services.AddSingleton<IFileSecurityScanner, ConfiguredFileSecurityScanner>();
         services.AddSingleton<FileUploadContentValidator>();
         services.AddSingleton<IWordGovernanceDerivativeService, OpenXmlWordGovernanceDerivativeService>();

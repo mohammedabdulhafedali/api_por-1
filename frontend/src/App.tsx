@@ -11,6 +11,7 @@ import { ChangeTypesAndPoliciesPage } from './components/configuration/ChangeTyp
 import { RequirementTemplatesPage } from './components/configuration/RequirementTemplatesPage';
 import { ApiDocumentsPage } from './components/documents/ApiDocumentsPage';
 import { IntegrationsPage } from './components/integrations/IntegrationsPage';
+import { ConsumerPortalPage } from './components/portal/ConsumerPortalPage';
 import { CompanySystemsPage } from './components/masterdata/CompanySystemsPage';
 import { ConsumersManagementPage } from './components/masterdata/ConsumersManagementPage';
 import { FileTypesManagementPage } from './components/masterdata/FileTypesManagementPage';
@@ -566,6 +567,14 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               void fetchCurrentIdentity(lang)
                 .then(setSessionUser)
                 .catch(() => {});
+            }}
+          />
+        ) : activeNavItem.id === 'UI-19' ? (
+          <ConsumerPortalPage
+            lang={lang}
+            onSessionExpired={() => {
+              setShowChangePassword(false);
+              setSessionUser(null);
             }}
           />
         ) : workspaceMode !== 'catalog' ? (
