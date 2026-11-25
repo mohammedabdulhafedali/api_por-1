@@ -11,6 +11,10 @@ import { ChangeTypesAndPoliciesPage } from './components/configuration/ChangeTyp
 import { RequirementTemplatesPage } from './components/configuration/RequirementTemplatesPage';
 import { ApiDocumentsPage } from './components/documents/ApiDocumentsPage';
 import { IntegrationsPage } from './components/integrations/IntegrationsPage';
+import { AuditLogPage } from './components/monitoring/AuditLogPage';
+import { DashboardPage } from './components/monitoring/DashboardPage';
+import { NotificationBellControl } from './components/monitoring/NotificationBellControl';
+import { SearchAndBrowsePage } from './components/monitoring/SearchAndBrowsePage';
 import { ConsumerPortalPage } from './components/portal/ConsumerPortalPage';
 import { CompanySystemsPage } from './components/masterdata/CompanySystemsPage';
 import { ConsumersManagementPage } from './components/masterdata/ConsumersManagementPage';
@@ -244,6 +248,25 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
     setMobileSidebarOpen(false);
   };
 
+  const navigateByNavId = (navId: string) => {
+    const standalone = STANDALONE_NAV_ITEMS.find((item) => item.id === navId);
+    if (standalone) {
+      setShowChangePassword(false);
+      handleSelectNavItem(standalone);
+      return;
+    }
+
+    for (const grp of SIDEBAR_GROUPS) {
+      const child = grp.items.find((item) => item.id === navId);
+      if (child) {
+        setShowChangePassword(false);
+        setOpenGroupId(grp.id);
+        handleSelectNavItem(child);
+        return;
+      }
+    }
+  };
+
   const handleCloseModal = () => {
     const previousVariant = activeModal;
     setActiveModal(null);
@@ -388,7 +411,7 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
         standaloneSectionTitle={t.standaloneSectionTitle}
         collapsibleSectionTitle={t.collapsibleSectionTitle}
         topbarBreadcrumb={
-          activeNavItem.id === 'UI-17'
+          activeNavItem.id === 'UI-17' && !sessionUser.permissions.includes('dashboard.view')
             ? t.topbarBreadcrumb
             : `${t.brandTitle} · ${activeNavItem.id}`
         }
@@ -397,7 +420,7 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
             ? lang === 'ar'
               ? 'تغيير كلمة المرور'
               : 'Change Password'
-            : activeNavItem.id === 'UI-17'
+            : activeNavItem.id === 'UI-17' && !sessionUser.permissions.includes('dashboard.view')
               ? t.topbarPageTitle
               : activeNavItem.label[lang]
         }
@@ -422,6 +445,11 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
         onToggleTheme={() => setTheme((current) => (current === 'light' ? 'dark' : 'light'))}
         userActions={
           <div className="topbar-user-actions">
+            <NotificationBellControl
+              lang={lang}
+              enabled={initialAuthenticatedUser === undefined}
+              onNavigateToScreen={navigateByNavId}
+            />
             <span className="topbar-user-pill" data-testid="authenticated-user-pill">
               <strong>{sessionUser.fullName}</strong>
               <code className="ltr-code">{sessionUser.email}</code>
@@ -576,6 +604,35 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               setShowChangePassword(false);
               setSessionUser(null);
             }}
+          />
+        ) : activeNavItem.id === 'UI-16' ? (
+          <AuditLogPage
+            lang={lang}
+            permissions={sessionUser.permissions}
+            onSessionExpired={() => {
+              setShowChangePassword(false);
+              setSessionUser(null);
+            }}
+          />
+        ) : activeNavItem.id === 'UI-18' ? (
+          <SearchAndBrowsePage
+            lang={lang}
+            permissions={sessionUser.permissions}
+            onSessionExpired={() => {
+              setShowChangePassword(false);
+              setSessionUser(null);
+            }}
+            onNavigateToScreen={navigateByNavId}
+          />
+        ) : activeNavItem.id === 'UI-17' && sessionUser.permissions.includes('dashboard.view') ? (
+          <DashboardPage
+            lang={lang}
+            userName={sessionUser.fullName}
+            onSessionExpired={() => {
+              setShowChangePassword(false);
+              setSessionUser(null);
+            }}
+            onNavigateToScreen={navigateByNavId}
           />
         ) : workspaceMode !== 'catalog' ? (
           <StandaloneFormPage

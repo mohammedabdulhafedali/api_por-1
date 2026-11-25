@@ -27,6 +27,7 @@ public sealed class AuditNotificationsModule : IBackendModule
         services.AddScoped<NotificationCenterService>();
         services.AddScoped<INotificationQueryService>(sp => sp.GetRequiredService<NotificationCenterService>());
         services.AddScoped<IInternalNotificationService>(sp => sp.GetRequiredService<NotificationCenterService>());
+        services.AddScoped<IMonitoringAndSearchService, MonitoringAndSearchService>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
@@ -63,5 +64,78 @@ public sealed class AuditNotificationsModule : IBackendModule
             .RequireActiveSession()
             .WithName("MarkNotificationAsRead")
             .Produces<NotificationItemDto>(StatusCodes.Status200OK);
+
+        // UI-16 Append-Only Audit Log (Read-Only Query; zero mutation endpoints per OP-01)
+        endpoints.MapGet("/audit-events", async (
+                [FromQuery] int? page,
+                [FromQuery] int? pageSize,
+                [FromQuery] string? search,
+                [FromQuery] string? operation,
+                [FromQuery] string? resourceKind,
+                [FromQuery] string? result,
+                [FromQuery] DateTimeOffset? fromUtc,
+                [FromQuery] DateTimeOffset? toUtc,
+                HttpContext httpContext,
+                IMonitoringAndSearchService service,
+                CancellationToken cancellationToken) =>
+            {
+                var response = await service.GetAuditEventsAsync(
+                    httpContext.User,
+                    page ?? 1,
+                    pageSize ?? 25,
+                    search,
+                    operation,
+                    resourceKind,
+                    result,
+                    fromUtc,
+                    toUtc,
+                    httpContext.TraceIdentifier,
+                    cancellationToken);
+                return Results.Ok(response);
+            })
+            .WithTags("Audit, Search & Dashboard (P05)")
+            .RequireGeneralPermission("audit.view", "AUDIT_EVENTS_READ_DENIED", "AUDIT_EVENT")
+            .WithName("GetAuditEvents")
+            .Produces<PagedAuditEventsResponse>(StatusCodes.Status200OK);
+
+        // UI-18 Authorized Global Search (RBAC + Document ACL filtered)
+        endpoints.MapGet("/search", async (
+                [FromQuery] string? q,
+                [FromQuery] string? type,
+                [FromQuery] string? state,
+                HttpContext httpContext,
+                IMonitoringAndSearchService service,
+                CancellationToken cancellationToken) =>
+            {
+                var response = await service.SearchAuthorizedAsync(
+                    httpContext.User,
+                    q,
+                    type,
+                    state,
+                    httpContext.TraceIdentifier,
+                    cancellationToken);
+                return Results.Ok(response);
+            })
+            .WithTags("Audit, Search & Dashboard (P05)")
+            .RequireGeneralPermission("search.view", "GLOBAL_SEARCH_DENIED", "SEARCH")
+            .WithName("SearchAuthorizedResources")
+            .Produces<GlobalSearchResponse>(StatusCodes.Status200OK);
+
+        // UI-17 Permission-Adaptive Dashboard
+        endpoints.MapGet("/dashboard", async (
+                HttpContext httpContext,
+                IMonitoringAndSearchService service,
+                CancellationToken cancellationToken) =>
+            {
+                var response = await service.GetDashboardSummaryAsync(
+                    httpContext.User,
+                    httpContext.TraceIdentifier,
+                    cancellationToken);
+                return Results.Ok(response);
+            })
+            .WithTags("Audit, Search & Dashboard (P05)")
+            .RequireGeneralPermission("dashboard.view", "DASHBOARD_READ_DENIED", "DASHBOARD")
+            .WithName("GetDashboardSummary")
+            .Produces<DashboardSummaryResponse>(StatusCodes.Status200OK);
     }
 }

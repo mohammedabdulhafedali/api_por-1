@@ -1,6 +1,6 @@
 # backend — الخادم الخلفي (ASP.NET Core 10 LTS — Modular Monolith)
 
-الحالة: **Sprint S08 مكتمل (`V01`–`V04`)** — تأسيس حل `ASP.NET Core 10 LTS` ببنية `Modular Monolith` (F03)، وعقود API v1 و`Problem Details` ثنائية اللغة (`Accept-Language`) (F07/U01)، و`PostgreSQL 18.7` + `EF Core 10` (F04/F05)، والمصادقة والمستخدمين والأدوار ومصفوفة الصلاحيات والتفويض المركزي (I01–I05)، والبيانات المرجعية والتهيئة (`MasterDataModule`, `ConfigurationModule` M01–M07)، ومحرك صلاحيات كل وثيقة `IDocumentAuthorizationService` (`I07` / `ADR-01`) في `ApiGovernance.Shared.Security` ووحدات `DocumentsModule` (D01–D03, I07, U02) و`IntegrationsModule` (D04–D06) و`VersionsFilesModule` (`V01`–`V04` للتخزين الخاص، والتحقق، والفحص الآمن `Fail-Closed` عبر `ClamAV`/`CLI`، وإصدارات API اليدوية). لا يبدأ `Sprint S09` قبل الاعتماد.
+الحالة: **مكتمل تقنيًا 100% (`S01`–`S14` — `59/59` مهمة)** — حل `ASP.NET Core 10 LTS` ببنية `Modular Monolith` يضم الوحدات العشر الكاملة: `IdentityAccess` (`I01`–`I06`), `MasterData` (`M01`–`M04`), `Configuration` (`M05`–`M07`), `Documents` (`D01`–`D03`, `I07`), `Integrations` (`D04`–`D06`), `VersionsFiles` (`V01`–`V08`), `Workflow` (`W01`–`W04`), `Changes` (`W05`–`W06`), `PublishingPortal` (`P01`–`P04`), و`AuditNotifications` (`OP-01`, `W07`, `P05`)، مع قالب النشر `web.config` ودليل العمليات وحزم الاختبار والتدقيق الأمني (`Q01`–`Q07`).
 
 ## هيكل الحل (`ApiGovernance.sln`)
 - `Directory.Build.props`: إعدادات البناء الموحدة (`net10.0`, `Nullable=enable`, `TreatWarningsAsErrors=true`).
