@@ -42,6 +42,17 @@ import {
   WorkflowRunDetails,
   WorkflowRunStageItem,
 } from '../../api/workflowsApi';
+import {
+  ChangeRequestItem,
+  createChangeRequest,
+  getIntegrationChangeRequests,
+  getMyNotifications,
+  IntegrationChangeRequestsWorkspaceResponse,
+  markNotificationAsRead,
+  NotificationsListResponse,
+  submitChangeRequest,
+  updateChangeRequest,
+} from '../../api/changesAndNotificationsApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
@@ -75,7 +86,10 @@ type PageMode =
   | 'upload-file'
   | 'create-working-copy'
   | 'workflow-inbox'
-  | 'decide-stage';
+  | 'decide-stage'
+  | 'create-change-request'
+  | 'edit-change-request'
+  | 'notifications';
 type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'audit';
 
 interface ModalState {
@@ -354,6 +368,44 @@ const COPY = {
       `تم تسجيل القرار الذري للمرحلة وتحديث حالة التشغيل والمراجعة إلى: ${outcome}`,
     workflowHistoryTitle: 'سجل قرارات المراحل ومحاولات المراجعة (W04)',
     workflowHistoryEmpty: 'لم تُسجل قرارات مراحل على هذه المراجعة بعد.',
+    // S11 W05-W07 Change Requests & Notifications Strings (AR)
+    crWorkspaceTitle: 'طلبات التغيير المقيدة بالملفات المتأثرة (UI-13 / W05–W06)',
+    crCreateBtn: 'إنشاء طلب تغيير (W05)',
+    crEditBtn: 'تعديل الطلب',
+    crSubmitBtn: 'إرسال للاعتماد (W06)',
+    crCreateBadge: 'إنشاء طلب تغيير · UI-13 / W05',
+    crEditBadge: 'تعديل طلب تغيير · UI-13 / W05',
+    crCreateTitle: 'إنشاء طلب تغيير لمراجعة معتمدة',
+    crEditTitle: 'تعديل مسودة طلب التغيير',
+    crFormSub:
+      'يُربط الطلب حصرًا بمراجعة معتمدة (APPROVED) وبملفات متأثرة تنتمي لتلك المراجعة ونوع تغيير مصرح في سياسة الوثيقة.',
+    crSourceRevLabel: 'المراجعة المعتمدة المستهدفة',
+    crChangeTypeLabel: 'نوع التغيير ومسار الاعتماد المستقل',
+    crReasonLabel: 'سبب طلب التغيير',
+    crReasonPlaceholder: 'اشرح الحاجة الفنية للتغيير...',
+    crImpactLabel: 'الأثر على الجهة المستهلكة (اختياري)',
+    crImpactPlaceholder: 'لا يوجد أثر كاسر / إضافة حقل اختياري...',
+    crAffectedFilesLabel: 'الملفات المتأثرة ضمن المراجعة المعتمدة (ملف واحد على الأقل)',
+    crSaveCreateBtn: 'حفظ كمسودة طلب تغيير',
+    crSaveEditBtn: 'حفظ تعديلات الطلب',
+    crValidationMissing: 'يرجى اختيار المراجعة ونوع التغيير والسبب وتحديد ملف متأثر واحد على الأقل.',
+    crEmptyList: 'لا توجد طلبات تغيير مسجلة لهذا التكامل بعد.',
+    crNoEligibleNotice: 'لا توجد مراجعة معتمدة تحتوي ملفات سليمة لإنشاء طلب تغيير حاليًا.',
+    crCreatedTitle: 'تم إنشاء طلب التغيير',
+    crCreatedMsg: 'حُفظ طلب التغيير بحالة DRAFT ومقيدًا بالملفات المختارة.',
+    crUpdatedTitle: 'تم تحديث طلب التغيير',
+    crUpdatedMsg: 'تم حفظ التعديلات على طلب التغيير بنجاح.',
+    crSubmittedTitle: 'تم إرسال طلب التغيير للاعتماد المستقل (W06)',
+    crSubmittedMsg: 'انطلق مسار اعتماد مستقل لطلب التغيير وفق مسار نوع التغيير المعتمد.',
+    notificationsBtn: 'الإشعارات الداخلية (W07)',
+    notificationsBadge: 'مركز الإشعارات الداخلية · W07',
+    notificationsTitle: 'الإشعارات الداخلية لأحداث مراحل الاعتماد',
+    notificationsSub: 'إشعارات داخلية آمنة خاصة بحسابك الحالي، مع عداد غير المقروء ووسم القراءة.',
+    notificationsUnreadBadge: (count: number) => `غير مقروء: ${count}`,
+    notificationsEmpty: 'لا توجد إشعارات مسجلة لحسابك حاليًا.',
+    markReadBtn: 'تحديد كمقروء',
+    readTag: 'مقروء',
+    unreadTag: 'جديد (غير مقروء)',
   },
   en: {
     pageTitle: 'Integrations Directory (UI-22)',
@@ -622,6 +674,44 @@ const COPY = {
       `Atomic stage decision saved cleanly. Current workflow / revision outcome: ${outcome}`,
     workflowHistoryTitle: 'Stage Decisions & Rework Attempts History (W04)',
     workflowHistoryEmpty: 'No stage decisions have been recorded for this revision yet.',
+    // S11 W05-W07 Change Requests & Notifications Strings (EN)
+    crWorkspaceTitle: 'File-Scoped Change Requests (UI-13 / W05–W06)',
+    crCreateBtn: 'Create Change Request (W05)',
+    crEditBtn: 'Edit Request',
+    crSubmitBtn: 'Submit for Approval (W06)',
+    crCreateBadge: 'Create Change Request · UI-13 / W05',
+    crEditBadge: 'Edit Change Request · UI-13 / W05',
+    crCreateTitle: 'Create Change Request on Approved Revision',
+    crEditTitle: 'Edit Draft Change Request',
+    crFormSub:
+      'Strictly scoped to an APPROVED source revision, policy-allowed change type, and affected files belonging to that revision.',
+    crSourceRevLabel: 'Approved Source Revision',
+    crChangeTypeLabel: 'Allowed Change Type & Independent Route',
+    crReasonLabel: 'Change Reason',
+    crReasonPlaceholder: 'Describe technical justification...',
+    crImpactLabel: 'Consumer Impact (optional)',
+    crImpactPlaceholder: 'Non-breaking optional field addition...',
+    crAffectedFilesLabel: 'Affected Source Files in Approved Revision (select at least one)',
+    crSaveCreateBtn: 'Save Draft Change Request',
+    crSaveEditBtn: 'Save Changes',
+    crValidationMissing: 'Please select a revision, change type, reason, and at least one affected file.',
+    crEmptyList: 'No change requests recorded for this integration yet.',
+    crNoEligibleNotice: 'No approved revision with clean files is available for change requests yet.',
+    crCreatedTitle: 'Change Request Created',
+    crCreatedMsg: 'Saved change request as DRAFT restricted to selected source files.',
+    crUpdatedTitle: 'Change Request Updated',
+    crUpdatedMsg: 'Saved edits to change request cleanly.',
+    crSubmittedTitle: 'Change Request Submitted to Independent Workflow (W06)',
+    crSubmittedMsg: 'Started independent approval workflow using the change type route.',
+    notificationsBtn: 'Internal Notifications (W07)',
+    notificationsBadge: 'Internal Notifications Center · W07',
+    notificationsTitle: 'Internal Workflow Stage Notifications',
+    notificationsSub: 'User-scoped internal notifications generated from workflow stage activations and final outcomes.',
+    notificationsUnreadBadge: (count: number) => `Unread: ${count}`,
+    notificationsEmpty: 'No internal notifications recorded for your account.',
+    markReadBtn: 'Mark as Read',
+    readTag: 'Read',
+    unreadTag: 'Unread',
   },
 } as const;
 
@@ -641,6 +731,7 @@ export function IntegrationsPage({
   const canViewFilesGlobal = permSet.has('files.view');
   const canViewWorkflowsGlobal = permSet.has('workflows.view');
   const canDecideWorkflowsGlobal = permSet.has('workflows.decide');
+  const canViewChangesGlobal = permSet.has('changes.view');
 
   const [mode, setMode] = useState<PageMode>(initialMode);
   useEffect(() => {
@@ -694,6 +785,17 @@ export function IntegrationsPage({
   const [decisionKind, setDecisionKind] = useState<WorkflowDecisionKind>('APPROVE');
   const [decisionNotes, setDecisionNotes] = useState('');
   const [decisionReturnTarget, setDecisionReturnTarget] = useState<'details' | 'workflow-inbox'>('details');
+  // S11 W05-W07 Change Requests & Notifications state
+  const [changesWorkspace, setChangesWorkspace] = useState<IntegrationChangeRequestsWorkspaceResponse | null>(null);
+  const [changesLoading, setChangesLoading] = useState(false);
+  const [editingCrId, setEditingCrId] = useState('');
+  const [crSourceRevisionId, setCrSourceRevisionId] = useState('');
+  const [crChangeTypeId, setCrChangeTypeId] = useState('');
+  const [crReason, setCrReason] = useState('');
+  const [crConsumerImpact, setCrConsumerImpact] = useState('');
+  const [crSelectedFileIds, setCrSelectedFileIds] = useState<Set<string>>(new Set());
+  const [notificationsData, setNotificationsData] = useState<NotificationsListResponse | null>(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const handleApiError = useCallback(
     (err: unknown, fallbackTitle: string) => {
@@ -840,6 +942,25 @@ export function IntegrationsPage({
     [canViewFilesGlobal, lang, loadWorkflowForRun]
   );
 
+  const loadChangesTab = useCallback(
+    async (integrationId: string) => {
+      if (!canViewChangesGlobal) {
+        setChangesWorkspace(null);
+        return;
+      }
+      setChangesLoading(true);
+      try {
+        const res = await getIntegrationChangeRequests(integrationId, lang);
+        setChangesWorkspace(res);
+      } catch {
+        setChangesWorkspace(null);
+      } finally {
+        setChangesLoading(false);
+      }
+    },
+    [canViewChangesGlobal, lang]
+  );
+
   useEffect(() => {
     if (mode !== 'details' || !details?.summary.id) return;
     if (activeTab === 'versions') {
@@ -850,10 +971,13 @@ export function IntegrationsPage({
         selectedWorkspaceVersionId || undefined,
         selectedWorkspaceRevisionId || undefined
       );
+    } else if (activeTab === 'changes') {
+      void loadChangesTab(details.summary.id);
     }
   }, [
     activeTab,
     details?.summary.id,
+    loadChangesTab,
     loadFilesWorkspaceTab,
     loadVersionsTab,
     mode,
@@ -1327,6 +1451,125 @@ export function IntegrationsPage({
     }
   };
 
+  const openCreateChangeRequest = () => {
+    if (!changesWorkspace) return;
+    setFormError(null);
+    setEditingCrId('');
+    const firstRev = changesWorkspace.eligibleRevisions[0];
+    setCrSourceRevisionId(firstRev?.revisionId ?? '');
+    setCrChangeTypeId(changesWorkspace.allowedChangeTypes[0]?.changeTypeId ?? '');
+    setCrReason('');
+    setCrConsumerImpact('');
+    setCrSelectedFileIds(new Set());
+    setMode('create-change-request');
+  };
+
+  const openEditChangeRequest = (cr: ChangeRequestItem) => {
+    setFormError(null);
+    setEditingCrId(cr.id);
+    setCrSourceRevisionId(cr.sourceRevisionId);
+    setCrChangeTypeId(cr.changeTypeId);
+    setCrReason(cr.reason);
+    setCrConsumerImpact(cr.consumerImpact ?? '');
+    setCrSelectedFileIds(new Set(cr.affectedFiles.map((f) => f.revisionFileId)));
+    setMode('edit-change-request');
+  };
+
+  const handleSaveChangeRequestSubmit = async () => {
+    if (!details) return;
+    setFormError(null);
+    const affectedIds = Array.from(crSelectedFileIds);
+    if (!crSourceRevisionId || !crChangeTypeId || !crReason.trim() || affectedIds.length === 0) {
+      setFormError(c.crValidationMissing);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (mode === 'edit-change-request' && editingCrId) {
+        await updateChangeRequest(
+          editingCrId,
+          {
+            changeTypeId: crChangeTypeId,
+            reason: crReason.trim(),
+            consumerImpact: crConsumerImpact.trim() || null,
+            affectedSourceFileIds: affectedIds,
+          },
+          lang
+        );
+        setModal({ variant: 'success', title: c.crUpdatedTitle, message: c.crUpdatedMsg });
+      } else {
+        await createChangeRequest(
+          details.summary.id,
+          {
+            sourceRevisionId: crSourceRevisionId,
+            changeTypeId: crChangeTypeId,
+            reason: crReason.trim(),
+            consumerImpact: crConsumerImpact.trim() || null,
+            affectedSourceFileIds: affectedIds,
+          },
+          lang
+        );
+        setModal({ variant: 'success', title: c.crCreatedTitle, message: c.crCreatedMsg });
+      }
+
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      setMode('details');
+      setActiveTab('changes');
+      await loadChangesTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, mode === 'edit-change-request' ? c.crEditTitle : c.crCreateTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitChangeRequest = async (crId: string) => {
+    if (!details) return;
+    setSubmitting(true);
+    try {
+      await submitChangeRequest(crId, lang);
+      setModal({ variant: 'success', title: c.crSubmittedTitle, message: c.crSubmittedMsg });
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      await loadChangesTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, c.crSubmitBtn);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const loadNotificationsCenter = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const res = await getMyNotifications(false, lang);
+      setNotificationsData(res);
+    } catch (err) {
+      handleApiError(err, c.notificationsTitle);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [c.notificationsTitle, handleApiError, lang]);
+
+  const openNotificationsCenter = () => {
+    setMode('notifications');
+    void loadNotificationsCenter();
+  };
+
+  const handleMarkNotificationRead = async (notificationId: string) => {
+    setSubmitting(true);
+    try {
+      await markNotificationAsRead(notificationId, lang);
+      await loadNotificationsCenter();
+    } catch (err) {
+      handleApiError(err, c.notificationsTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const renderScanStatusBadge = (status: string) => {
     switch (status) {
       case 'CLEAN':
@@ -1785,6 +2028,165 @@ export function IntegrationsPage({
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </section>
+      ) : (mode === 'create-change-request' || mode === 'edit-change-request') && details && changesWorkspace ? (
+        <StandaloneFormPage
+          modeBadgeLabel={mode === 'edit-change-request' ? c.crEditBadge : c.crCreateBadge}
+          formTitle={mode === 'edit-change-request' ? c.crEditTitle : c.crCreateTitle}
+          formSubtitle={c.crFormSub}
+          backButtonLabel={c.backDetailsBtn}
+          submitButtonLabel={mode === 'edit-change-request' ? c.crSaveEditBtn : c.crSaveCreateBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => {
+            setMode('details');
+            setActiveTab('changes');
+          }}
+          onCancel={() => {
+            setMode('details');
+            setActiveTab('changes');
+          }}
+          onSubmit={() => void handleSaveChangeRequestSubmit()}
+        >
+          {formError && (
+            <p className="form-error-text" role="alert">
+              {formError}
+            </p>
+          )}
+          {(() => {
+            const selectedEligibleRev =
+              changesWorkspace.eligibleRevisions.find((r) => r.revisionId === crSourceRevisionId) ?? null;
+
+            return (
+              <div style={{ display: 'grid', gap: 14 }}>
+                <FormField id="cr-source-rev" label={c.crSourceRevLabel} required>
+                  <SelectInput
+                    id="cr-source-rev"
+                    value={crSourceRevisionId}
+                    disabled={mode === 'edit-change-request'}
+                    onChange={(e) => {
+                      setCrSourceRevisionId(e.target.value);
+                      setCrSelectedFileIds(new Set());
+                    }}
+                    options={changesWorkspace.eligibleRevisions.map((r) => ({
+                      value: r.revisionId,
+                      label: `${r.versionLabel} · #${r.revisionNumber} (${r.availableFiles.length} files)`,
+                    }))}
+                  />
+                </FormField>
+
+                <FormField id="cr-change-type" label={c.crChangeTypeLabel} required>
+                  <SelectInput
+                    id="cr-change-type"
+                    value={crChangeTypeId}
+                    onChange={(e) => setCrChangeTypeId(e.target.value)}
+                    options={changesWorkspace.allowedChangeTypes.map((ct) => ({
+                      value: ct.changeTypeId,
+                      label: `${ct.name} (${ct.routeName})`,
+                    }))}
+                  />
+                </FormField>
+
+                <FormField id="cr-reason" label={c.crReasonLabel} required>
+                  <TextInput
+                    id="cr-reason"
+                    value={crReason}
+                    placeholder={c.crReasonPlaceholder}
+                    onChange={(e) => setCrReason(e.target.value)}
+                  />
+                </FormField>
+
+                <FormField id="cr-impact" label={c.crImpactLabel}>
+                  <TextInput
+                    id="cr-impact"
+                    value={crConsumerImpact}
+                    placeholder={c.crImpactPlaceholder}
+                    onChange={(e) => setCrConsumerImpact(e.target.value)}
+                  />
+                </FormField>
+
+                <FormField id="cr-affected-files" label={c.crAffectedFilesLabel} required>
+                  <div className="badge-wrap-list" style={{ gap: 10 }}>
+                    {(selectedEligibleRev?.availableFiles ?? []).map((af) => (
+                      <label key={af.revisionFileId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={crSelectedFileIds.has(af.revisionFileId)}
+                          onChange={() =>
+                            setCrSelectedFileIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(af.revisionFileId)) next.delete(af.revisionFileId);
+                              else next.add(af.revisionFileId);
+                              return next;
+                            })
+                          }
+                        />
+                        <span>{`${af.originalName} (${af.fileTypeName})`}</span>
+                      </label>
+                    ))}
+                  </div>
+                </FormField>
+              </div>
+            );
+          })()}
+        </StandaloneFormPage>
+      ) : mode === 'notifications' ? (
+        <section className="surface-card">
+          <div className="card-header-row">
+            <div>
+              <span className="mode-pill">{c.notificationsBadge}</span>
+              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+                {c.notificationsTitle}
+              </h2>
+              <p className="card-subtitle">{c.notificationsSub}</p>
+            </div>
+            <div className="button-row" style={{ alignItems: 'center' }}>
+              {notificationsData && (
+                <StatusBadge variant={notificationsData.unreadCount > 0 ? 'warning' : 'neutral'}>
+                  {c.notificationsUnreadBadge(notificationsData.unreadCount)}
+                </StatusBadge>
+              )}
+              <Button variant="outline" onClick={() => setMode('list')}>
+                {c.backBtn}
+              </Button>
+            </div>
+          </div>
+
+          {notificationsLoading ? (
+            <LoadingState title={commonStrings.tableLoadingTitle} />
+          ) : !notificationsData || notificationsData.items.length === 0 ? (
+            <p className="card-subtitle">{c.notificationsEmpty}</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {notificationsData.items.map((n) => (
+                <div key={n.id} className="slot-stat-box">
+                  <div className="card-header-row">
+                    <div>
+                      <div className="badge-wrap-list" style={{ marginBottom: 4 }}>
+                        <StatusBadge variant={n.isRead ? 'neutral' : 'info'}>
+                          {n.isRead ? c.readTag : c.unreadTag}
+                        </StatusBadge>
+                        <code className="ltr-code">{n.kind}</code>
+                      </div>
+                      <div className="slot-stat-value" style={{ fontSize: '0.94rem' }}>
+                        {lang === 'ar' ? n.summaryAr : n.summaryEn}
+                      </div>
+                    </div>
+                    {!n.isRead && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={() => void handleMarkNotificationRead(n.id)}
+                      >
+                        {c.markReadBtn}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -2834,6 +3236,109 @@ export function IntegrationsPage({
 
               {activeTab === 'changes' && (
                 <div>
+                  {canViewChangesGlobal && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div className="card-header-row" style={{ marginBottom: 10 }}>
+                        <h3 className="card-title heading-font">{c.crWorkspaceTitle}</h3>
+                        {changesWorkspace?.canCreate && changesWorkspace.eligibleRevisions.length > 0 && (
+                          <Button variant="primary" size="sm" disabled={submitting} onClick={openCreateChangeRequest}>
+                            {c.crCreateBtn}
+                          </Button>
+                        )}
+                      </div>
+
+                      {changesLoading ? (
+                        <LoadingState title={commonStrings.tableLoadingTitle} />
+                      ) : !changesWorkspace ? null : (
+                        <>
+                          {changesWorkspace.eligibleRevisions.length === 0 && changesWorkspace.items.length === 0 && (
+                            <p className="card-subtitle" style={{ marginBottom: 8 }}>
+                              {c.crNoEligibleNotice}
+                            </p>
+                          )}
+                          {changesWorkspace.items.length === 0 ? (
+                            <p className="card-subtitle">{c.crEmptyList}</p>
+                          ) : (
+                            <div className="table-scroll-container">
+                              <table className="data-table">
+                                <thead>
+                                  <tr>
+                                    <th>{c.crReasonLabel}</th>
+                                    <th>{c.colChangeType}</th>
+                                    <th>{c.colRevStatus}</th>
+                                    <th>{c.colActions}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {changesWorkspace.items.map((cr) => (
+                                    <tr key={cr.id}>
+                                      <td>
+                                        <strong>{cr.reason}</strong>
+                                        <div className="badge-wrap-list" style={{ marginTop: 4 }}>
+                                          {cr.affectedFiles.map((af) => (
+                                            <StatusBadge key={af.revisionFileId} variant="neutral">
+                                              {af.originalName}
+                                            </StatusBadge>
+                                          ))}
+                                        </div>
+                                        {cr.latestDecisionNotes && (
+                                          <div className="muted-cell-text">{cr.latestDecisionNotes}</div>
+                                        )}
+                                      </td>
+                                      <td>
+                                        <div>{cr.changeTypeName}</div>
+                                        <div className="muted-cell-text">{cr.approvalRouteName}</div>
+                                      </td>
+                                      <td>
+                                        <StatusBadge
+                                          variant={
+                                            cr.status === 'APPROVED'
+                                              ? 'success'
+                                              : cr.status === 'REJECTED'
+                                                ? 'danger'
+                                                : cr.status === 'RETURNED'
+                                                  ? 'warning'
+                                                  : 'info'
+                                          }
+                                        >
+                                          {cr.status}
+                                        </StatusBadge>
+                                      </td>
+                                      <td>
+                                        <div className="button-row">
+                                          {cr.isEditable && changesWorkspace.canEdit && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              disabled={submitting}
+                                              onClick={() => openEditChangeRequest(cr)}
+                                            >
+                                              {c.crEditBtn}
+                                            </Button>
+                                          )}
+                                          {cr.isEditable && changesWorkspace.canSubmit && (
+                                            <Button
+                                              variant="primary"
+                                              size="sm"
+                                              disabled={submitting}
+                                              onClick={() => void handleSubmitChangeRequest(cr.id)}
+                                            >
+                                              {c.crSubmitBtn}
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <p className="card-subtitle" style={{ marginBottom: 10 }}>
                     {c.changesTabDesc}
                   </p>
@@ -2993,6 +3498,9 @@ export function IntegrationsPage({
               <p className="card-subtitle">{c.pageDesc}</p>
             </div>
             <div className="button-row">
+              <Button variant="outline" disabled={submitting} onClick={openNotificationsCenter}>
+                {c.notificationsBtn}
+              </Button>
               {canViewWorkflowsGlobal && (
                 <Button variant="secondary" disabled={submitting} onClick={openWorkflowInbox}>
                   {c.workflowInboxBtn}
