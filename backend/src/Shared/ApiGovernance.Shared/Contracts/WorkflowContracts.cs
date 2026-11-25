@@ -45,4 +45,31 @@ public interface IWorkflowRunStarter
         Guid actorUserId,
         Guid integrationId,
         CancellationToken cancellationToken = default);
+
+    Task<Guid> StartChangeRequestWorkflowRunAsync(
+        Guid changeRequestId,
+        Guid routeId,
+        Guid actorUserId,
+        Guid integrationId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Internal notification emitter triggered by workflow stage activations and final outcomes (W07).
+/// </summary>
+public interface IInternalNotificationService
+{
+    Task NotifyStageActivatedAsync(
+        Guid roleId,
+        Guid? excludeUserId,
+        string resourceKind,
+        Guid resourceId,
+        CancellationToken cancellationToken = default);
+
+    Task NotifyWorkflowOutcomeAsync(
+        Guid targetUserId,
+        string kind,
+        string resourceKind,
+        Guid resourceId,
+        CancellationToken cancellationToken = default);
 }

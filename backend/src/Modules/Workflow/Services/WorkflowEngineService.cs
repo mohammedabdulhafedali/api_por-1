@@ -40,15 +40,45 @@ public interface IWorkflowEngineService
 public sealed class WorkflowEngineService(
     ApiGovernanceDbContext dbContext,
     IServerAuthorizationService serverAuthorization,
-    IDocumentAuthorizationService documentAuthorization)
+    IDocumentAuthorizationService documentAuthorization,
+    IInternalNotificationService internalNotificationService)
     : IWorkflowEngineService, IWorkflowRunStarter
 {
-    public async Task<Guid> StartRevisionWorkflowRunAsync(
+    public Task<Guid> StartRevisionWorkflowRunAsync(
         Guid revisionId,
         Guid routeId,
         Guid actorUserId,
         Guid integrationId,
         CancellationToken cancellationToken = default)
+        => StartWorkflowRunCoreAsync(
+            revisionId: revisionId,
+            changeRequestId: null,
+            routeId: routeId,
+            actorUserId: actorUserId,
+            integrationId: integrationId,
+            cancellationToken: cancellationToken);
+
+    public Task<Guid> StartChangeRequestWorkflowRunAsync(
+        Guid changeRequestId,
+        Guid routeId,
+        Guid actorUserId,
+        Guid integrationId,
+        CancellationToken cancellationToken = default)
+        => StartWorkflowRunCoreAsync(
+            revisionId: null,
+            changeRequestId: changeRequestId,
+            routeId: routeId,
+            actorUserId: actorUserId,
+            integrationId: integrationId,
+            cancellationToken: cancellationToken);
+
+    private async Task<Guid> StartWorkflowRunCoreAsync(
+        Guid? revisionId,
+        Guid? changeRequestId,
+        Guid routeId,
+        Guid actorUserId,
+        Guid integrationId,
+        CancellationToken cancellationToken)
     {
         var routeStages = await dbContext.ApprovalRouteStages.AsNoTracking()
             .Where(s => s.RouteId == routeId)
@@ -58,17 +88,21 @@ public sealed class WorkflowEngineService(
         if (routeStages.Count == 0)
         {
             throw ApiContractException.UnprocessableEntity(
-                messageAr: "لا يمكن بدء مسار الاعتماد لأن المسار المرتبط بالوثيقة لا يحتوي على مراحل.",
+                messageAr: "لا يمكن بدء مسار الاعتماد لأن المسار المرتبط لا يحتوي على مراحل.",
                 messageEn: "Cannot start workflow run because the linked approval route has no configured stages.");
         }
 
-        var hasActiveRun = await dbContext.WorkflowRuns.AsNoTracking()
-            .AnyAsync(r => r.RevisionId == revisionId && r.Status == WorkflowRunStatusValues.InProgress, cancellationToken);
+        var hasActiveRun = revisionId.HasValue
+            ? await dbContext.WorkflowRuns.AsNoTracking()
+                .AnyAsync(r => r.RevisionId == revisionId && r.Status == WorkflowRunStatusValues.InProgress, cancellationToken)
+            : await dbContext.WorkflowRuns.AsNoTracking()
+                .AnyAsync(r => r.ChangeRequestId == changeRequestId && r.Status == WorkflowRunStatusValues.InProgress, cancellationToken);
+
         if (hasActiveRun)
         {
             throw ApiContractException.Conflict(
-                messageAr: "يوجد تشغيل مسار اعتماد نشط بالفعل لهذه المراجعة.",
-                messageEn: "An active workflow run already exists for this revision.");
+                messageAr: "يوجد تشغيل مسار اعتماد نشط بالفعل لهذا العنصر.",
+                messageEn: "An active workflow run already exists for this target.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -77,7 +111,7 @@ public sealed class WorkflowEngineService(
             Id = Guid.NewGuid(),
             RouteId = routeId,
             RevisionId = revisionId,
-            ChangeRequestId = null,
+            ChangeRequestId = changeRequestId,
             Status = WorkflowRunStatusValues.InProgress,
             SubmittedBy = actorUserId,
             StartedAt = now,
@@ -98,6 +132,16 @@ public sealed class WorkflowEngineService(
         dbContext.WorkflowRunStages.AddRange(snapshotStages);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        var resourceKind = changeRequestId.HasValue ? "CHANGE_REQUEST" : "DOCUMENT_REVISION";
+        var resourceId = changeRequestId ?? revisionId!.Value;
+
+        await internalNotificationService.NotifyStageActivatedAsync(
+            snapshotStages[0].ResponsibleRoleIdSnapshot,
+            actorUserId,
+            resourceKind,
+            resourceId,
+            cancellationToken);
+
         await serverAuthorization.WriteAuditEventAsync(
             actorUserId,
             "WORKFLOW_RUN_CREATED",
@@ -108,6 +152,7 @@ public sealed class WorkflowEngineService(
             {
                 integrationId,
                 revisionId,
+                changeRequestId,
                 routeId,
                 stagesCount = snapshotStages.Count,
                 firstStageId = snapshotStages[0].Id,
@@ -147,7 +192,7 @@ public sealed class WorkflowEngineService(
             where st.Status == WorkflowStageStatusValues.Active &&
                   run.Status == WorkflowRunStatusValues.InProgress &&
                   actorRoleIds.Contains(st.ResponsibleRoleIdSnapshot) &&
-                  run.RevisionId != null
+                  (run.RevisionId != null || run.ChangeRequestId != null)
             orderby run.StartedAt descending
             select new
             {
@@ -163,54 +208,81 @@ public sealed class WorkflowEngineService(
             return new WorkflowInboxResponse([], traceId);
         }
 
-        var revIds = activeStages.Select(x => x.run.RevisionId!.Value).Distinct().ToList();
-        var revInfos = await (
-            from rev in dbContext.DocumentRevisions.AsNoTracking()
-            join ver in dbContext.ApiVersions.AsNoTracking() on rev.ApiVersionId equals ver.Id
-            join integ in dbContext.Integrations.AsNoTracking() on ver.IntegrationId equals integ.Id
-            join doc in dbContext.ApiDocuments.AsNoTracking() on integ.DocumentId equals doc.Id
-            where revIds.Contains(rev.Id)
-            select new
-            {
-                rev.Id,
-                rev.RevisionNumber,
-                rev.Status,
-                ver.VersionLabel,
-                IntegrationId = integ.Id,
-                integ.ReferenceCode,
-                DocumentId = doc.Id,
-                doc.ProviderInternalSystemId,
-                doc.ProviderExternalSystemId,
-                doc.ConsumerCompanySystemId,
-                doc.ConsumerEntityId,
-                doc.ApiGroupId
-            })
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        var revIds = activeStages.Where(x => x.run.RevisionId.HasValue).Select(x => x.run.RevisionId!.Value).Distinct().ToList();
+        var crIds = activeStages.Where(x => x.run.ChangeRequestId.HasValue).Select(x => x.run.ChangeRequestId!.Value).Distinct().ToList();
 
-        var docIds = revInfos.Values.Select(v => v.DocumentId).Distinct().ToList();
+        var revInfos = revIds.Count == 0
+            ? new Dictionary<Guid, InboxTargetInfo>()
+            : await (
+                from rev in dbContext.DocumentRevisions.AsNoTracking()
+                join ver in dbContext.ApiVersions.AsNoTracking() on rev.ApiVersionId equals ver.Id
+                join integ in dbContext.Integrations.AsNoTracking() on ver.IntegrationId equals integ.Id
+                join doc in dbContext.ApiDocuments.AsNoTracking() on integ.DocumentId equals doc.Id
+                where revIds.Contains(rev.Id)
+                select new InboxTargetInfo(
+                    rev.Id,
+                    integ.Id,
+                    doc.Id,
+                    integ.ReferenceCode,
+                    ver.VersionLabel,
+                    rev.RevisionNumber,
+                    rev.Status,
+                    doc.ProviderInternalSystemId,
+                    doc.ProviderExternalSystemId,
+                    doc.ConsumerCompanySystemId,
+                    doc.ConsumerEntityId))
+                .ToDictionaryAsync(x => x.TargetId, cancellationToken);
+
+        var crInfos = crIds.Count == 0
+            ? new Dictionary<Guid, InboxTargetInfo>()
+            : await (
+                from cr in dbContext.ChangeRequests.AsNoTracking()
+                join rev in dbContext.DocumentRevisions.AsNoTracking() on cr.SourceRevisionId equals rev.Id
+                join ver in dbContext.ApiVersions.AsNoTracking() on rev.ApiVersionId equals ver.Id
+                join integ in dbContext.Integrations.AsNoTracking() on cr.IntegrationId equals integ.Id
+                join doc in dbContext.ApiDocuments.AsNoTracking() on integ.DocumentId equals doc.Id
+                where crIds.Contains(cr.Id)
+                select new InboxTargetInfo(
+                    cr.Id,
+                    integ.Id,
+                    doc.Id,
+                    integ.ReferenceCode,
+                    ver.VersionLabel,
+                    rev.RevisionNumber,
+                    cr.Status,
+                    doc.ProviderInternalSystemId,
+                    doc.ProviderExternalSystemId,
+                    doc.ConsumerCompanySystemId,
+                    doc.ConsumerEntityId))
+                .ToDictionaryAsync(x => x.TargetId, cancellationToken);
+
+        var allTargetDocs = revInfos.Values
+            .Concat(crInfos.Values)
+            .Select(x => (x.DocumentId, x.IntProvId, x.ExtProvId, x.ConsSysId, x.ConsEntId))
+            .Distinct()
+            .ToList();
+
+        var docIds = allTargetDocs.Select(v => v.DocumentId).Distinct().ToList();
         var effectiveDocPerms = await documentAuthorization.EvaluateDocumentPermissionsBatchAsync(
             actor.Id, docIds, cancellationToken);
         var hasGlobalDecide = await serverAuthorization.HasGeneralPermissionAsync(
             actorPrincipal, "workflows.decide", cancellationToken);
 
-        var titleLookup = await BuildDocumentTitleLookupAsync(
-            revInfos.Values.Select(x => (
-                x.DocumentId,
-                x.ProviderInternalSystemId,
-                x.ProviderExternalSystemId,
-                x.ConsumerCompanySystemId,
-                x.ConsumerEntityId)).Distinct().ToList(),
-            cancellationToken);
+        var titleLookup = await BuildDocumentTitleLookupAsync(allTargetDocs, cancellationToken);
 
         var items = new List<WorkflowInboxItemDto>();
         foreach (var entry in activeStages)
         {
-            if (!revInfos.TryGetValue(entry.run.RevisionId!.Value, out var revInfo))
+            var targetInfo = entry.run.RevisionId.HasValue
+                ? revInfos.GetValueOrDefault(entry.run.RevisionId.Value)
+                : crInfos.GetValueOrDefault(entry.run.ChangeRequestId!.Value);
+
+            if (targetInfo is null)
             {
                 continue;
             }
 
-            if (!effectiveDocPerms.TryGetValue(revInfo.DocumentId, out var permsMap))
+            if (!effectiveDocPerms.TryGetValue(targetInfo.DocumentId, out var permsMap))
             {
                 continue;
             }
@@ -222,7 +294,7 @@ public sealed class WorkflowEngineService(
             }
 
             var canReviewDoc = permsMap.TryGetValue(DocumentPermissionCatalog.Review, out var rRes) && rRes.Allowed;
-            var derivedTitle = titleLookup.GetValueOrDefault(revInfo.DocumentId, revInfo.ReferenceCode);
+            var derivedTitle = titleLookup.GetValueOrDefault(targetInfo.DocumentId, targetInfo.ReferenceCode);
 
             items.Add(new WorkflowInboxItemDto(
                 RunId: entry.run.Id,
@@ -231,15 +303,15 @@ public sealed class WorkflowEngineService(
                 StageNameSnapshot: entry.st.StageNameSnapshot,
                 ResponsibleRoleIdSnapshot: entry.st.ResponsibleRoleIdSnapshot,
                 ResponsibleRoleName: entry.RoleName,
-                IntegrationId: revInfo.IntegrationId,
-                DocumentId: revInfo.DocumentId,
-                ReferenceCode: revInfo.ReferenceCode,
+                IntegrationId: targetInfo.IntegrationId,
+                DocumentId: targetInfo.DocumentId,
+                ReferenceCode: targetInfo.ReferenceCode,
                 DerivedTitle: derivedTitle,
-                RevisionId: revInfo.Id,
-                ChangeRequestId: null,
-                VersionLabel: revInfo.VersionLabel,
-                RevisionNumber: revInfo.RevisionNumber,
-                RevisionStatus: revInfo.Status,
+                RevisionId: entry.run.RevisionId,
+                ChangeRequestId: entry.run.ChangeRequestId,
+                VersionLabel: targetInfo.VersionLabel,
+                RevisionNumber: targetInfo.RevisionNumber,
+                RevisionStatus: targetInfo.Status,
                 SubmittedBy: entry.run.SubmittedBy,
                 SubmittedByName: entry.SubmittedByName,
                 StartedAt: entry.run.StartedAt,
@@ -282,7 +354,9 @@ public sealed class WorkflowEngineService(
 
         var runQuery = context.Run.RevisionId.HasValue
             ? dbContext.WorkflowRuns.AsNoTracking().Where(r => r.RevisionId == context.Run.RevisionId)
-            : dbContext.WorkflowRuns.AsNoTracking().Where(r => r.Id == context.Run.Id);
+            : context.Run.ChangeRequestId.HasValue
+                ? dbContext.WorkflowRuns.AsNoTracking().Where(r => r.ChangeRequestId == context.Run.ChangeRequestId)
+                : dbContext.WorkflowRuns.AsNoTracking().Where(r => r.Id == context.Run.Id);
 
         var relatedRuns = await runQuery
             .OrderByDescending(r => r.StartedAt)
@@ -475,6 +549,8 @@ public sealed class WorkflowEngineService(
             dbContext.WorkflowDecisions.Add(decisionEntity);
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            WorkflowRunStageEntity? activatedNextStage = null;
+
             if (normalizedDecision == WorkflowDecisionValues.Approve)
             {
                 var nextStage = await dbContext.WorkflowRunStages
@@ -485,13 +561,20 @@ public sealed class WorkflowEngineService(
                 if (nextStage is not null)
                 {
                     nextStage.Status = WorkflowStageStatusValues.Active;
+                    activatedNextStage = nextStage;
                     outcomeStatus = WorkflowRunStatusValues.InProgress;
 
-                    if (context.Revision is not null)
+                    if (context.Run.RevisionId.HasValue)
                     {
                         await dbContext.DocumentRevisions
-                            .Where(r => r.Id == context.Revision.Id)
+                            .Where(r => r.Id == context.Run.RevisionId.Value)
                             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "IN_REVIEW"), cancellationToken);
+                    }
+                    else if (context.Run.ChangeRequestId.HasValue)
+                    {
+                        await dbContext.ChangeRequests
+                            .Where(cr => cr.Id == context.Run.ChangeRequestId.Value)
+                            .ExecuteUpdateAsync(s => s.SetProperty(cr => cr.Status, "IN_REVIEW"), cancellationToken);
                     }
                 }
                 else
@@ -503,10 +586,10 @@ public sealed class WorkflowEngineService(
                             .SetProperty(r => r.Status, WorkflowRunStatusValues.Approved)
                             .SetProperty(r => r.EndedAt, now), cancellationToken);
 
-                    if (context.Revision is not null)
+                    if (context.Run.RevisionId.HasValue)
                     {
                         await dbContext.DocumentRevisions
-                            .Where(r => r.Id == context.Revision.Id)
+                            .Where(r => r.Id == context.Run.RevisionId.Value)
                             .ExecuteUpdateAsync(s => s
                                 .SetProperty(r => r.Status, "APPROVED")
                                 .SetProperty(r => r.ApprovedAt, now), cancellationToken);
@@ -514,12 +597,18 @@ public sealed class WorkflowEngineService(
                         dbContext.ReleaseHistoryEvents.Add(new ReleaseHistoryEventEntity
                         {
                             Id = Guid.NewGuid(),
-                            RevisionId = context.Revision.Id,
+                            RevisionId = context.Run.RevisionId.Value,
                             EventType = "REVISION_APPROVED",
                             ActorUserId = context.Actor.Id,
-                            ChangeRequestId = context.Revision.ChangeRequestId,
+                            ChangeRequestId = context.Revision?.ChangeRequestId,
                             RecordedAt = now
                         });
+                    }
+                    else if (context.Run.ChangeRequestId.HasValue)
+                    {
+                        await dbContext.ChangeRequests
+                            .Where(cr => cr.Id == context.Run.ChangeRequestId.Value)
+                            .ExecuteUpdateAsync(s => s.SetProperty(cr => cr.Status, "APPROVED"), cancellationToken);
                     }
                 }
             }
@@ -539,27 +628,62 @@ public sealed class WorkflowEngineService(
                         .SetProperty(r => r.Status, outcomeStatus)
                         .SetProperty(r => r.EndedAt, now), cancellationToken);
 
-                if (context.Revision is not null)
+                if (context.Run.RevisionId.HasValue)
                 {
                     await dbContext.DocumentRevisions
-                        .Where(r => r.Id == context.Revision.Id)
+                        .Where(r => r.Id == context.Run.RevisionId.Value)
                         .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, outcomeStatus), cancellationToken);
 
                     dbContext.ReleaseHistoryEvents.Add(new ReleaseHistoryEventEntity
                     {
                         Id = Guid.NewGuid(),
-                        RevisionId = context.Revision.Id,
+                        RevisionId = context.Run.RevisionId.Value,
                         EventType = outcomeStatus == WorkflowRunStatusValues.Returned
                             ? "REVISION_RETURNED"
                             : "REVISION_REJECTED",
                         ActorUserId = context.Actor.Id,
-                        ChangeRequestId = context.Revision.ChangeRequestId,
+                        ChangeRequestId = context.Revision?.ChangeRequestId,
                         RecordedAt = now
                     });
+                }
+                else if (context.Run.ChangeRequestId.HasValue)
+                {
+                    await dbContext.ChangeRequests
+                        .Where(cr => cr.Id == context.Run.ChangeRequestId.Value)
+                        .ExecuteUpdateAsync(s => s.SetProperty(cr => cr.Status, outcomeStatus), cancellationToken);
                 }
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            var notifResourceKind = context.Run.ChangeRequestId.HasValue ? "CHANGE_REQUEST" : "DOCUMENT_REVISION";
+            var notifResourceId = context.Run.ChangeRequestId ?? context.Run.RevisionId!.Value;
+
+            if (activatedNextStage is not null)
+            {
+                await internalNotificationService.NotifyStageActivatedAsync(
+                    activatedNextStage.ResponsibleRoleIdSnapshot,
+                    context.Actor.Id,
+                    notifResourceKind,
+                    notifResourceId,
+                    cancellationToken);
+            }
+            else
+            {
+                var outcomeKind = outcomeStatus switch
+                {
+                    WorkflowRunStatusValues.Approved => "WORKFLOW_APPROVED",
+                    WorkflowRunStatusValues.Returned => "WORKFLOW_RETURNED",
+                    _ => "WORKFLOW_REJECTED"
+                };
+                await internalNotificationService.NotifyWorkflowOutcomeAsync(
+                    context.Run.SubmittedBy,
+                    outcomeKind,
+                    notifResourceKind,
+                    notifResourceId,
+                    cancellationToken);
+            }
+
             await tx.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException dbEx) when (dbEx.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
@@ -629,6 +753,19 @@ public sealed class WorkflowEngineService(
         return new SubmitStageDecisionResponse(runDetails, decisionDto, outcomeStatus, traceId);
     }
 
+    private sealed record InboxTargetInfo(
+        Guid TargetId,
+        Guid IntegrationId,
+        Guid DocumentId,
+        string ReferenceCode,
+        string VersionLabel,
+        int RevisionNumber,
+        string Status,
+        Guid? IntProvId,
+        Guid? ExtProvId,
+        Guid? ConsSysId,
+        Guid? ConsEntId);
+
     private sealed record ResolvedWorkflowContext(
         UserEntity Actor,
         WorkflowRunEntity Run,
@@ -683,6 +820,13 @@ public sealed class WorkflowEngineService(
             {
                 integration = await dbContext.Integrations.AsNoTracking()
                     .FirstOrDefaultAsync(i => i.Id == cr.IntegrationId, cancellationToken);
+                revision = await dbContext.DocumentRevisions.AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.Id == cr.SourceRevisionId, cancellationToken);
+                if (revision is not null)
+                {
+                    version = await dbContext.ApiVersions.AsNoTracking()
+                        .FirstOrDefaultAsync(v => v.Id == revision.ApiVersionId, cancellationToken);
+                }
             }
         }
 
