@@ -45,7 +45,7 @@ public interface IPrivateFileStore
         CancellationToken cancellationToken = default);
 }
 
-public sealed class LocalPrivateFileStore : IPrivateFileStore
+public sealed class LocalPrivateFileStore : IPrivateFileStore, IPublishedObjectReadAccessor
 {
     private const string ObjectsPrefix = "objects/";
     private const string QuarantinePrefix = "quarantine/";
@@ -229,6 +229,12 @@ public sealed class LocalPrivateFileStore : IPrivateFileStore
 
         return Task.CompletedTask;
     }
+
+    public Task<(Stream Stream, long SizeBytes)> OpenVerifiedObjectStreamAsync(
+        string storageKey,
+        string expectedSha256,
+        CancellationToken cancellationToken = default)
+        => OpenVerifiedImmutableObjectReadStreamAsync(storageKey, expectedSha256, cancellationToken);
 
     public async Task<(Stream Stream, long SizeBytes)> OpenVerifiedImmutableObjectReadStreamAsync(
         string storageKey,

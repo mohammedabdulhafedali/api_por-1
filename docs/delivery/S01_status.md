@@ -1,8 +1,8 @@
 # سجل متابعة المهام وجاهزية البيئة — منصة حوكمة وثائق APIs والتكاملات
 
 **آخر تحديث:** 25 نوفمبر 2026  
-**الفرع التكاملي:** `develop` (مغلق `Sprint S01`–`Sprint S11` — `46/59` مهمة)  
-**الحالة الحالية:** **اكتملت مهام `Sprint S11` (`W05`–`W07`) وتم دمجها في `develop` واجتياز فحوص البناء والتكامل المستهدفة لـ `Changes & Notifications`. جارٍ استكمال التنفيذ المستمر إلى `Sprint S12` (`P01`–`P04`).**
+**الفرع التكاملي:** `develop` (مغلق `Sprint S01`–`Sprint S12` — `50/59` مهمة)  
+**الحالة الحالية:** **اكتملت مهام `Sprint S12` (`P01`–`P04`) وتم دمجها في `develop` واجتياز فحوص البناء والتكامل المستهدفة لـ `Publishing & Consumer Portal`. جاهز للمرحلة التالية `Sprint S13` (`P05`, `U04`, `Q01`–`Q03`).**
 
 ## 1. جدول حالة مهام Sprint S01 (مغلق 100%)
 
@@ -106,7 +106,16 @@
 | **W06** | تقديم واعتماد طلبات التغيير عبر مسار `ChangeType` المستقل دون تعديل المراجعة المعتمدة | `W05`, `W01`–`W04` | **مكتملة ومدمجة** | `task/S11-changes-notifications` → `develop` | `ChangesAndNotificationsS11IntegrationTests.cs` |
 | **W07** | مركز الإشعارات الداخلية المقيّد بالمستخدم وتأشير القراءة (`Notifications`) | `W01`–`W06`, `I05` | **مكتملة ومدمجة** | `task/S11-changes-notifications` → `develop` | `NotificationCenterService.cs` / `ChangesAndNotificationsS11.test.tsx` |
 
-## 12. التقدم الإجمالي للمشروع (14 سبرنتًا / 59 مهمة)
-- **السبرنتات المكتملة:** `11 / 14` (`Sprint S01`–`Sprint S11` — 100%).
-- **المهام المدمجة في `develop`:** `46 / 59` (`77.97%` — `F01..F08, I01..I07, M01..M07, D01..D06, U01..U03, V01..V08, W01..W07`).
-- **التحقق الآلي المسجل:** فحوص `S11` المستهدفة (`ESLint + tsc -b + ChangesAndNotificationsS11.test.tsx` `1/1` + `ChangesAndNotificationsS11IntegrationTests` `1/1` + انحدار `WorkflowS10` `2/2`) نجحت بالكامل (سيتم تشغيل بوابة الجودة الشاملة الكاملة `run-quality-gate.ps1` عند إغلاق السبرنتات في `S14`).
+## 12. جدول حالة مهام Sprint S12 (النشر وبوابة المستهلك الخارجي — مكتمل 100%)
+
+| معرف المهمة | اسم المهمة | التبعيات | الحالة | الفرع / الـ Commit | الدليل / الملاحظات |
+|---|---|---|---|---|---|
+| **P01** | النشر الانتقائي للملفات السليمة من المراجعات المعتمدة فقط (`UI-14`) | `V05`, `W03`, `I07` | **مكتملة ومدمجة** | `task/S12-publishing-portal` → `develop` | `PublishingPortalService.cs` / `UI-14` |
+| **P02** | إيقاف النشر (`WITHDRAWN`) وحجبه عن المستهلك مع حفظ الأثر التاريخي | `P01`, `OP-01` | **مكتملة ومدمجة** | `task/S12-publishing-portal` → `develop` | `PublishingPortalS12IntegrationTests.cs` |
+| **P03** | تحديد إصدار API المستخدم حاليًا لدى المستهلك بسجل وحيد نشط (`valid_to IS NULL`) | `P01`, `V04` | **مكتملة ومدمجة** | `task/S12-publishing-portal` → `develop` | `ConsumerVersionUsage` / `UI-12` |
+| **P04** | بوابة المستهلك الخارجي المقيّدة بـ `ConsumerEntityId` وتنزيل `SHA-256` الموثق (`UI-19`) | `P01`–`P03`, `V07` | **مكتملة ومدمجة** | `task/S12-publishing-portal` → `develop` | `ConsumerPortalPage.tsx` / `PublishingPortalS12.test.tsx` |
+
+## 13. التقدم الإجمالي للمشروع (14 سبرنتًا / 59 مهمة)
+- **السبرنتات المكتملة:** `12 / 14` (`Sprint S01`–`Sprint S12` — 100%).
+- **المهام المدمجة في `develop`:** `50 / 59` (`84.75%` — `F01..F08, I01..I07, M01..M07, D01..D06, U01..U03, V01..V08, W01..W07, P01..P04`).
+- **التحقق الآلي المسجل:** نجاح فحوص `S12` المستهدفة (`ESLint`, `tsc -b`, `PublishingPortalS12.test.tsx`, `PublishingPortalS12IntegrationTests` `1/1`) فوق سجل الاختبارات السابق، تمهيدًا لبوابة الجودة الشاملة في `S14`.
