@@ -10,6 +10,7 @@ import {
   Button,
   ErrorState,
   LoadingState,
+  ReferenceIcon,
   SelectInput,
   StatusBadge,
   TextInput,
@@ -138,33 +139,34 @@ export function SearchAndBrowsePage({
 
   return (
     <div className="module-stack" data-testid="search-browse-page">
-      <div className="content-card">
-        <div className="card-header-row">
+      <section className="panel content-card">
+        <div className="panel-head">
           <div>
-            <StatusBadge variant="info">{txt.badge}</StatusBadge>
-            <h2 className="section-title" style={{ marginTop: 8 }}>
-              {txt.title}
-            </h2>
-            <p className="section-subtitle">{txt.subtitle}</p>
+            <span className="sr-only">
+              <StatusBadge variant="info">{txt.badge}</StatusBadge>
+            </span>
+            <h2 className="panel-title section-title">{txt.title}</h2>
+            <p className="panel-desc section-subtitle">{txt.subtitle}</p>
           </div>
           {data && <StatusBadge variant="neutral">{txt.countLabel(data.totalCount)}</StatusBadge>}
         </div>
 
         <form
-          className="monitoring-filter-grid"
-          style={{ marginTop: 14 }}
+          className="filter-row monitoring-filter-grid"
           onSubmit={(e) => {
             e.preventDefault();
             void runSearch();
           }}
         >
           <TextInput
+            className="searchbar"
             value={query}
             placeholder={txt.queryPlaceholder}
             onChange={(e) => setQuery(e.target.value)}
             aria-label={txt.queryPlaceholder}
           />
           <SelectInput
+            className="control"
             value={typeFilter}
             options={[
               { value: 'ALL', label: txt.allTypes },
@@ -175,6 +177,7 @@ export function SearchAndBrowsePage({
             aria-label={txt.colKind}
           />
           <SelectInput
+            className="control"
             value={stateFilter}
             placeholder={txt.allStates}
             options={[
@@ -191,9 +194,7 @@ export function SearchAndBrowsePage({
             </Button>
           </div>
         </form>
-      </div>
 
-      <div className="content-card">
         {loading && !data ? (
           <LoadingState title={txt.loadingText} />
         ) : errorMsg ? (
@@ -204,70 +205,55 @@ export function SearchAndBrowsePage({
             onRetry={() => void runSearch()}
           />
         ) : !data || data.items.length === 0 ? (
-          <div className="empty-state-box">{txt.emptyMsg}</div>
+          <div className="empty-state-box empty">
+            <ReferenceIcon name="search" size={26} />
+            <div>{txt.emptyMsg}</div>
+          </div>
         ) : (
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{txt.colKind}</th>
-                  <th>{txt.colTitle}</th>
-                  <th>{txt.colGroup}</th>
-                  <th>{txt.colState}</th>
-                  <th>{txt.colAction}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((item) => (
-                  <tr key={`${item.resultKind}-${item.id}`}>
-                    <td>
-                      <StatusBadge variant={item.resultKind === 'INTEGRATION' ? 'info' : 'neutral'}>
-                        {item.resultKind}
-                      </StatusBadge>
-                    </td>
-                    <td>
-                      <strong>{item.title}</strong>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {item.providerName} {'->'} {item.consumerName}
-                      </div>
-                    </td>
-                    <td>
-                      <div>{item.apiGroupName}</div>
-                      {item.referenceCode && (
-                        <code className="ltr-code">{item.referenceCode}</code>
-                      )}
-                      {item.latestVersionLabel && (
-                        <span style={{ marginInlineStart: 8, fontSize: 11.5 }}>
-                          v{item.latestVersionLabel}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="status-stack">
-                        <StatusBadge variant={item.hasActivePublication ? 'success' : 'warning'}>
-                          {item.hasActivePublication ? txt.publishedBadge : txt.notPublished}
-                        </StatusBadge>
-                        <code className="ltr-code" style={{ fontSize: 11 }}>
-                          {item.state}
-                        </code>
-                      </div>
-                    </td>
-                    <td>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenItem(item)}
-                      >
-                        {item.resultKind === 'INTEGRATION' ? txt.openIntegBtn : txt.openDocBtn}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="stack">
+            {data.items.map((item) => (
+              <div key={`${item.resultKind}-${item.id}`} className="item-card">
+                <div>
+                  <div className="row wrap" style={{ marginBottom: 6 }}>
+                    <StatusBadge variant={item.resultKind === 'INTEGRATION' ? 'info' : 'neutral'}>
+                      {item.resultKind}
+                    </StatusBadge>
+                    {item.referenceCode && (
+                      <span className="tag ltr-code">{item.referenceCode}</span>
+                    )}
+                    <StatusBadge variant={item.hasActivePublication ? 'success' : 'warning'}>
+                      {item.hasActivePublication ? txt.publishedBadge : txt.notPublished}
+                    </StatusBadge>
+                    <code className="ltr-code" style={{ fontSize: 11 }}>
+                      {item.state}
+                    </code>
+                  </div>
+                  <div className="item-title">
+                    <strong>{item.title}</strong>
+                  </div>
+                  <div className="item-sub">
+                    <span>{item.providerName}</span> {'←'} <span>{item.consumerName}</span> ·{' '}
+                    <span>{item.apiGroupName}</span>
+                    {item.latestVersionLabel ? (
+                      <>
+                        {' · '}
+                        <span>{item.latestVersionLabel}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <Button
+                  variant={item.resultKind === 'INTEGRATION' ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleOpenItem(item)}
+                >
+                  {item.resultKind === 'INTEGRATION' ? txt.openIntegBtn : txt.openDocBtn}
+                </Button>
+              </div>
+            ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

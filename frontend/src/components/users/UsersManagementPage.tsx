@@ -675,20 +675,23 @@ export function UsersManagementPage({
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card" aria-labelledby="ui15-users-heading">
-          <div className="card-header-row">
-            <div>
-              <h2 id="ui15-users-heading" className="card-title heading-font">
-                {copy.sectionTitle}
-              </h2>
-              <p className="card-subtitle">{copy.sectionDesc}</p>
-            </div>
-            {canCreate && (
+        <>
+          {canCreate && (
+            <div className="page-actions">
               <Button variant="primary" onClick={openCreatePage}>
                 {copy.addUserBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel" aria-labelledby="ui15-users-heading">
+            <div className="panel-head">
+              <div>
+                <h2 id="ui15-users-heading" className="panel-title heading-font">
+                  {copy.sectionTitle}
+                </h2>
+                <p className="panel-desc">{copy.sectionDesc}</p>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={search}
@@ -745,7 +748,8 @@ export function UsersManagementPage({
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       ) : mode === 'permissions' && editingUser ? (
         <UserPermissionsMatrixPage
           userId={editingUser.id}

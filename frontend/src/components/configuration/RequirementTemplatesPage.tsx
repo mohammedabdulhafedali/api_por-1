@@ -16,8 +16,6 @@ import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
   CentralModalDialog,
-  DataTable,
-  DataTableColumn,
   ErrorState,
   FormField,
   PaginationBar,
@@ -483,86 +481,6 @@ export function RequirementTemplatesPage({
     );
   }
 
-  const columns: DataTableColumn<FileRequirementTemplateItem>[] = [
-    { key: 'name', header: c.colName, render: (row) => <strong>{row.name}</strong> },
-    {
-      key: 'rules',
-      header: c.colRules,
-      render: (row) => (
-        <div className="badge-wrap-list">
-          {row.rules.map((r) => (
-            <StatusBadge
-              key={r.id}
-              variant={
-                r.requirementMode === 'REQUIRED'
-                  ? 'info'
-                  : r.requirementMode === 'OPTIONAL'
-                    ? 'neutral'
-                    : 'warning'
-              }
-            >
-              {`${r.fileTypeName} · ${formatModeLabel(r.requirementMode)} (${r.minCount}–${r.maxCount})`}
-            </StatusBadge>
-          ))}
-        </div>
-      ),
-    },
-    {
-      key: 'snapshots',
-      header: c.colSnapshots,
-      render: (row) => (
-        <span className="muted-cell-text">
-          {row.snapshotCount} {c.snapshotCountLabel}
-        </span>
-      ),
-    },
-    {
-      key: 'docs',
-      header: c.colDocs,
-      render: (row) => <span className="ltr-code">{row.documentsCount}</span>,
-    },
-    {
-      key: 'status',
-      header: c.colStatus,
-      render: (row) => (
-        <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-          {row.isActive ? c.activeBadge : c.inactiveBadge}
-        </StatusBadge>
-      ),
-    },
-    {
-      key: 'actions',
-      header: c.colActions,
-      render: (row) => (
-        <div className="button-row">
-          <Button variant="outline" size="sm" onClick={() => void openSnapshots(row)}>
-            {c.snapshotsBtn}
-          </Button>
-          {canManage && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={row.documentsCount > 0}
-                title={row.documentsCount > 0 ? c.inUseLockedHint : undefined}
-                onClick={() => openEdit(row)}
-              >
-                {c.editBtn}
-              </Button>
-              <Button
-                variant={row.isActive ? 'danger' : 'secondary'}
-                size="sm"
-                onClick={() => handleToggleStatus(row)}
-              >
-                {row.isActive ? c.deactivateBtn : c.activateBtn}
-              </Button>
-            </>
-          )}
-        </div>
-      ),
-    },
-  ];
-
   return (
     <>
       {mode === 'snapshots' && snapshotsTemplate ? (
@@ -775,18 +693,21 @@ export function RequirementTemplatesPage({
           </div>
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
-            {canManage && (
+        <>
+          {canManage && (
+            <div className="page-actions">
               <Button variant="primary" disabled={submitting} onClick={openCreate}>
                 {c.addBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">{c.pageTitle}</h2>
+                <p className="panel-desc">{c.pageDesc}</p>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={searchQuery}
@@ -816,17 +737,85 @@ export function RequirementTemplatesPage({
               retryLabel={commonStrings.tableRetryBtn}
               onRetry={() => void loadTemplates()}
             />
+          ) : loading ? (
+            <div className="state-box" role="status" aria-live="polite">
+              <div className="state-box-title">{c.loadingText}</div>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="empty-state-box empty" role="status">
+              <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
+              <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
+            </div>
           ) : (
             <>
-              <DataTable<FileRequirementTemplateItem>
-                columns={columns}
-                rows={items}
-                getRowKey={(row) => row.id}
-                isLoading={loading}
-                loadingTitle={c.loadingText}
-                emptyTitle={commonStrings.tableEmptyTitle}
-                emptyDescription={commonStrings.tableEmptyDesc}
-              />
+              <div className="grid-2" style={{ marginTop: 14 }}>
+                {items.map((row) => (
+                  <div key={row.id} className="panel">
+                    <div className="panel-head">
+                      <div>
+                        <div className="row wrap">
+                          <div className="panel-title">
+                            <strong>{row.name}</strong>
+                          </div>
+                          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+                            {row.isActive ? c.activeBadge : c.inactiveBadge}
+                          </StatusBadge>
+                          <span className="tag">
+                            {row.snapshotCount} {c.snapshotCountLabel}
+                          </span>
+                          <span className="tag ltr-code">{row.documentsCount}</span>
+                        </div>
+                        <div className="panel-desc">{c.colRules}</div>
+                      </div>
+                      <div className="button-row">
+                        <Button variant="outline" size="sm" onClick={() => void openSnapshots(row)}>
+                          {c.snapshotsBtn}
+                        </Button>
+                        {canManage && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={row.documentsCount > 0}
+                              title={row.documentsCount > 0 ? c.inUseLockedHint : undefined}
+                              onClick={() => openEdit(row)}
+                            >
+                              {c.editBtn}
+                            </Button>
+                            <Button
+                              variant={row.isActive ? 'danger' : 'secondary'}
+                              size="sm"
+                              onClick={() => handleToggleStatus(row)}
+                            >
+                              {row.isActive ? c.deactivateBtn : c.activateBtn}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="stack">
+                      {row.rules.map((r) => (
+                        <div key={r.id} className="item-card" style={{ padding: '10px 12px' }}>
+                          <div className="row between wrap">
+                            <strong>{r.fileTypeName}</strong>
+                            <StatusBadge
+                              variant={
+                                r.requirementMode === 'REQUIRED'
+                                  ? 'info'
+                                  : r.requirementMode === 'OPTIONAL'
+                                    ? 'neutral'
+                                    : 'warning'
+                              }
+                            >
+                              {`${formatModeLabel(r.requirementMode)} (${r.minCount}–${r.maxCount})`}
+                            </StatusBadge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {totalCount > 0 && (
                 <PaginationBar
@@ -841,7 +830,8 @@ export function RequirementTemplatesPage({
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       )}
 
       <CentralModalDialog

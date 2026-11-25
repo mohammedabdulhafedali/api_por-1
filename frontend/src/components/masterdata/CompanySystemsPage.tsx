@@ -491,65 +491,68 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card">
-          <div className="button-row" style={{ marginBottom: 14, gap: 8 }}>
-            <Button
-              variant={tab === 'systems' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setTab('systems');
-                setPage(1);
-                setSearch('');
-              }}
-            >
-              {copy.tabSystems}
-            </Button>
-            <Button
-              variant={tab === 'api-groups' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setTab('api-groups');
-                setPage(1);
-                setSearch('');
-              }}
-            >
-              {copy.tabGroups}
-            </Button>
-          </div>
+        <>
+          {canCreateActiveTab && (
+            <div className="page-actions">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditingId(null);
+                  setFormName('');
+                  setFormDesc('');
+                  setHadInitialDesc(false);
+                  setFormActive(true);
+                  setNameError('');
+                  setMode('create');
+                }}
+              >
+                {tab === 'systems' ? copy.addSysBtn : copy.addGrpBtn}
+              </Button>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="tabs">
+              <button
+                type="button"
+                className={`tab ${tab === 'systems' ? 'active' : ''}`}
+                onClick={() => {
+                  setTab('systems');
+                  setPage(1);
+                  setSearch('');
+                }}
+              >
+                {copy.tabSystems}
+              </button>
+              <button
+                type="button"
+                className={`tab ${tab === 'api-groups' ? 'active' : ''}`}
+                onClick={() => {
+                  setTab('api-groups');
+                  setPage(1);
+                  setSearch('');
+                }}
+              >
+                {copy.tabGroups}
+              </button>
+            </div>
 
-          {!canViewActiveTab ? (
-            <ErrorState
-              title={tab === 'systems' ? copy.noViewSysTitle : copy.noViewGrpTitle}
-              message={tab === 'systems' ? copy.noViewSysDesc : copy.noViewGrpDesc}
-            />
-          ) : (
-            <>
-              <div className="card-header-row">
-                <div>
-                  <h2 className="card-title heading-font">
-                    {tab === 'systems' ? copy.sysTitle : copy.grpTitle}
-                  </h2>
-                  <p className="card-subtitle">
-                    {tab === 'systems' ? copy.sysDesc : copy.grpDesc}
-                  </p>
+            {!canViewActiveTab ? (
+              <ErrorState
+                title={tab === 'systems' ? copy.noViewSysTitle : copy.noViewGrpTitle}
+                message={tab === 'systems' ? copy.noViewSysDesc : copy.noViewGrpDesc}
+              />
+            ) : (
+              <>
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title heading-font">
+                      {tab === 'systems' ? copy.sysTitle : copy.grpTitle}
+                    </h2>
+                    <p className="panel-desc">
+                      {tab === 'systems' ? copy.sysDesc : copy.grpDesc}
+                    </p>
+                  </div>
                 </div>
-                {canCreateActiveTab && (
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setEditingId(null);
-                      setFormName('');
-                      setFormDesc('');
-                      setHadInitialDesc(false);
-                      setFormActive(true);
-                      setNameError('');
-                      setMode('create');
-                    }}
-                  >
-                    {tab === 'systems' ? copy.addSysBtn : copy.addGrpBtn}
-                  </Button>
-                )}
-              </div>
 
               <SearchFilterBar
                 searchValue={search}
@@ -619,6 +622,7 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
             </>
           )}
         </section>
+        </>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={

@@ -14,8 +14,6 @@ import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
   CentralModalDialog,
-  DataTable,
-  DataTableColumn,
   ErrorState,
   FormField,
   PaginationBar,
@@ -448,69 +446,6 @@ export function ApprovalRoutesPage({
     );
   }
 
-  const columns: DataTableColumn<ApprovalRouteItem>[] = [
-    { key: 'name', header: c.colName, render: (row) => <strong>{row.name}</strong> },
-    {
-      key: 'stages',
-      header: c.colStages,
-      render: (row) =>
-        row.stages.length === 0 ? (
-          <StatusBadge variant="danger">{c.noStagesWarning}</StatusBadge>
-        ) : (
-          <div className="badge-wrap-list">
-            {row.stages.map((s) => (
-              <StatusBadge key={s.id} variant="info">
-                {`${s.position}. ${s.stageName} (${s.responsibleRoleName})`}
-              </StatusBadge>
-            ))}
-          </div>
-        ),
-    },
-    {
-      key: 'links',
-      header: c.colLinks,
-      render: (row) => (
-        <span className="muted-cell-text">
-          {c.linksSummary(row.changeTypesCount, row.documentsCount)}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: c.colStatus,
-      render: (row) => (
-        <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-          {row.isActive ? c.activeBadge : c.inactiveBadge}
-        </StatusBadge>
-      ),
-    },
-    {
-      key: 'actions',
-      header: c.colActions,
-      render: (row) => (
-        <div className="button-row">
-          {canManage && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => openEditRouteName(row)}>
-                {c.editRouteBtn}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => openManageStages(row)}>
-                {c.manageStagesBtn}
-              </Button>
-              <Button
-                variant={row.isActive ? 'danger' : 'secondary'}
-                size="sm"
-                onClick={() => handleToggleStatus(row)}
-              >
-                {row.isActive ? c.deactivateBtn : c.activateBtn}
-              </Button>
-            </>
-          )}
-        </div>
-      ),
-    },
-  ];
-
   return (
     <>
       {mode !== 'list' ? (
@@ -660,18 +595,21 @@ export function ApprovalRoutesPage({
           )}
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
-            {canManage && (
+        <>
+          {canManage && (
+            <div className="page-actions">
               <Button variant="primary" disabled={submitting} onClick={openCreate}>
                 {c.addBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">{c.pageTitle}</h2>
+                <p className="panel-desc">{c.pageDesc}</p>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={searchQuery}
@@ -701,17 +639,76 @@ export function ApprovalRoutesPage({
               retryLabel={commonStrings.tableRetryBtn}
               onRetry={() => void loadRoutes()}
             />
+          ) : loading ? (
+            <div className="state-box" role="status" aria-live="polite">
+              <div className="state-box-title">{c.loadingText}</div>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="empty-state-box empty" role="status">
+              <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
+              <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
+            </div>
           ) : (
             <>
-              <DataTable<ApprovalRouteItem>
-                columns={columns}
-                rows={items}
-                getRowKey={(row) => row.id}
-                isLoading={loading}
-                loadingTitle={c.loadingText}
-                emptyTitle={commonStrings.tableEmptyTitle}
-                emptyDescription={commonStrings.tableEmptyDesc}
-              />
+              <div className="grid-2" style={{ marginTop: 14 }}>
+                {items.map((row) => (
+                  <div key={row.id} className="panel">
+                    <div className="panel-head">
+                      <div>
+                        <div className="row wrap">
+                          <div className="panel-title">
+                            <strong>{row.name}</strong>
+                          </div>
+                          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+                            {row.isActive ? c.activeBadge : c.inactiveBadge}
+                          </StatusBadge>
+                        </div>
+                        <div className="panel-desc">
+                          {c.linksSummary(row.changeTypesCount, row.documentsCount)}
+                        </div>
+                      </div>
+                      <div className="button-row">
+                        {canManage && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => openEditRouteName(row)}>
+                              {c.editRouteBtn}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              aria-label={c.manageStagesBtn}
+                              onClick={() => openManageStages(row)}
+                            >
+                              {c.manageStagesBtn.replace(/\s*\(UI-\d+[A-Z]?\)/g, '')}
+                            </Button>
+                            <Button
+                              variant={row.isActive ? 'danger' : 'secondary'}
+                              size="sm"
+                              onClick={() => handleToggleStatus(row)}
+                            >
+                              {row.isActive ? c.deactivateBtn : c.activateBtn}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {row.stages.length === 0 ? (
+                      <StatusBadge variant="danger">{c.noStagesWarning}</StatusBadge>
+                    ) : (
+                      <div className="workflow">
+                        {row.stages.map((s, idx) => (
+                          <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            <span className="step">
+                              {`${s.position}. ${s.stageName} (${s.responsibleRoleName})`}
+                            </span>
+                            {idx < row.stages.length - 1 && <span className="arrow">‹</span>}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
 
               {totalCount > 0 && (
                 <PaginationBar
@@ -726,7 +723,8 @@ export function ApprovalRoutesPage({
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       )}
 
       <CentralModalDialog

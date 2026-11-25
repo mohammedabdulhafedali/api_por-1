@@ -551,10 +551,11 @@ export function ChangeTypesAndPoliciesPage({
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card">
-          <div className="button-row" style={{ marginBottom: 16 }}>
-            <Button
-              variant={tab === 'types' ? 'primary' : 'outline'}
+        <section className="surface-card panel">
+          <div className="tabs">
+            <button
+              type="button"
+              className={`tab ${tab === 'types' ? 'active' : ''}`}
               onClick={() => {
                 setTab('types');
                 setPage(1);
@@ -562,9 +563,10 @@ export function ChangeTypesAndPoliciesPage({
               }}
             >
               {c.tabTypes}
-            </Button>
-            <Button
-              variant={tab === 'policies' ? 'primary' : 'outline'}
+            </button>
+            <button
+              type="button"
+              className={`tab ${tab === 'policies' ? 'active' : ''}`}
               onClick={() => {
                 setTab('policies');
                 setPage(1);
@@ -572,7 +574,7 @@ export function ChangeTypesAndPoliciesPage({
               }}
             >
               {c.tabPolicies}
-            </Button>
+            </button>
           </div>
 
           <div className="card-header-row">

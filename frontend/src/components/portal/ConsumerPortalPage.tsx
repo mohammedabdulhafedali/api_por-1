@@ -15,6 +15,7 @@ import {
   CentralModalDialog,
   ErrorState,
   LoadingState,
+  ReferenceIcon,
   StatusBadge,
 } from '../ui';
 
@@ -217,61 +218,51 @@ export function ConsumerPortalPage({ lang, onSessionExpired }: ConsumerPortalPag
           )}
 
           {!portalData || portalData.integrations.length === 0 ? (
-            <p className="card-subtitle">{c.emptyIntegrations}</p>
+            <div className="empty-state-box empty">
+              <ReferenceIcon name="search" size={26} />
+              <div>{c.emptyIntegrations}</div>
+            </div>
           ) : (
-            <div className="table-scroll-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{c.colRef}</th>
-                    <th>{c.colDoc}</th>
-                    <th>{c.colActiveVer}</th>
-                    <th>{c.colLatestPub}</th>
-                    <th>{c.colFilesCount}</th>
-                    <th>{c.colActions}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {portalData.integrations.map((item) => (
-                    <tr key={item.integrationId}>
-                      <td>
-                        <code className="ltr-code">{item.referenceCode}</code>
-                      </td>
-                      <td>
-                        <div>{item.documentTitle}</div>
-                        <div className="card-subtitle">
-                          {item.providerName} · {item.apiGroupName}
-                        </div>
-                      </td>
-                      <td>
-                        {item.activeConsumerVersionLabel ? (
-                          <StatusBadge variant="success">{item.activeConsumerVersionLabel}</StatusBadge>
-                        ) : (
-                          <span>{c.unsetVersion}</span>
-                        )}
-                      </td>
-                      <td>
-                        <code className="ltr-code">
-                          {item.latestPublicationVersionLabel} · Rev #{item.latestPublicationRevisionNumber}
-                        </code>
-                      </td>
-                      <td>
-                        <code className="ltr-code">{item.publishedFilesCount}</code>
-                      </td>
-                      <td>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={filesLoading}
-                          onClick={() => void handleInspectPackage(item)}
-                        >
-                          {c.openFilesBtn}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid-2">
+              {portalData.integrations.map((item) => (
+                <div key={item.integrationId} className="version-card">
+                  <div className="row between wrap">
+                    <span className="tag success">
+                      {lang === 'ar' ? 'منشور' : 'Published'}
+                    </span>
+                    <span className="tag ltr-code">{item.referenceCode}</span>
+                    <span className="tag ltr-code">
+                      {item.latestPublicationVersionLabel} · Rev #{item.latestPublicationRevisionNumber}
+                    </span>
+                  </div>
+                  <h3 style={{ margin: '10px 0 4px' }}>{item.documentTitle}</h3>
+                  <div className="item-sub">
+                    {item.providerName} · {item.apiGroupName}
+                  </div>
+                  <div className="item-sub" style={{ marginTop: 4 }}>
+                    {c.colActiveVer}:{' '}
+                    {item.activeConsumerVersionLabel ? (
+                      <StatusBadge variant="success">{item.activeConsumerVersionLabel}</StatusBadge>
+                    ) : (
+                      <span>{c.unsetVersion}</span>
+                    )}
+                  </div>
+                  <div className="divider" />
+                  <div className="row between wrap">
+                    <span className="item-sub">
+                      {c.colFilesCount}: <code className="ltr-code">{item.publishedFilesCount}</code>
+                    </span>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={filesLoading}
+                      onClick={() => void handleInspectPackage(item)}
+                    >
+                      {c.openFilesBtn}
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
