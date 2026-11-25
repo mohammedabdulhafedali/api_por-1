@@ -15,26 +15,62 @@ import {
 import {
   createDraftDocumentRevision,
   createIntegrationVersion,
+  createWorkingCopyRevision,
   deleteDraftRevisionFile,
+  downloadBinaryFileVerified,
+  generateWordDerivative,
   getIntegrationFilesWorkspace,
   getRevisionFileDownloadUrl,
+  getWordDerivativeDownloadUrl,
   IntegrationFilesWorkspaceResponse,
   IntegrationVersionsResponse,
   listIntegrationVersions,
   rescanRevisionFile,
   RevisionFileItem,
+  submitDocumentRevision,
   uploadRevisionFile,
+  WordDerivativeRecordItem,
 } from '../../api/versionsFilesApi';
+import {
+  getWorkflowHistory,
+  getWorkflowInbox,
+  getWorkflowRunDetails,
+  submitWorkflowStageDecision,
+  WorkflowDecisionHistoryEntry,
+  WorkflowDecisionKind,
+  WorkflowInboxItem,
+  WorkflowRunDetails,
+  WorkflowRunStageItem,
+} from '../../api/workflowsApi';
+import {
+  ChangeRequestItem,
+  createChangeRequest,
+  getIntegrationChangeRequests,
+  getMyNotifications,
+  IntegrationChangeRequestsWorkspaceResponse,
+  markNotificationAsRead,
+  NotificationsListResponse,
+  submitChangeRequest,
+  updateChangeRequest,
+} from '../../api/changesAndNotificationsApi';
+import {
+  ConsumerVersionResponse,
+  getIntegrationConsumerVersion,
+  getIntegrationPublications,
+  IntegrationPublicationsResponse,
+  publishApprovedRevision,
+  setIntegrationConsumerVersion,
+  withdrawPublication,
+} from '../../api/publishingPortalApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
   CentralModalDialog,
-  DataTable,
-  DataTableColumn,
   ErrorState,
   FormField,
   LoadingState,
   PaginationBar,
+  ReferenceIcon,
   SearchFilterBar,
   SelectInput,
   StandaloneFormPage,
@@ -49,8 +85,21 @@ interface IntegrationsPageProps {
   onSessionExpired: () => void;
 }
 
-type PageMode = 'list' | 'create' | 'details' | 'assign-devs' | 'create-version' | 'upload-file';
-type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'audit';
+type PageMode =
+  | 'list'
+  | 'create'
+  | 'details'
+  | 'assign-devs'
+  | 'create-version'
+  | 'upload-file'
+  | 'create-working-copy'
+  | 'workflow-inbox'
+  | 'decide-stage'
+  | 'create-change-request'
+  | 'edit-change-request'
+  | 'notifications'
+  | 'publish-revision';
+type DetailsTab = 'developers' | 'files' | 'revisions' | 'versions' | 'changes' | 'publishing' | 'audit';
 
 interface ModalState {
   variant: 'success' | 'warning' | 'error' | 'confirm';
@@ -232,6 +281,174 @@ const COPY = {
     fileRemovedMsg: 'تم حذف ارتباط الملف من مسودة المراجعة وتسجيل الحدث.',
     draftCreatedTitle: 'تمت تهيئة مسودة المراجعة',
     draftCreatedMsg: 'تم فتح مسودة حزمة توثيق (#1) مستقلة عن رقم إصدار API لرفع الملفات.',
+    // S09 V05-V08 Strings (AR)
+    submitRevisionBtn: 'تقديم المراجعة للاعتماد (V05)',
+    submitRevisionConfirmTitle: 'تأكيد تقديم حزمة التوثيق (V05)',
+    submitRevisionConfirmMsg: (revNum: number) =>
+      `سيتم التحقق من اكتمال جميع الملفات الإلزامية وحالة الفحص ثم قفل المراجعة #${revNum} بحالة SUBMITTED وإحالتها لمسار المراجعة. هل تريد المتابعة؟`,
+    submitRevisionSuccessTitle: 'تم تقديم المراجعة بنجاح',
+    submitRevisionSuccessMsg: (revNum: number, cleanCount: number) =>
+      `تم تقديم حزمة التوثيق #${revNum} بحالة SUBMITTED مع ${cleanCount} ملفًا سليمًا، وأصبحت المراجعة محمية من التعديل (V06).`,
+    requirementsChecklistTitle: 'تقدم استيفاء الملفات الإلزامية قبل التقديم (V05)',
+    reqSatisfiedBadge: 'مكتمل',
+    reqMissingBadge: 'ناقص',
+    reqExceedsBadge: 'تجاوز الحد الأقصى',
+    protectedRevisionBanner: (status: string) =>
+      `هذه المراجعة في حالة ${status} ومحمية بالكامل من رفع أو حذف أو تعديل الملفات (V06). لبدء تعديل بعد الاعتماد، أنشئ نسخة عمل جديدة مرتبطة بطلب تغيير معتمد.`,
+    createWorkingCopyBtn: 'إنشاء نسخة عمل جديدة (V06)',
+    workingCopyBadge: 'نسخة عمل من مراجعة معتمدة · UI-11 / V06 · OP-05',
+    workingCopyTitle: 'إنشاء نسخة عمل جديدة من مراجعة معتمدة',
+    workingCopySub:
+      'تُفتح نسخة العمل (#التالي) استنادًا إلى مراجعة معتمدة (APPROVED) وطلب تغيير معتمد، مع نسخ الملفات السليمة غير المشمولة بالتغيير ومنع فتح أكثر من مسودة نشطة لنفس الإصدار (OP-05).',
+    workingCopyBaseLabel: 'المراجعة المرجعية المعتمدة (Base Revision)',
+    workingCopyCrLabel: 'طلب التغيير المعتمد (Approved Change Request)',
+    workingCopyNoApprovedBase: 'لا توجد مراجعة معتمدة (APPROVED) لهذا الإصدار بعد.',
+    workingCopyNoApprovedCr: 'لا توجد طلبات تغيير معتمدة مرتبطة بمراجعة معتمدة لهذا الإصدار بعد.',
+    workingCopySubmitBtn: 'فتح نسخة العمل',
+    workingCopyCreatedTitle: 'تم فتح نسخة العمل بنجاح',
+    workingCopyCreatedMsg: (revNum: number) =>
+      `تم إنشاء مسودة نسخة العمل #${revNum} مع نسخ الملفات الموروثة من المراجعة المعتمدة وتسجيل الحدث.`,
+    workingCopyValidationMissing: 'يرجى اختيار المراجعة المعتمدة وطلب التغيير المعتمد قبل الإرسال.',
+    revisionsHistoryTitle: 'سجل مراجعات حزمة التوثيق لهذا الإصدار (UI-11 / V05–V06)',
+    colRevNumber: 'رقم المراجعة',
+    colRevStatus: 'الحالة والحماية',
+    colRevLineage: 'الأساس وطلب التغيير',
+    colRevFiles: 'الملفات السليمة / قيد الفحص',
+    selectRevisionBtn: 'فتح الحزمة',
+    selectedRevisionTag: 'المعروضة حاليًا',
+    protectedTag: 'محمية (قراءة فقط)',
+    editableDraftTag: 'مسودة قابلة للتعديل',
+    verifiedDownloadNotice: (name: string, sha: string) =>
+      `تم التحقق من الصلاحية وبصمة SHA-256 وتدقيق تنزيل (${name}) — ${sha.slice(0, 16)}…`,
+    wordUpdateBtn: 'تحديث حقول Word (V08)',
+    wordDerivativesTitle: 'نتائج إثبات جدوى تحديث حقول Word عبر Open XML SDK (V08)',
+    wordDerivativesNote:
+      'يتم تعديل نسخة مشتقة مستقلة مع بقاء الملف الأصلي سليمًا وبصمته دون أي مساس، ويُحظر تنزيل أي مشتق لم يجتز التحقق البنيوي والفحص الأمني (OP-03).',
+    wordStatusVerified: 'مشتق متحقق وقابل للتنزيل (VERIFIED)',
+    wordStatusNoFields: 'لا توجد حقول معرّفة (NO_RECOGNIZED_FIELDS)',
+    wordStatusPending: 'بانتظار الفحص الأمني (PENDING_SCAN)',
+    wordStatusFailed: 'فشل التوليد أو التحقق البنيوي (FAILED)',
+    wordStrategyLabel: 'الآلية المكتشفة',
+    wordFieldsCountLabel: 'عدد الحقول المحدّثة',
+    wordSourceShaLabel: 'بصمة الملف الأصلي (ثابتة)',
+    wordDerivedShaLabel: 'بصمة المشتق',
+    wordDownloadDerivedBtn: 'تنزيل المشتق المتحقق',
+    wordBlockedDownloadTag: 'محجوب من النشر والتنزيل (OP-03)',
+    wordGeneratedTitle: 'نتيجة معالجة مشتق Word (V08)',
+    wordGeneratedVerifiedMsg: (count: number, kind: string) =>
+      `تم توليد مشتق .docx متحقق واجتياز OpenXmlValidator والفحص الأمني دون تعديل الملف الأصلي.\nالآلية: ${kind} · الحقول المحدّثة: ${count}`,
+    wordGeneratedBlockedMsg: (status: string, detail: string) =>
+      `حُفظ سجل الفحص بحالة ${status} ومُنع نشر المشتق أو تنزيله (OP-03).\nالتفصيل: ${detail}`,
+    // S10 W01-W04 Workflow Strings (AR)
+    workflowInboxBtn: 'صندوق المراجعات بانتظار قراري (W01–W04)',
+    workflowInboxBadge: 'صندوق سير العمل المتسلسل · UI-11 / W01–W04',
+    workflowInboxTitle: 'طلبات المراجعة النشطة ضمن أدواري',
+    workflowInboxSub:
+      'يعرض فقط المراحل النشطة (ACTIVE) المسندة لأي دور نشط تملكه ضمن الوثائق المصرح لك بالوصول إليها (ADR-01). يكفي قرار عضو مؤهل واحد لإتمام المرحلة.',
+    workflowInboxEmpty: 'لا توجد حاليًا مراحل اعتماد نشطة بانتظار قرار من أدوارك.',
+    colWfIntegration: 'التكامل والوثيقة',
+    colWfRevision: 'الإصدار / المراجعة',
+    colWfStage: 'المرحلة النشطة والدور',
+    colWfSubmittedBy: 'مُقدَّمة من',
+    openReviewDetailsBtn: 'فتح التبويب',
+    decideStageBtn: 'اتخاذ قرار المرحلة (W02)',
+    workflowRunTitle: 'مسار الاعتماد التنفيذي المجمد (W01–W04)',
+    workflowSnapshotNote:
+      'ملاحظة W01: نسخة المراحل هنا مجمدة لحظة التقديم، ولا تتأثر بأي تعديل لاحق في إعدادات مسار الاعتماد.',
+    workflowActiveStageTag: 'المرحلة النشطة حاليًا',
+    workflowReworkAlertTitle: 'إعادة للعمل (RETURNED — W04)',
+    workflowRejectedAlertTitle: 'مرفوضة نهائيًا (REJECTED — W04)',
+    workflowReworkInstruction:
+      'يمكنك تعديل ملفات هذه المراجعة أو استبدالها ثم إعادة التقديم لتشغيل دورة مراجعة جديدة مع بقاء السجل السابق.',
+    workflowDecisionBadge: 'تسجيل قرار مرحلة الاعتماد · UI-11 / W02–W04',
+    workflowDecisionTitle: 'اتخاذ قرار ذري على المرحلة النشطة',
+    workflowDecisionSub:
+      'قرار واحد ذري لكل مرحلة. اختيار الإعادة للعمل (RETURN) أو الرفض (REJECT) يتطلب كتابة ملاحظات إلزامية.',
+    decisionChoiceLabel: 'القرار المطلوب',
+    decisionApproveOpt: 'اعتماد المرحلة والانتقال / الإكمال (APPROVE)',
+    decisionReturnOpt: 'إعادة للعمل بملاحظات إلزامية (RETURN)',
+    decisionRejectOpt: 'رفض نهائي بملاحظات إلزامية (REJECT)',
+    decisionNotesLabel: 'ملاحظات المراجع (إلزامية عند الإعادة أو الرفض)',
+    decisionNotesPlaceholder: 'اذكر التعديلات المطلوبة أو أسباب الرفض بوضوح...',
+    decisionSubmitBtn: 'تأكيد وتسجيل القرار',
+    decisionNotesRequiredErr: 'الملاحظات إلزامية عند اختيار الإعادة للعمل أو الرفض (W04).',
+    decisionRecordedTitle: 'تم تسجيل قرار المرحلة بنجاح',
+    decisionRecordedMsg: (outcome: string) =>
+      `تم تسجيل القرار الذري للمرحلة وتحديث حالة التشغيل والمراجعة إلى: ${outcome}`,
+    workflowHistoryTitle: 'سجل قرارات المراحل ومحاولات المراجعة (W04)',
+    workflowHistoryEmpty: 'لم تُسجل قرارات مراحل على هذه المراجعة بعد.',
+    // S11 W05-W07 Change Requests & Notifications Strings (AR)
+    crWorkspaceTitle: 'طلبات التغيير المقيدة بالملفات المتأثرة (UI-13 / W05–W06)',
+    crCreateBtn: 'إنشاء طلب تغيير (W05)',
+    crEditBtn: 'تعديل الطلب',
+    crSubmitBtn: 'إرسال للاعتماد (W06)',
+    crCreateBadge: 'إنشاء طلب تغيير · UI-13 / W05',
+    crEditBadge: 'تعديل طلب تغيير · UI-13 / W05',
+    crCreateTitle: 'إنشاء طلب تغيير لمراجعة معتمدة',
+    crEditTitle: 'تعديل مسودة طلب التغيير',
+    crFormSub:
+      'يُربط الطلب حصرًا بمراجعة معتمدة (APPROVED) وبملفات متأثرة تنتمي لتلك المراجعة ونوع تغيير مصرح في سياسة الوثيقة.',
+    crSourceRevLabel: 'المراجعة المعتمدة المستهدفة',
+    crChangeTypeLabel: 'نوع التغيير ومسار الاعتماد المستقل',
+    crReasonLabel: 'سبب طلب التغيير',
+    crReasonPlaceholder: 'اشرح الحاجة الفنية للتغيير...',
+    crImpactLabel: 'الأثر على الجهة المستهلكة (اختياري)',
+    crImpactPlaceholder: 'لا يوجد أثر كاسر / إضافة حقل اختياري...',
+    crAffectedFilesLabel: 'الملفات المتأثرة ضمن المراجعة المعتمدة (ملف واحد على الأقل)',
+    crSaveCreateBtn: 'حفظ كمسودة طلب تغيير',
+    crSaveEditBtn: 'حفظ تعديلات الطلب',
+    crValidationMissing: 'يرجى اختيار المراجعة ونوع التغيير والسبب وتحديد ملف متأثر واحد على الأقل.',
+    crEmptyList: 'لا توجد طلبات تغيير مسجلة لهذا التكامل بعد.',
+    crNoEligibleNotice: 'لا توجد مراجعة معتمدة تحتوي ملفات سليمة لإنشاء طلب تغيير حاليًا.',
+    crCreatedTitle: 'تم إنشاء طلب التغيير',
+    crCreatedMsg: 'حُفظ طلب التغيير بحالة DRAFT ومقيدًا بالملفات المختارة.',
+    crUpdatedTitle: 'تم تحديث طلب التغيير',
+    crUpdatedMsg: 'تم حفظ التعديلات على طلب التغيير بنجاح.',
+    crSubmittedTitle: 'تم إرسال طلب التغيير للاعتماد المستقل (W06)',
+    crSubmittedMsg: 'انطلق مسار اعتماد مستقل لطلب التغيير وفق مسار نوع التغيير المعتمد.',
+    notificationsBtn: 'الإشعارات الداخلية (W07)',
+    notificationsBadge: 'مركز الإشعارات الداخلية · W07',
+    notificationsTitle: 'الإشعارات الداخلية لأحداث مراحل الاعتماد',
+    notificationsSub: 'إشعارات داخلية آمنة خاصة بحسابك الحالي، مع عداد غير المقروء ووسم القراءة.',
+    notificationsUnreadBadge: (count: number) => `غير مقروء: ${count}`,
+    notificationsEmpty: 'لا توجد إشعارات مسجلة لحسابك حاليًا.',
+    markReadBtn: 'تحديد كمقروء',
+    readTag: 'مقروء',
+    unreadTag: 'جديد (غير مقروء)',
+    // S12 P01-P03 Publishing & Consumer Version Usage (AR)
+    tabPublishing: 'النشر وإصدار المستهلك (UI-14)',
+    publishingWorkspaceTitle: 'حزم النشر للجهة المستهلكة وإصدار الاستخدام الحالي (UI-14 / P01–P03)',
+    publishRevisionBtn: 'نشر انتقائي لمراجعة معتمدة (P01)',
+    publishBadge: 'نشر انتقائي لمراجعة معتمدة · UI-14 / P01',
+    publishTitle: 'نشر حزمة توثيق انتقائية من مراجعة معتمدة',
+    publishSub:
+      'يُشترط أن تكون المراجعة بحالة APPROVED وجميع الملفات المختارة سليمة (CLEAN). لن تظهر الملفات غير المختارة للمستهلك.',
+    publishRevLabel: 'المراجعة المعتمدة المستهدفة',
+    publishFilesLabel: 'الملفات السليمة المتاحة للنشر الانتقائي',
+    publishSubmitBtn: 'تأكيد النشر وإتاحته للمستهلك',
+    publishValidationMissing: 'يرجى اختيار مراجعة معتمدة وملف سليم واحد على الأقل.',
+    publishSuccessTitle: 'تم نشر الحزمة بنجاح',
+    publishSuccessMsg: (verLabel: string, count: number) =>
+      `تم نشر حزمة الإصدار (${verLabel}) مع ${count} ملفًا مختارًا وبحالة PUBLISHED.`,
+    withdrawBtn: 'إيقاف النشر (P02)',
+    withdrawConfirmTitle: 'تأكيد إيقاف النشر (P02)',
+    withdrawConfirmMsg: (verLabel: string, revNum: number) =>
+      `سيتم تحويل حزمة الإصدار (${verLabel} · المراجعة #${revNum}) إلى WITHDRAWN وحجبها عن بوابة المستهلك مع بقاء سجلها للتدقيق.`,
+    withdrawSuccessTitle: 'تم إيقاف النشر',
+    withdrawSuccessMsg: 'تم تحويل حالة الحزمة إلى WITHDRAWN وحجبها عن بوابة المستهلك.',
+    consumerVersionTitle: 'إصدار API المعتمد للاستخدام حاليًا لدى المستهلك (UI-12 / P03)',
+    consumerVersionCurrentLabel: 'الإصدار النشط حاليًا',
+    consumerVersionUnset: 'لم يتم تحديد إصدار نشط بعد',
+    consumerVersionSelectLabel: 'تعيين / تحديث الإصدار النشط (من الإصدارات المنشورة فقط)',
+    consumerVersionSaveBtn: 'اعتماد الإصدار النشط (P03)',
+    consumerVersionSavedTitle: 'تم تحديث إصدار الاستخدام الحالي',
+    consumerVersionSavedMsg: (verLabel: string) =>
+      `أصبح (${verLabel}) هو الإصدار الوحيد النشط للاستخدام الحالي لدى المستهلك مع إغلاق السجل السابق تاريخيًا.`,
+    emptyPublications: 'لا توجد حزم منشورة مسجلة لهذا التكامل بعد.',
+    colPubVersion: 'الإصدار والمراجعة',
+    colPubState: 'حالة النشر',
+    colPubFiles: 'الملفات المنشورة',
+    colPubActorDate: 'الناشر والتاريخ',
   },
   en: {
     pageTitle: 'Integrations Directory (UI-22)',
@@ -404,6 +621,174 @@ const COPY = {
     fileRemovedMsg: 'File link removed from the draft revision and audited.',
     draftCreatedTitle: 'Draft Revision Initialized',
     draftCreatedMsg: 'Initialized independent Documentation Revision (#1) for uploading files.',
+    // S09 V05-V08 Strings (EN)
+    submitRevisionBtn: 'Submit Revision (V05)',
+    submitRevisionConfirmTitle: 'Confirm Revision Submission (V05)',
+    submitRevisionConfirmMsg: (revNum: number) =>
+      `All mandatory files and security scan states will be verified, and Revision #${revNum} will be locked as SUBMITTED. Proceed?`,
+    submitRevisionSuccessTitle: 'Revision Submitted',
+    submitRevisionSuccessMsg: (revNum: number, cleanCount: number) =>
+      `Documentation package Revision #${revNum} submitted cleanly (${cleanCount} clean file(s)) and locked from edits (V06).`,
+    requirementsChecklistTitle: 'Mandatory File Readiness Checklist (V05)',
+    reqSatisfiedBadge: 'Complete',
+    reqMissingBadge: 'Missing',
+    reqExceedsBadge: 'Exceeds Max',
+    protectedRevisionBanner: (status: string) =>
+      `This revision is ${status} and strictly protected from file uploads, deletions, or edits (V06). To modify after approval, create a new working copy linked to an approved change request.`,
+    createWorkingCopyBtn: 'Create Working Copy (V06)',
+    workingCopyBadge: 'Working Copy from Approved Revision · UI-11 / V06 · OP-05',
+    workingCopyTitle: 'Create Working Copy from Approved Revision',
+    workingCopySub:
+      'Opens the next draft working copy (#N) branched from an APPROVED revision and an APPROVED change request, carrying forward unaffected clean files while enforcing a single active draft per version (OP-05).',
+    workingCopyBaseLabel: 'Approved Base Revision',
+    workingCopyCrLabel: 'Approved Change Request',
+    workingCopyNoApprovedBase: 'No APPROVED revision exists for this API version yet.',
+    workingCopyNoApprovedCr: 'No APPROVED change request exists for an approved revision on this version yet.',
+    workingCopySubmitBtn: 'Open Working Copy',
+    workingCopyCreatedTitle: 'Working Copy Opened',
+    workingCopyCreatedMsg: (revNum: number) =>
+      `Opened draft Working Copy Revision #${revNum} carrying forward unaffected approved files.`,
+    workingCopyValidationMissing: 'Please select both an approved base revision and an approved change request.',
+    revisionsHistoryTitle: 'Documentation Revisions Package History (UI-11 / V05–V06)',
+    colRevNumber: 'Revision #',
+    colRevStatus: 'Status & Protection',
+    colRevLineage: 'Base & Change Request',
+    colRevFiles: 'Clean / Pending Files',
+    selectRevisionBtn: 'Open Package',
+    selectedRevisionTag: 'Active View',
+    protectedTag: 'Protected (Read-Only)',
+    editableDraftTag: 'Editable Draft',
+    verifiedDownloadNotice: (name: string, sha: string) =>
+      `Verified permissions, SHA-256 integrity, and audit log for (${name}) — ${sha.slice(0, 16)}…`,
+    wordUpdateBtn: 'Update Word Fields (V08)',
+    wordDerivativesTitle: 'Open XML SDK Word Governance Derivative PoC (V08)',
+    wordDerivativesNote:
+      'Updates are written strictly to a separate derivative while keeping the original file and SHA-256 untouched. Unverified or failed derivatives are blocked from publishing/download (OP-03).',
+    wordStatusVerified: 'Verified & Publishable (VERIFIED)',
+    wordStatusNoFields: 'No Recognized Fields (NO_RECOGNIZED_FIELDS)',
+    wordStatusPending: 'Pending Security Scan (PENDING_SCAN)',
+    wordStatusFailed: 'Generation or Validation Failed (FAILED)',
+    wordStrategyLabel: 'Strategy Detected',
+    wordFieldsCountLabel: 'Fields Updated',
+    wordSourceShaLabel: 'Original SHA-256 (Unchanged)',
+    wordDerivedShaLabel: 'Derived SHA-256',
+    wordDownloadDerivedBtn: 'Download Verified Derivative',
+    wordBlockedDownloadTag: 'Publish / Download Blocked (OP-03)',
+    wordGeneratedTitle: 'Word Derivative PoC Result (V08)',
+    wordGeneratedVerifiedMsg: (count: number, kind: string) =>
+      `Generated verified .docx derivative passing OpenXmlValidator and security scan without modifying the original file.\nStrategy: ${kind} · Fields updated: ${count}`,
+    wordGeneratedBlockedMsg: (status: string, detail: string) =>
+      `Diagnostic recorded as ${status}; derivative publish & download remain blocked (OP-03).\nDetails: ${detail}`,
+    // S10 W01-W04 Workflow Strings (EN)
+    workflowInboxBtn: 'Pending Approvals Inbox (W01–W04)',
+    workflowInboxBadge: 'Sequential Workflow Inbox · UI-11 / W01–W04',
+    workflowInboxTitle: 'Active Review Stages Across My Roles',
+    workflowInboxSub:
+      'Lists only ACTIVE workflow stages matching any of your active roles on authorized API documents (ADR-01). A single eligible member decision completes each stage.',
+    workflowInboxEmpty: 'No active workflow stages currently await a decision from your roles.',
+    colWfIntegration: 'Integration & Document',
+    colWfRevision: 'Version / Revision',
+    colWfStage: 'Active Stage & Role',
+    colWfSubmittedBy: 'Submitted By',
+    openReviewDetailsBtn: 'Open Tab',
+    decideStageBtn: 'Record Stage Decision (W02)',
+    workflowRunTitle: 'Frozen Approval Workflow Execution (W01–W04)',
+    workflowSnapshotNote:
+      'W01 Snapshot Guarantee: Stage order & assigned roles were frozen upon submission and remain immune to subsequent route template edits.',
+    workflowActiveStageTag: 'Currently Active Stage',
+    workflowReworkAlertTitle: 'Returned for Rework (RETURNED — W04)',
+    workflowRejectedAlertTitle: 'Workflow Rejected (REJECTED — W04)',
+    workflowReworkInstruction:
+      'You may update/replace files on this returned revision and re-submit to initiate a new review run while preserving prior decision history.',
+    workflowDecisionBadge: 'Record Stage Decision · UI-11 / W02–W04',
+    workflowDecisionTitle: 'Atomic Stage Decision',
+    workflowDecisionSub:
+      'Only one atomic decision is permitted per stage. Returning for rework (RETURN) or rejecting (REJECT) requires mandatory reviewer notes.',
+    decisionChoiceLabel: 'Stage Decision',
+    decisionApproveOpt: 'Approve & Advance / Complete (APPROVE)',
+    decisionReturnOpt: 'Return for Rework with Mandatory Notes (RETURN)',
+    decisionRejectOpt: 'Reject with Mandatory Notes (REJECT)',
+    decisionNotesLabel: 'Reviewer Notes (Mandatory for RETURN or REJECT)',
+    decisionNotesPlaceholder: 'Specify required fixes or rejection rationale...',
+    decisionSubmitBtn: 'Confirm & Submit Decision',
+    decisionNotesRequiredErr: 'Reviewer notes are mandatory when returning for rework or rejecting (W04).',
+    decisionRecordedTitle: 'Stage Decision Recorded',
+    decisionRecordedMsg: (outcome: string) =>
+      `Atomic stage decision saved cleanly. Current workflow / revision outcome: ${outcome}`,
+    workflowHistoryTitle: 'Stage Decisions & Rework Attempts History (W04)',
+    workflowHistoryEmpty: 'No stage decisions have been recorded for this revision yet.',
+    // S11 W05-W07 Change Requests & Notifications Strings (EN)
+    crWorkspaceTitle: 'File-Scoped Change Requests (UI-13 / W05–W06)',
+    crCreateBtn: 'Create Change Request (W05)',
+    crEditBtn: 'Edit Request',
+    crSubmitBtn: 'Submit for Approval (W06)',
+    crCreateBadge: 'Create Change Request · UI-13 / W05',
+    crEditBadge: 'Edit Change Request · UI-13 / W05',
+    crCreateTitle: 'Create Change Request on Approved Revision',
+    crEditTitle: 'Edit Draft Change Request',
+    crFormSub:
+      'Strictly scoped to an APPROVED source revision, policy-allowed change type, and affected files belonging to that revision.',
+    crSourceRevLabel: 'Approved Source Revision',
+    crChangeTypeLabel: 'Allowed Change Type & Independent Route',
+    crReasonLabel: 'Change Reason',
+    crReasonPlaceholder: 'Describe technical justification...',
+    crImpactLabel: 'Consumer Impact (optional)',
+    crImpactPlaceholder: 'Non-breaking optional field addition...',
+    crAffectedFilesLabel: 'Affected Source Files in Approved Revision (select at least one)',
+    crSaveCreateBtn: 'Save Draft Change Request',
+    crSaveEditBtn: 'Save Changes',
+    crValidationMissing: 'Please select a revision, change type, reason, and at least one affected file.',
+    crEmptyList: 'No change requests recorded for this integration yet.',
+    crNoEligibleNotice: 'No approved revision with clean files is available for change requests yet.',
+    crCreatedTitle: 'Change Request Created',
+    crCreatedMsg: 'Saved change request as DRAFT restricted to selected source files.',
+    crUpdatedTitle: 'Change Request Updated',
+    crUpdatedMsg: 'Saved edits to change request cleanly.',
+    crSubmittedTitle: 'Change Request Submitted to Independent Workflow (W06)',
+    crSubmittedMsg: 'Started independent approval workflow using the change type route.',
+    notificationsBtn: 'Internal Notifications (W07)',
+    notificationsBadge: 'Internal Notifications Center · W07',
+    notificationsTitle: 'Internal Workflow Stage Notifications',
+    notificationsSub: 'User-scoped internal notifications generated from workflow stage activations and final outcomes.',
+    notificationsUnreadBadge: (count: number) => `Unread: ${count}`,
+    notificationsEmpty: 'No internal notifications recorded for your account.',
+    markReadBtn: 'Mark as Read',
+    readTag: 'Read',
+    unreadTag: 'Unread',
+    // S12 P01-P03 Publishing & Consumer Version Usage (EN)
+    tabPublishing: 'Publishing & Usage (UI-14)',
+    publishingWorkspaceTitle: 'Publications & Active Consumer Version (UI-14 / P01–P03)',
+    publishRevisionBtn: 'Selective Publish Approved Revision (P01)',
+    publishBadge: 'Publish Approved Revision · UI-14 / P01',
+    publishTitle: 'Publish Selective Files from Approved Revision',
+    publishSub:
+      'Target revision must be APPROVED and every selected file must have CLEAN scan status.',
+    publishRevLabel: 'Target Approved Revision',
+    publishFilesLabel: 'Select CLEAN Files to Publish',
+    publishSubmitBtn: 'Confirm & Publish Package',
+    publishValidationMissing: 'Select an approved revision and at least one CLEAN file.',
+    publishSuccessTitle: 'Package Published',
+    publishSuccessMsg: (verLabel: string, count: number) =>
+      `Published version (${verLabel}) with ${count} selected files in PUBLISHED state.`,
+    withdrawBtn: 'Withdraw (P02)',
+    withdrawConfirmTitle: 'Confirm Publication Withdrawal (P02)',
+    withdrawConfirmMsg: (verLabel: string, revNum: number) =>
+      `Publication (${verLabel} · Rev #${revNum}) will transition to WITHDRAWN and disappear from the consumer portal while retaining audit history.`,
+    withdrawSuccessTitle: 'Publication Withdrawn',
+    withdrawSuccessMsg: 'Publication marked as WITHDRAWN and hidden from the consumer portal.',
+    consumerVersionTitle: 'Current Consumer API Version Usage (UI-12 / P03)',
+    consumerVersionCurrentLabel: 'Active Version',
+    consumerVersionUnset: 'Not assigned yet',
+    consumerVersionSelectLabel: 'Set Active Version (Published versions only)',
+    consumerVersionSaveBtn: 'Save Active Consumer Version (P03)',
+    consumerVersionSavedTitle: 'Active Consumer Version Updated',
+    consumerVersionSavedMsg: (verLabel: string) =>
+      `Set (${verLabel}) as the single active consumer version and closed prior usage window.`,
+    emptyPublications: 'No publications recorded for this integration yet.',
+    colPubVersion: 'Version & Revision',
+    colPubState: 'State',
+    colPubFiles: 'Published Files',
+    colPubActorDate: 'Publisher & Timestamp',
   },
 } as const;
 
@@ -421,6 +806,11 @@ export function IntegrationsPage({
   const canAssignGlobal = permSet.has('integrations.assign_developer');
   const canViewVersionsGlobal = permSet.has('versions.view');
   const canViewFilesGlobal = permSet.has('files.view');
+  const canViewWorkflowsGlobal = permSet.has('workflows.view');
+  const canDecideWorkflowsGlobal = permSet.has('workflows.decide');
+  const canViewChangesGlobal = permSet.has('changes.view');
+  const canViewPublicationsGlobal = permSet.has('publications.view');
+  const canViewConsumerUsageGlobal = permSet.has('versions.usage.view');
 
   const [mode, setMode] = useState<PageMode>(initialMode);
   useEffect(() => {
@@ -448,16 +838,58 @@ export function IntegrationsPage({
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // S08 V01-V04 Versions & Files workspace state
+  // S08 / S09 Versions, Revisions & Files workspace state
   const [versionsData, setVersionsData] = useState<IntegrationVersionsResponse | null>(null);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [filesWorkspace, setFilesWorkspace] = useState<IntegrationFilesWorkspaceResponse | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
   const [selectedWorkspaceVersionId, setSelectedWorkspaceVersionId] = useState('');
+  const [selectedWorkspaceRevisionId, setSelectedWorkspaceRevisionId] = useState('');
   const [newVersionLabel, setNewVersionLabel] = useState('');
   const [selectedUploadFileTypeId, setSelectedUploadFileTypeId] = useState('');
   const [selectedLocalFile, setSelectedLocalFile] = useState<File | null>(null);
   const [fileInputResetKey, setFileInputResetKey] = useState(0);
+  const [workingCopyBaseRevisionId, setWorkingCopyBaseRevisionId] = useState('');
+  const [workingCopyChangeRequestId, setWorkingCopyChangeRequestId] = useState('');
+  const [verifiedDownloadNotice, setVerifiedDownloadNotice] = useState<string | null>(null);
+  // S10 W01-W04 Workflow Engine state
+  const [workflowInbox, setWorkflowInbox] = useState<WorkflowInboxItem[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [selectedWorkflowRun, setSelectedWorkflowRun] = useState<WorkflowRunDetails | null>(null);
+  const [workflowHistory, setWorkflowHistory] = useState<WorkflowDecisionHistoryEntry[]>([]);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [decisionRunId, setDecisionRunId] = useState('');
+  const [decisionStage, setDecisionStage] = useState<WorkflowRunStageItem | null>(null);
+  const [decisionTitleContext, setDecisionTitleContext] = useState('');
+  const [decisionKind, setDecisionKind] = useState<WorkflowDecisionKind>('APPROVE');
+  const [decisionNotes, setDecisionNotes] = useState('');
+  const [decisionReturnTarget, setDecisionReturnTarget] = useState<'details' | 'workflow-inbox'>('details');
+  // S11 W05-W07 Change Requests & Notifications state
+  const [changesWorkspace, setChangesWorkspace] = useState<IntegrationChangeRequestsWorkspaceResponse | null>(null);
+  const [changesLoading, setChangesLoading] = useState(false);
+  const [editingCrId, setEditingCrId] = useState('');
+  const [crSourceRevisionId, setCrSourceRevisionId] = useState('');
+  const [crChangeTypeId, setCrChangeTypeId] = useState('');
+  const [crReason, setCrReason] = useState('');
+  const [crConsumerImpact, setCrConsumerImpact] = useState('');
+  const [crSelectedFileIds, setCrSelectedFileIds] = useState<Set<string>>(new Set());
+  const [notificationsData, setNotificationsData] = useState<NotificationsListResponse | null>(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  // S12 P01-P03 Publishing & Consumer Version Usage state
+  const [publicationsData, setPublicationsData] = useState<IntegrationPublicationsResponse | null>(null);
+  const [consumerVersionData, setConsumerVersionData] = useState<ConsumerVersionResponse | null>(null);
+  const [publishingLoading, setPublishingLoading] = useState(false);
+  const [selectedConsumerVerId, setSelectedConsumerVerId] = useState('');
+  const [publishRevisionsPool, setPublishRevisionsPool] = useState<
+    Array<{
+      revisionId: string;
+      versionLabel: string;
+      revisionNumber: number;
+      files: RevisionFileItem[];
+    }>
+  >([]);
+  const [publishRevisionId, setPublishRevisionId] = useState('');
+  const [publishSelectedFileIds, setPublishSelectedFileIds] = useState<Set<string>>(new Set());
 
   const handleApiError = useCallback(
     (err: unknown, fallbackTitle: string) => {
@@ -549,38 +981,149 @@ export function IntegrationsPage({
     [canViewVersionsGlobal, lang]
   );
 
+  const loadWorkflowForRun = useCallback(
+    async (runId?: string | null) => {
+      if (!canViewWorkflowsGlobal || !runId) {
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
+        return;
+      }
+      setWorkflowLoading(true);
+      try {
+        const [runDetails, historyRes] = await Promise.all([
+          getWorkflowRunDetails(runId, lang),
+          getWorkflowHistory(runId, lang),
+        ]);
+        setSelectedWorkflowRun(runDetails);
+        setWorkflowHistory(historyRes.entries);
+      } catch {
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
+      } finally {
+        setWorkflowLoading(false);
+      }
+    },
+    [canViewWorkflowsGlobal, lang]
+  );
+
   const loadFilesWorkspaceTab = useCallback(
-    async (integrationId: string, versionId?: string) => {
+    async (integrationId: string, versionId?: string, revisionId?: string) => {
       if (!canViewFilesGlobal) {
         setFilesWorkspace(null);
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
         return;
       }
       setFilesLoading(true);
       try {
         const res = await getIntegrationFilesWorkspace(
           integrationId,
-          versionId ? { versionId } : {},
+          { versionId, revisionId },
           lang
         );
         setFilesWorkspace(res);
         setSelectedWorkspaceVersionId(res.selectedVersionId ?? '');
+        setSelectedWorkspaceRevisionId(res.selectedRevision?.id ?? '');
+        await loadWorkflowForRun(res.selectedRevision?.latestWorkflowRunId);
       } catch {
         setFilesWorkspace(null);
+        setSelectedWorkflowRun(null);
+        setWorkflowHistory([]);
       } finally {
         setFilesLoading(false);
       }
     },
-    [canViewFilesGlobal, lang]
+    [canViewFilesGlobal, lang, loadWorkflowForRun]
+  );
+
+  const loadChangesTab = useCallback(
+    async (integrationId: string) => {
+      if (!canViewChangesGlobal) {
+        setChangesWorkspace(null);
+        return;
+      }
+      setChangesLoading(true);
+      try {
+        const res = await getIntegrationChangeRequests(integrationId, lang);
+        setChangesWorkspace(res);
+      } catch {
+        setChangesWorkspace(null);
+      } finally {
+        setChangesLoading(false);
+      }
+    },
+    [canViewChangesGlobal, lang]
+  );
+
+  const loadPublishingTab = useCallback(
+    async (integrationId: string) => {
+      if (!canViewPublicationsGlobal && !canViewConsumerUsageGlobal) {
+        setPublicationsData(null);
+        setConsumerVersionData(null);
+        return;
+      }
+      setPublishingLoading(true);
+      try {
+        const [pubsRes, usageRes, versRes] = await Promise.all([
+          canViewPublicationsGlobal
+            ? getIntegrationPublications(integrationId, lang)
+            : Promise.resolve(null),
+          canViewConsumerUsageGlobal
+            ? getIntegrationConsumerVersion(integrationId, lang)
+            : Promise.resolve(null),
+          canViewVersionsGlobal
+            ? listIntegrationVersions(integrationId, lang)
+            : Promise.resolve(null),
+        ]);
+        setPublicationsData(pubsRes);
+        setConsumerVersionData(usageRes);
+        if (versRes) {
+          setVersionsData(versRes);
+        }
+        if (usageRes?.activeUsage?.apiVersionId) {
+          setSelectedConsumerVerId(usageRes.activeUsage.apiVersionId);
+        } else if (pubsRes?.publications?.some((p) => p.state === 'PUBLISHED')) {
+          const firstPublishedVer = pubsRes.publications.find((p) => p.state === 'PUBLISHED');
+          setSelectedConsumerVerId(firstPublishedVer?.apiVersionId ?? '');
+        } else {
+          setSelectedConsumerVerId('');
+        }
+      } catch {
+        setPublicationsData(null);
+        setConsumerVersionData(null);
+      } finally {
+        setPublishingLoading(false);
+      }
+    },
+    [canViewConsumerUsageGlobal, canViewPublicationsGlobal, canViewVersionsGlobal, lang]
   );
 
   useEffect(() => {
     if (mode !== 'details' || !details?.summary.id) return;
     if (activeTab === 'versions') {
       void loadVersionsTab(details.summary.id);
-    } else if (activeTab === 'files') {
-      void loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId || undefined);
+    } else if (activeTab === 'files' || activeTab === 'revisions') {
+      void loadFilesWorkspaceTab(
+        details.summary.id,
+        selectedWorkspaceVersionId || undefined,
+        selectedWorkspaceRevisionId || undefined
+      );
+    } else if (activeTab === 'changes') {
+      void loadChangesTab(details.summary.id);
+    } else if (activeTab === 'publishing') {
+      void loadPublishingTab(details.summary.id);
     }
-  }, [activeTab, details?.summary.id, loadFilesWorkspaceTab, loadVersionsTab, mode, selectedWorkspaceVersionId]);
+  }, [
+    activeTab,
+    details?.summary.id,
+    loadChangesTab,
+    loadFilesWorkspaceTab,
+    loadPublishingTab,
+    loadVersionsTab,
+    mode,
+    selectedWorkspaceRevisionId,
+    selectedWorkspaceVersionId,
+  ]);
 
   const openDetails = async (integrationId: string, initialTab: DetailsTab = 'developers') => {
     setMode('details');
@@ -588,6 +1131,8 @@ export function IntegrationsPage({
     setVersionsData(null);
     setFilesWorkspace(null);
     setSelectedWorkspaceVersionId('');
+    setSelectedWorkspaceRevisionId('');
+    setVerifiedDownloadNotice(null);
     setDetailsLoading(true);
     try {
       const full = await getIntegrationDetails(integrationId, lang);
@@ -821,10 +1366,476 @@ export function IntegrationsPage({
     });
   };
 
+  const promptSubmitRevision = (revisionId: string, revisionNumber: number) => {
+    if (!details) return;
+    setModal({
+      variant: 'confirm',
+      title: c.submitRevisionConfirmTitle,
+      message: c.submitRevisionConfirmMsg(revisionNumber),
+      onConfirmAction: () => {
+        void (async () => {
+          setSubmitting(true);
+          try {
+            const result = await submitDocumentRevision(revisionId, lang);
+            setModal({
+              variant: 'success',
+              title: c.submitRevisionSuccessTitle,
+              message: c.submitRevisionSuccessMsg(result.revision.revisionNumber, result.cleanFilesCount),
+            });
+            const refreshed = await getIntegrationDetails(details.summary.id, lang);
+            setDetails(refreshed);
+            await loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId || undefined, result.revision.id);
+          } catch (err) {
+            handleApiError(err, c.submitRevisionConfirmTitle);
+          } finally {
+            setSubmitting(false);
+          }
+        })();
+      },
+    });
+  };
+
+  const openCreateWorkingCopy = (preferredBaseId?: string) => {
+    setFormError(null);
+    const approvedRevs = (filesWorkspace?.revisions ?? []).filter((r) => r.status === 'APPROVED');
+    const chosenBaseId =
+      preferredBaseId && approvedRevs.some((r) => r.id === preferredBaseId)
+        ? preferredBaseId
+        : approvedRevs[0]?.id ?? '';
+    setWorkingCopyBaseRevisionId(chosenBaseId);
+
+    const matchingCrs = (filesWorkspace?.approvedChangeRequests ?? []).filter(
+      (cr) => !chosenBaseId || cr.sourceRevisionId === chosenBaseId
+    );
+    setWorkingCopyChangeRequestId(matchingCrs[0]?.id ?? '');
+    setMode('create-working-copy');
+  };
+
+  const handleCreateWorkingCopySubmit = async () => {
+    if (!details || !selectedWorkspaceVersionId) return;
+    setFormError(null);
+    if (!workingCopyBaseRevisionId || !workingCopyChangeRequestId) {
+      setFormError(c.workingCopyValidationMissing);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const created = await createWorkingCopyRevision(
+        selectedWorkspaceVersionId,
+        workingCopyBaseRevisionId,
+        workingCopyChangeRequestId,
+        lang
+      );
+      setSelectedWorkspaceRevisionId(created.id);
+      setModal({
+        variant: 'success',
+        title: c.workingCopyCreatedTitle,
+        message: c.workingCopyCreatedMsg(created.revisionNumber),
+      });
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      setMode('details');
+      setActiveTab('files');
+      await loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId, created.id);
+    } catch (err) {
+      handleApiError(err, c.workingCopyTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDownloadRevisionFile = async (file: RevisionFileItem) => {
+    try {
+      const result = await downloadBinaryFileVerified(
+        getRevisionFileDownloadUrl(file.revisionId, file.id),
+        file.originalName,
+        lang
+      );
+      setVerifiedDownloadNotice(
+        c.verifiedDownloadNotice(result.filename || file.originalName, result.sha256 || file.sha256)
+      );
+    } catch (err) {
+      handleApiError(err, c.downloadBtn);
+    }
+  };
+
+  const handleGenerateWordDerivative = async (file: RevisionFileItem) => {
+    if (!details) return;
+    setSubmitting(true);
+    try {
+      const record = await generateWordDerivative(file.revisionId, file.id, lang);
+      if (record.isPublishable) {
+        setModal({
+          variant: 'success',
+          title: c.wordGeneratedTitle,
+          message: c.wordGeneratedVerifiedMsg(record.fieldsUpdatedCount, record.templateKindDetected),
+        });
+      } else {
+        const detail =
+          record.validationErrors.length > 0
+            ? record.validationErrors.join(' | ')
+            : record.errorMessage || record.templateKindDetected;
+        setModal({
+          variant: 'warning',
+          title: c.wordGeneratedTitle,
+          message: c.wordGeneratedBlockedMsg(record.status, detail),
+        });
+      }
+      await loadFilesWorkspaceTab(details.summary.id, selectedWorkspaceVersionId || undefined, file.revisionId);
+    } catch (err) {
+      handleApiError(err, c.wordUpdateBtn);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDownloadWordDerivative = async (record: WordDerivativeRecordItem, fallbackName: string) => {
+    try {
+      const result = await downloadBinaryFileVerified(
+        getWordDerivativeDownloadUrl(record.revisionId, record.revisionFileId),
+        fallbackName,
+        lang
+      );
+      setVerifiedDownloadNotice(
+        c.verifiedDownloadNotice(result.filename || fallbackName, result.sha256 || record.derivedSha256 || '')
+      );
+    } catch (err) {
+      handleApiError(err, c.wordDownloadDerivedBtn);
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
     if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${bytes} B`;
+  };
+
+  const loadWorkflowInbox = useCallback(async () => {
+    if (!canViewWorkflowsGlobal) return;
+    setInboxLoading(true);
+    try {
+      const res = await getWorkflowInbox(lang);
+      setWorkflowInbox(res.items);
+    } catch (err) {
+      handleApiError(err, c.workflowInboxTitle);
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [canViewWorkflowsGlobal, c.workflowInboxTitle, handleApiError, lang]);
+
+  const openWorkflowInbox = () => {
+    setMode('workflow-inbox');
+    void loadWorkflowInbox();
+  };
+
+  const openDecideStage = (
+    runId: string,
+    stage: WorkflowRunStageItem,
+    titleContext: string,
+    returnTarget: 'details' | 'workflow-inbox'
+  ) => {
+    setFormError(null);
+    setDecisionRunId(runId);
+    setDecisionStage(stage);
+    setDecisionTitleContext(titleContext);
+    setDecisionKind('APPROVE');
+    setDecisionNotes('');
+    setDecisionReturnTarget(returnTarget);
+    setMode('decide-stage');
+  };
+
+  const handleSubmitStageDecision = async () => {
+    if (!decisionRunId || !decisionStage) return;
+    setFormError(null);
+    const trimmed = decisionNotes.trim();
+    if ((decisionKind === 'RETURN' || decisionKind === 'REJECT') && !trimmed) {
+      setFormError(c.decisionNotesRequiredErr);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await submitWorkflowStageDecision(
+        decisionRunId,
+        decisionStage.id,
+        { decision: decisionKind, notes: trimmed || null },
+        lang
+      );
+      setModal({
+        variant: 'success',
+        title: c.decisionRecordedTitle,
+        message: c.decisionRecordedMsg(res.outcomeStatus),
+      });
+
+      if (decisionReturnTarget === 'workflow-inbox') {
+        setMode('workflow-inbox');
+        await loadWorkflowInbox();
+      } else if (details) {
+        const refreshed = await getIntegrationDetails(details.summary.id, lang);
+        setDetails(refreshed);
+        setMode('details');
+        setActiveTab('revisions');
+        await loadFilesWorkspaceTab(
+          details.summary.id,
+          selectedWorkspaceVersionId || undefined,
+          selectedWorkspaceRevisionId || undefined
+        );
+      } else {
+        setMode('list');
+      }
+    } catch (err) {
+      handleApiError(err, c.workflowDecisionTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openCreateChangeRequest = () => {
+    if (!changesWorkspace) return;
+    setFormError(null);
+    setEditingCrId('');
+    const firstRev = changesWorkspace.eligibleRevisions[0];
+    setCrSourceRevisionId(firstRev?.revisionId ?? '');
+    setCrChangeTypeId(changesWorkspace.allowedChangeTypes[0]?.changeTypeId ?? '');
+    setCrReason('');
+    setCrConsumerImpact('');
+    setCrSelectedFileIds(new Set());
+    setMode('create-change-request');
+  };
+
+  const openEditChangeRequest = (cr: ChangeRequestItem) => {
+    setFormError(null);
+    setEditingCrId(cr.id);
+    setCrSourceRevisionId(cr.sourceRevisionId);
+    setCrChangeTypeId(cr.changeTypeId);
+    setCrReason(cr.reason);
+    setCrConsumerImpact(cr.consumerImpact ?? '');
+    setCrSelectedFileIds(new Set(cr.affectedFiles.map((f) => f.revisionFileId)));
+    setMode('edit-change-request');
+  };
+
+  const handleSaveChangeRequestSubmit = async () => {
+    if (!details) return;
+    setFormError(null);
+    const affectedIds = Array.from(crSelectedFileIds);
+    if (!crSourceRevisionId || !crChangeTypeId || !crReason.trim() || affectedIds.length === 0) {
+      setFormError(c.crValidationMissing);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (mode === 'edit-change-request' && editingCrId) {
+        await updateChangeRequest(
+          editingCrId,
+          {
+            changeTypeId: crChangeTypeId,
+            reason: crReason.trim(),
+            consumerImpact: crConsumerImpact.trim() || null,
+            affectedSourceFileIds: affectedIds,
+          },
+          lang
+        );
+        setModal({ variant: 'success', title: c.crUpdatedTitle, message: c.crUpdatedMsg });
+      } else {
+        await createChangeRequest(
+          details.summary.id,
+          {
+            sourceRevisionId: crSourceRevisionId,
+            changeTypeId: crChangeTypeId,
+            reason: crReason.trim(),
+            consumerImpact: crConsumerImpact.trim() || null,
+            affectedSourceFileIds: affectedIds,
+          },
+          lang
+        );
+        setModal({ variant: 'success', title: c.crCreatedTitle, message: c.crCreatedMsg });
+      }
+
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      setMode('details');
+      setActiveTab('changes');
+      await loadChangesTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, mode === 'edit-change-request' ? c.crEditTitle : c.crCreateTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitChangeRequest = async (crId: string) => {
+    if (!details) return;
+    setSubmitting(true);
+    try {
+      await submitChangeRequest(crId, lang);
+      setModal({ variant: 'success', title: c.crSubmittedTitle, message: c.crSubmittedMsg });
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      await loadChangesTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, c.crSubmitBtn);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const loadNotificationsCenter = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const res = await getMyNotifications(false, lang);
+      setNotificationsData(res);
+    } catch (err) {
+      handleApiError(err, c.notificationsTitle);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [c.notificationsTitle, handleApiError, lang]);
+
+  const openNotificationsCenter = () => {
+    setMode('notifications');
+    void loadNotificationsCenter();
+  };
+
+  const handleMarkNotificationRead = async (notificationId: string) => {
+    setSubmitting(true);
+    try {
+      await markNotificationAsRead(notificationId, lang);
+      await loadNotificationsCenter();
+    } catch (err) {
+      handleApiError(err, c.notificationsTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openPublishRevisionForm = async () => {
+    if (!details) return;
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const vers = versionsData ?? (await listIntegrationVersions(details.summary.id, lang));
+      const pool: Array<{
+        revisionId: string;
+        versionLabel: string;
+        revisionNumber: number;
+        files: RevisionFileItem[];
+      }> = [];
+
+      for (const ver of vers.versions) {
+        const ws = await getIntegrationFilesWorkspace(details.summary.id, { versionId: ver.id }, lang);
+        for (const rev of ws.revisions) {
+          if (rev.status === 'APPROVED') {
+            const revWs =
+              ws.selectedRevision?.id === rev.id
+                ? ws
+                : await getIntegrationFilesWorkspace(
+                    details.summary.id,
+                    { versionId: ver.id, revisionId: rev.id },
+                    lang
+                  );
+            const cleanFiles = revWs.files.filter((f) => f.scanStatus === 'CLEAN');
+            if (cleanFiles.length > 0) {
+              pool.push({
+                revisionId: rev.id,
+                versionLabel: ver.versionLabel,
+                revisionNumber: rev.revisionNumber,
+                files: cleanFiles,
+              });
+            }
+          }
+        }
+      }
+
+      setPublishRevisionsPool(pool);
+      const first = pool[0];
+      setPublishRevisionId(first?.revisionId ?? '');
+      setPublishSelectedFileIds(new Set(first ? first.files.map((f) => f.id) : []));
+      setMode('publish-revision');
+    } catch (err) {
+      handleApiError(err, c.publishTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitPublishRevision = async () => {
+    if (!details) return;
+    if (!publishRevisionId || publishSelectedFileIds.size === 0) {
+      setFormError(c.publishValidationMissing);
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const created = await publishApprovedRevision(
+        publishRevisionId,
+        Array.from(publishSelectedFileIds),
+        lang
+      );
+      setModal({
+        variant: 'success',
+        title: c.publishSuccessTitle,
+        message: c.publishSuccessMsg(created.versionLabel, created.files.length),
+      });
+      const refreshed = await getIntegrationDetails(details.summary.id, lang);
+      setDetails(refreshed);
+      setMode('details');
+      setActiveTab('publishing');
+      await loadPublishingTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, c.publishTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRequestWithdrawPublication = (pubId: string, versionLabel: string, revisionNumber: number) => {
+    if (!details) return;
+    const integrationId = details.summary.id;
+    setModal({
+      variant: 'confirm',
+      title: c.withdrawConfirmTitle,
+      message: c.withdrawConfirmMsg(versionLabel, revisionNumber),
+      onConfirmAction: () => {
+        void (async () => {
+          setSubmitting(true);
+          try {
+            await withdrawPublication(pubId, lang);
+            setModal({
+              variant: 'success',
+              title: c.withdrawSuccessTitle,
+              message: c.withdrawSuccessMsg,
+            });
+            await loadPublishingTab(integrationId);
+          } catch (err) {
+            handleApiError(err, c.withdrawBtn);
+          } finally {
+            setSubmitting(false);
+          }
+        })();
+      },
+    });
+  };
+
+  const handleSaveConsumerVersion = async () => {
+    if (!details || !selectedConsumerVerId) return;
+    setSubmitting(true);
+    try {
+      const updated = await setIntegrationConsumerVersion(details.summary.id, selectedConsumerVerId, lang);
+      setConsumerVersionData(updated);
+      setModal({
+        variant: 'success',
+        title: c.consumerVersionSavedTitle,
+        message: c.consumerVersionSavedMsg(updated.activeUsage?.versionLabel ?? selectedConsumerVerId),
+      });
+      await loadPublishingTab(details.summary.id);
+    } catch (err) {
+      handleApiError(err, c.consumerVersionTitle);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderScanStatusBadge = (status: string) => {
@@ -903,73 +1914,6 @@ export function IntegrationsPage({
       </td>
     </tr>
   );
-
-  const columns: DataTableColumn<IntegrationItem>[] = [
-    {
-      key: 'ref',
-      header: c.colRef,
-      render: (row) => <code className="ltr-code">{row.referenceCode}</code>,
-    },
-    {
-      key: 'doc',
-      header: c.colDoc,
-      render: (row) => {
-        const st = formatStateBadge(row.documentState);
-        return (
-          <div>
-            <strong>{row.derivedTitle}</strong>
-            <div className="badge-wrap-list" style={{ marginTop: 4 }}>
-              <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
-              <StatusBadge variant={row.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
-                {row.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
-              </StatusBadge>
-            </div>
-          </div>
-        );
-      },
-    },
-    { key: 'group', header: c.colGroup, render: (row) => row.apiGroupName },
-    {
-      key: 'devs',
-      header: c.colDevs,
-      render: (row) =>
-        (row.assignedDevelopers ?? []).length === 0 ? (
-          <span className="muted-cell-text">{c.noDevsLabel}</span>
-        ) : (
-          <div className="badge-wrap-list">
-            {(row.assignedDevelopers ?? []).map((dev) => (
-              <StatusBadge key={dev.userId} variant="info">
-                {dev.fullName}
-              </StatusBadge>
-            ))}
-          </div>
-        ),
-    },
-    {
-      key: 'versions',
-      header: c.colVersions,
-      render: (row) => <code className="ltr-code">{row.versionsCount}</code>,
-    },
-    {
-      key: 'actions',
-      header: c.colActions,
-      render: (row) => {
-        const myDocPerms = new Set(row.myDocumentPermissions ?? []);
-        return (
-          <div className="button-row">
-            <Button variant="outline" size="sm" onClick={() => void openDetails(row.id)}>
-              {c.detailsBtn}
-            </Button>
-            {canAssignGlobal && myDocPerms.has('doc.assign') && (
-              <Button variant="secondary" size="sm" onClick={() => void openAssignDevelopers(row)}>
-                {c.assignDevsBtn}
-              </Button>
-            )}
-          </div>
-        );
-      },
-    },
-  ];
 
   return (
     <>
@@ -1059,6 +2003,476 @@ export function IntegrationsPage({
             </FormField>
           </div>
         </StandaloneFormPage>
+      ) : mode === 'create-working-copy' && details && filesWorkspace ? (
+        <StandaloneFormPage
+          modeBadgeLabel={c.workingCopyBadge}
+          formTitle={`${c.workingCopyTitle}: ${details.summary.derivedTitle}`}
+          formSubtitle={c.workingCopySub}
+          backButtonLabel={c.backDetailsBtn}
+          submitButtonLabel={c.workingCopySubmitBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => setMode('details')}
+          onCancel={() => setMode('details')}
+          onSubmit={() => void handleCreateWorkingCopySubmit()}
+        >
+          {(() => {
+            const approvedRevs = filesWorkspace.revisions.filter((r) => r.status === 'APPROVED');
+            const matchingCrs = (filesWorkspace.approvedChangeRequests ?? []).filter(
+              (cr) => !workingCopyBaseRevisionId || cr.sourceRevisionId === workingCopyBaseRevisionId
+            );
+            const selectedCr = matchingCrs.find((cr) => cr.id === workingCopyChangeRequestId) ?? null;
+
+            return (
+              <div style={{ display: 'grid', gap: 14 }}>
+                {formError && (
+                  <p className="form-error-text" role="alert">
+                    {formError}
+                  </p>
+                )}
+                <FormField id="wc-base-rev" label={c.workingCopyBaseLabel} required>
+                  {approvedRevs.length === 0 ? (
+                    <p className="card-subtitle">{c.workingCopyNoApprovedBase}</p>
+                  ) : (
+                    <SelectInput
+                      id="wc-base-rev"
+                      value={workingCopyBaseRevisionId}
+                      onChange={(e) => {
+                        const nextBase = e.target.value;
+                        setWorkingCopyBaseRevisionId(nextBase);
+                        const nextCrs = (filesWorkspace.approvedChangeRequests ?? []).filter(
+                          (cr) => cr.sourceRevisionId === nextBase
+                        );
+                        setWorkingCopyChangeRequestId(nextCrs[0]?.id ?? '');
+                      }}
+                      options={approvedRevs.map((r) => ({
+                        value: r.id,
+                        label: `#${r.revisionNumber} · ${r.versionLabel} (${r.filesCount} files)`,
+                      }))}
+                    />
+                  )}
+                </FormField>
+
+                <FormField id="wc-change-req" label={c.workingCopyCrLabel} required>
+                  {matchingCrs.length === 0 ? (
+                    <p className="card-subtitle">{c.workingCopyNoApprovedCr}</p>
+                  ) : (
+                    <SelectInput
+                      id="wc-change-req"
+                      value={workingCopyChangeRequestId}
+                      onChange={(e) => setWorkingCopyChangeRequestId(e.target.value)}
+                      options={matchingCrs.map((cr) => ({
+                        value: cr.id,
+                        label: `${cr.changeTypeName} — ${cr.reason.slice(0, 70)}`,
+                      }))}
+                    />
+                  )}
+                </FormField>
+
+                {selectedCr && (
+                  <div className="slot-stat-box">
+                    <div className="slot-stat-label">{selectedCr.changeTypeName}</div>
+                    <div className="slot-stat-value" style={{ fontSize: '0.92rem' }}>
+                      {selectedCr.reason}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </StandaloneFormPage>
+      ) : mode === 'decide-stage' && decisionStage ? (
+        <StandaloneFormPage
+          modeBadgeLabel={c.workflowDecisionBadge}
+          formTitle={`${c.workflowDecisionTitle}: ${decisionTitleContext}`}
+          formSubtitle={c.workflowDecisionSub}
+          backButtonLabel={c.backBtn}
+          submitButtonLabel={c.decisionSubmitBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => setMode(decisionReturnTarget)}
+          onCancel={() => setMode(decisionReturnTarget)}
+          onSubmit={() => void handleSubmitStageDecision()}
+        >
+          {formError && (
+            <p className="form-error-text" role="alert">
+              {formError}
+            </p>
+          )}
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div className="slot-stat-box">
+              <div className="slot-stat-label">{c.colWfStage}</div>
+              <div className="slot-stat-value">
+                {`#${decisionStage.position} · ${decisionStage.stageNameSnapshot} (${decisionStage.responsibleRoleName})`}
+              </div>
+            </div>
+
+            <FormField id="wf-decision-choice" label={c.decisionChoiceLabel} required>
+              <SelectInput
+                id="wf-decision-choice"
+                value={decisionKind}
+                onChange={(e) => setDecisionKind(e.target.value as WorkflowDecisionKind)}
+                options={[
+                  { value: 'APPROVE', label: c.decisionApproveOpt },
+                  { value: 'RETURN', label: c.decisionReturnOpt },
+                  { value: 'REJECT', label: c.decisionRejectOpt },
+                ]}
+              />
+            </FormField>
+
+            <FormField
+              id="wf-decision-notes"
+              label={c.decisionNotesLabel}
+              required={decisionKind === 'RETURN' || decisionKind === 'REJECT'}
+            >
+              <textarea
+                id="wf-decision-notes"
+                className="form-control"
+                rows={4}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}
+                value={decisionNotes}
+                placeholder={c.decisionNotesPlaceholder}
+                onChange={(e) => setDecisionNotes(e.target.value)}
+              />
+            </FormField>
+          </div>
+        </StandaloneFormPage>
+      ) : mode === 'workflow-inbox' ? (
+        <section className="surface-card">
+          <div className="card-header-row">
+            <div>
+              <span className="mode-pill">{c.workflowInboxBadge}</span>
+              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+                {c.workflowInboxTitle}
+              </h2>
+              <p className="card-subtitle">{c.workflowInboxSub}</p>
+            </div>
+            <Button variant="outline" onClick={() => setMode('list')}>
+              {c.backBtn}
+            </Button>
+          </div>
+
+          {inboxLoading ? (
+            <LoadingState title={commonStrings.tableLoadingTitle} />
+          ) : workflowInbox.length === 0 ? (
+            <p className="card-subtitle">{c.workflowInboxEmpty}</p>
+          ) : (
+            <div className="table-scroll-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{c.colWfIntegration}</th>
+                    <th>{c.colWfRevision}</th>
+                    <th>{c.colWfStage}</th>
+                    <th>{c.colWfSubmittedBy}</th>
+                    <th>{c.colActions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workflowInbox.map((item) => (
+                    <tr key={item.stageId}>
+                      <td>
+                        <strong>{item.derivedTitle}</strong>
+                        <div className="muted-cell-text">
+                          <code className="ltr-code">{item.referenceCode}</code>
+                        </div>
+                      </td>
+                      <td>
+                        <code className="ltr-code">
+                          {`${item.versionLabel ?? '-'} · #${item.revisionNumber ?? '-'}`}
+                        </code>
+                      </td>
+                      <td>
+                        <div>
+                          <strong>{`#${item.stagePosition} · ${item.stageNameSnapshot}`}</strong>
+                        </div>
+                        <StatusBadge variant="info">{item.responsibleRoleName}</StatusBadge>
+                      </td>
+                      <td>{item.submittedByName}</td>
+                      <td>
+                        <div className="button-row">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void openDetails(item.integrationId, 'revisions')}
+                          >
+                            {c.openReviewDetailsBtn}
+                          </Button>
+                          {item.canDecide && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() =>
+                                openDecideStage(
+                                  item.runId,
+                                  {
+                                    id: item.stageId,
+                                    runId: item.runId,
+                                    position: item.stagePosition,
+                                    stageNameSnapshot: item.stageNameSnapshot,
+                                    responsibleRoleIdSnapshot: item.responsibleRoleIdSnapshot,
+                                    responsibleRoleName: item.responsibleRoleName,
+                                    status: 'ACTIVE',
+                                  },
+                                  `${item.derivedTitle} (#${item.revisionNumber ?? ''})`,
+                                  'workflow-inbox'
+                                )
+                              }
+                            >
+                              {c.decideStageBtn}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : (mode === 'create-change-request' || mode === 'edit-change-request') && details && changesWorkspace ? (
+        <StandaloneFormPage
+          modeBadgeLabel={mode === 'edit-change-request' ? c.crEditBadge : c.crCreateBadge}
+          formTitle={mode === 'edit-change-request' ? c.crEditTitle : c.crCreateTitle}
+          formSubtitle={c.crFormSub}
+          backButtonLabel={c.backDetailsBtn}
+          submitButtonLabel={mode === 'edit-change-request' ? c.crSaveEditBtn : c.crSaveCreateBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => {
+            setMode('details');
+            setActiveTab('changes');
+          }}
+          onCancel={() => {
+            setMode('details');
+            setActiveTab('changes');
+          }}
+          onSubmit={() => void handleSaveChangeRequestSubmit()}
+        >
+          {formError && (
+            <p className="form-error-text" role="alert">
+              {formError}
+            </p>
+          )}
+          {(() => {
+            const selectedEligibleRev =
+              changesWorkspace.eligibleRevisions.find((r) => r.revisionId === crSourceRevisionId) ?? null;
+
+            return (
+              <div style={{ display: 'grid', gap: 14 }}>
+                <FormField id="cr-source-rev" label={c.crSourceRevLabel} required>
+                  <SelectInput
+                    id="cr-source-rev"
+                    value={crSourceRevisionId}
+                    disabled={mode === 'edit-change-request'}
+                    onChange={(e) => {
+                      setCrSourceRevisionId(e.target.value);
+                      setCrSelectedFileIds(new Set());
+                    }}
+                    options={changesWorkspace.eligibleRevisions.map((r) => ({
+                      value: r.revisionId,
+                      label: `${r.versionLabel} · #${r.revisionNumber} (${r.availableFiles.length} files)`,
+                    }))}
+                  />
+                </FormField>
+
+                <FormField id="cr-change-type" label={c.crChangeTypeLabel} required>
+                  <SelectInput
+                    id="cr-change-type"
+                    value={crChangeTypeId}
+                    onChange={(e) => setCrChangeTypeId(e.target.value)}
+                    options={changesWorkspace.allowedChangeTypes.map((ct) => ({
+                      value: ct.changeTypeId,
+                      label: `${ct.name} (${ct.routeName})`,
+                    }))}
+                  />
+                </FormField>
+
+                <FormField id="cr-reason" label={c.crReasonLabel} required>
+                  <TextInput
+                    id="cr-reason"
+                    value={crReason}
+                    placeholder={c.crReasonPlaceholder}
+                    onChange={(e) => setCrReason(e.target.value)}
+                  />
+                </FormField>
+
+                <FormField id="cr-impact" label={c.crImpactLabel}>
+                  <TextInput
+                    id="cr-impact"
+                    value={crConsumerImpact}
+                    placeholder={c.crImpactPlaceholder}
+                    onChange={(e) => setCrConsumerImpact(e.target.value)}
+                  />
+                </FormField>
+
+                <FormField id="cr-affected-files" label={c.crAffectedFilesLabel} required>
+                  <div className="badge-wrap-list" style={{ gap: 10 }}>
+                    {(selectedEligibleRev?.availableFiles ?? []).map((af) => (
+                      <label key={af.revisionFileId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={crSelectedFileIds.has(af.revisionFileId)}
+                          onChange={() =>
+                            setCrSelectedFileIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(af.revisionFileId)) next.delete(af.revisionFileId);
+                              else next.add(af.revisionFileId);
+                              return next;
+                            })
+                          }
+                        />
+                        <span>{`${af.originalName} (${af.fileTypeName})`}</span>
+                      </label>
+                    ))}
+                  </div>
+                </FormField>
+              </div>
+            );
+          })()}
+        </StandaloneFormPage>
+      ) : mode === 'notifications' ? (
+        <section className="surface-card">
+          <div className="card-header-row">
+            <div>
+              <span className="mode-pill">{c.notificationsBadge}</span>
+              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+                {c.notificationsTitle}
+              </h2>
+              <p className="card-subtitle">{c.notificationsSub}</p>
+            </div>
+            <div className="button-row" style={{ alignItems: 'center' }}>
+              {notificationsData && (
+                <StatusBadge variant={notificationsData.unreadCount > 0 ? 'warning' : 'neutral'}>
+                  {c.notificationsUnreadBadge(notificationsData.unreadCount)}
+                </StatusBadge>
+              )}
+              <Button variant="outline" onClick={() => setMode('list')}>
+                {c.backBtn}
+              </Button>
+            </div>
+          </div>
+
+          {notificationsLoading ? (
+            <LoadingState title={commonStrings.tableLoadingTitle} />
+          ) : !notificationsData || notificationsData.items.length === 0 ? (
+            <p className="card-subtitle">{c.notificationsEmpty}</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {notificationsData.items.map((n) => (
+                <div key={n.id} className="slot-stat-box">
+                  <div className="card-header-row">
+                    <div>
+                      <div className="badge-wrap-list" style={{ marginBottom: 4 }}>
+                        <StatusBadge variant={n.isRead ? 'neutral' : 'info'}>
+                          {n.isRead ? c.readTag : c.unreadTag}
+                        </StatusBadge>
+                        <code className="ltr-code">{n.kind}</code>
+                      </div>
+                      <div className="slot-stat-value" style={{ fontSize: '0.94rem' }}>
+                        {lang === 'ar' ? n.summaryAr : n.summaryEn}
+                      </div>
+                    </div>
+                    {!n.isRead && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={() => void handleMarkNotificationRead(n.id)}
+                      >
+                        {c.markReadBtn}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : mode === 'publish-revision' && details ? (
+        <StandaloneFormPage
+          modeBadgeLabel={c.publishBadge}
+          formTitle={`${c.publishTitle}: ${details.summary.derivedTitle}`}
+          formSubtitle={c.publishSub}
+          backButtonLabel={c.backDetailsBtn}
+          submitButtonLabel={c.publishSubmitBtn}
+          cancelButtonLabel={c.cancelBtn}
+          isSubmitting={submitting}
+          onBack={() => {
+            setMode('details');
+            setActiveTab('publishing');
+          }}
+          onCancel={() => {
+            setMode('details');
+            setActiveTab('publishing');
+          }}
+          onSubmit={() => void handleSubmitPublishRevision()}
+        >
+          {formError && (
+            <p className="form-error-text" role="alert">
+              {formError}
+            </p>
+          )}
+          {(() => {
+            const selectedPoolItem =
+              publishRevisionsPool.find((r) => r.revisionId === publishRevisionId) ?? null;
+
+            return (
+              <>
+                <FormField id="publish-revision-select" label={c.publishRevLabel} required>
+                  <SelectInput
+                    id="publish-revision-select"
+                    value={publishRevisionId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setPublishRevisionId(nextId);
+                      const nextPool = publishRevisionsPool.find((r) => r.revisionId === nextId);
+                      setPublishSelectedFileIds(new Set(nextPool ? nextPool.files.map((f) => f.id) : []));
+                    }}
+                    options={publishRevisionsPool.map((r) => ({
+                      value: r.revisionId,
+                      label: `${r.versionLabel} · Rev #${r.revisionNumber} (${r.files.length} CLEAN)`,
+                    }))}
+                  />
+                </FormField>
+
+                {selectedPoolItem && (
+                  <div style={{ marginTop: 14 }}>
+                    <div className="field-label" style={{ marginBottom: 8 }}>
+                      {c.publishFilesLabel}
+                    </div>
+                    <div className="badge-wrap-list" style={{ gap: 10 }}>
+                      {selectedPoolItem.files.map((file) => (
+                        <label
+                          key={file.id}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={publishSelectedFileIds.has(file.id)}
+                            onChange={() =>
+                              setPublishSelectedFileIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(file.id)) next.delete(file.id);
+                                else next.add(file.id);
+                                return next;
+                              })
+                            }
+                          />
+                          <span>
+                            {file.originalName} ({file.fileTypeName})
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </StandaloneFormPage>
       ) : mode === 'assign-devs' && details ? (
         <StandaloneFormPage
           modeBadgeLabel={c.assignBadge}
@@ -1099,87 +2513,147 @@ export function IntegrationsPage({
           )}
         </StandaloneFormPage>
       ) : mode === 'details' ? (
-        <section className="surface-card">
+        <div>
           {detailsLoading || !details ? (
-            <LoadingState title={commonStrings.tableLoadingTitle} />
+            <section className="surface-card panel">
+              <LoadingState title={commonStrings.tableLoadingTitle} />
+            </section>
           ) : (
             <>
-              <div className="card-header-row">
-                <div>
-                  <span className="mode-pill">{c.detailsBadge}</span>
-                  <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
-                    {details.summary.derivedTitle} ·{' '}
-                    <code className="ltr-code">{details.summary.referenceCode}</code>
-                  </h2>
-                  <div className="badge-wrap-list" style={{ marginTop: 6 }}>
-                    <StatusBadge variant={details.summary.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
-                      {details.summary.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
-                    </StatusBadge>
-                    <StatusBadge variant="neutral">
+              {/* Reference intHeader() top actions + header panel */}
+              <div className="page-actions">
+                <Button variant="outline" onClick={() => setMode('list')}>
+                  {c.backBtn}
+                </Button>
+              </div>
+
+              <div className="panel">
+                <div className="row between wrap">
+                  <div>
+                    <div className="eyebrow">
+                      <code className="ltr-code">{details.summary.referenceCode}</code>
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: 850 }}>{details.summary.derivedTitle}</div>
+                    <div className="item-sub">
+                      {`${c.groupLabel}: ${details.summary.apiGroupName} · `}
                       {c.countsSummary(
                         details.summary.versionsCount,
                         details.revisionsCount,
                         details.changeRequestsCount,
                         details.publicationsCount
                       )}
+                    </div>
+                    <div className="item-sub" style={{ marginTop: 9 }}>
+                      <b>{lang === 'ar' ? 'المطورون المسؤولون:' : 'Responsible Developers:'}</b>{' '}
+                      {details.summary.assignedDevelopers.length === 0
+                        ? c.noDevsLabel
+                        : details.summary.assignedDevelopers.map((d) => d.fullName).join('، ')}
+                    </div>
+                  </div>
+                  <div className="row wrap">
+                    <StatusBadge variant={details.summary.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
+                      {details.summary.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
+                    </StatusBadge>
+                    <StatusBadge variant={formatStateBadge(details.summary.documentState).variant}>
+                      {formatStateBadge(details.summary.documentState).label}
                     </StatusBadge>
                   </div>
                 </div>
-                <Button variant="outline" onClick={() => setMode('list')}>
-                  {c.backBtn}
-                </Button>
-              </div>
 
-              {/* Persistent Read-Only Party & Governance Summary */}
-              <div className="slot-grid-3" style={{ marginBottom: 18 }}>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.providerLabel}</div>
-                  <div className="slot-stat-value">{details.summary.providerName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.consumerLabel}</div>
-                  <div className="slot-stat-value">{details.summary.consumerName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.groupLabel}</div>
-                  <div className="slot-stat-value">{details.summary.apiGroupName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.reqTemplateLabel}</div>
-                  <div className="slot-stat-value">{details.summary.requirementTemplateName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.routeLabel}</div>
-                  <div className="slot-stat-value">{details.summary.approvalRouteName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.policyLabel}</div>
-                  <div className="slot-stat-value">{details.summary.changePolicyName}</div>
+                {/* UI-09 Tab Navigation inside intHeader */}
+                <div className="tabs" style={{ marginTop: 18, marginBottom: 0 }}>
+                  {(
+                    [
+                      ['developers', c.tabDevelopers],
+                      ['files', c.tabFiles],
+                      ['revisions', c.tabRevisions],
+                      ['versions', c.tabVersions],
+                      ['changes', c.tabChanges],
+                      ['publishing', c.tabPublishing],
+                      ['audit', c.tabAudit],
+                    ] as Array<[DetailsTab, string]>
+                  ).map(([tabKey, label]) => {
+                    const cleanLabel = label.replace(/\s*\(UI-\d+[A-Z]?\)/g, '');
+                    return (
+                      <button
+                        key={tabKey}
+                        type="button"
+                        aria-label={label}
+                        className={`tab ${activeTab === tabKey ? 'active' : ''}`}
+                        onClick={() => setActiveTab(tabKey)}
+                      >
+                        {cleanLabel}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* UI-09 6-Tab Navigation */}
-              <div className="button-row" style={{ marginBottom: 16 }}>
-                {(
-                  [
-                    ['developers', c.tabDevelopers],
-                    ['files', c.tabFiles],
-                    ['revisions', c.tabRevisions],
-                    ['versions', c.tabVersions],
-                    ['changes', c.tabChanges],
-                    ['audit', c.tabAudit],
-                  ] as Array<[DetailsTab, string]>
-                ).map(([tabKey, label]) => (
-                  <Button
-                    key={tabKey}
-                    variant={activeTab === tabKey ? 'primary' : 'outline'}
-                    size="sm"
-                    onClick={() => setActiveTab(tabKey)}
-                  >
-                    {label}
-                  </Button>
-                ))}
+              {/* Persistent Read-Only Party & Governance Summary + Lifecycle Workflow */}
+              <div className="grid-2" style={{ marginBottom: 18 }}>
+                <div className="panel" style={{ marginBottom: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 10 }}>
+                    {lang === 'ar' ? 'بيانات التكامل' : 'Integration Information'}
+                  </div>
+                  <div className="grid-2">
+                    <div>
+                      <div className="field">
+                        <label>{c.providerLabel}</label>
+                        <div className="bold">{details.summary.providerName}</div>
+                      </div>
+                      <div className="field">
+                        <label>{c.groupLabel}</label>
+                        <div className="bold">{details.summary.apiGroupName}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="field">
+                        <label>{c.consumerLabel}</label>
+                        <div className="bold">{details.summary.consumerName}</div>
+                      </div>
+                      <div className="field">
+                        <label>{c.routeLabel}</label>
+                        <div className="bold">{details.summary.approvalRouteName}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel" style={{ marginBottom: 0 }}>
+                  <div className="panel-head" style={{ marginBottom: 6 }}>
+                    <div className="panel-title">
+                      {lang === 'ar' ? 'حالة دورة الحياة' : 'Lifecycle State'}
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={() => setActiveTab('versions')}>
+                      {lang === 'ar' ? 'إدارة الإصدارات' : 'Manage Versions'}
+                    </Button>
+                  </div>
+                  <div className="workflow" style={{ marginBottom: 10 }}>
+                    <span className="step on">{lang === 'ar' ? 'وثيقة API' : 'API Doc'}</span>
+                    <span className="arrow">‹</span>
+                    <span className="step on">{lang === 'ar' ? 'تكامل' : 'Integration'}</span>
+                    <span className="arrow">‹</span>
+                    <span className={`step ${details.summary.versionsCount > 0 ? 'on' : ''}`}>
+                      {lang === 'ar' ? 'إصدار' : 'Version'}
+                    </span>
+                    <span className="arrow">‹</span>
+                    <span className={`step ${details.revisionsCount > 0 ? 'on' : ''}`}>
+                      {lang === 'ar' ? 'اعتماد' : 'Approval'}
+                    </span>
+                    <span className="arrow">‹</span>
+                    <span className={`step ${details.publicationsCount > 0 ? 'on' : ''}`}>
+                      {lang === 'ar' ? 'نشر' : 'Publish'}
+                    </span>
+                  </div>
+                  <div className="divider" />
+                  <div className="row wrap">
+                    <span className="chip">{`${details.summary.versionsCount} ${lang === 'ar' ? 'إصدار' : 'versions'}`}</span>
+                    <span className="chip">{`${details.changeRequestsCount} ${lang === 'ar' ? 'طلب تغيير' : 'changes'}`}</span>
+                    <span className="chip">{`${details.publicationsCount} ${lang === 'ar' ? 'إصدار منشور' : 'published'}`}</span>
+                  </div>
+                </div>
               </div>
+
+              <section className="surface-card panel">
 
               {/* Tab Content */}
               {activeTab === 'developers' && (
@@ -1236,33 +2710,35 @@ export function IntegrationsPage({
                   {details.requirementRules.length === 0 ? (
                     <p className="card-subtitle">{c.emptyRules}</p>
                   ) : (
-                    <div className="table-scroll-container" style={{ marginBottom: 18 }}>
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>{c.colFileType}</th>
-                            <th>{c.colExtensions}</th>
-                            <th>{c.colMode}</th>
-                            <th>{c.colCounts}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {details.requirementRules.map((r) => (
-                            <tr key={r.fileTypeId}>
-                              <td>{r.fileTypeName}</td>
-                              <td>
-                                <code className="ltr-code">{r.extensions.join(', ')}</code>
-                              </td>
-                              <td>{formatModeLabel(r.requirementMode)}</td>
-                              <td>
-                                <code className="ltr-code">
+                    <div className="stack" style={{ marginBottom: 18 }}>
+                      {details.requirementRules.map((r) => (
+                        <div key={r.fileTypeId} className="item-card file-card">
+                          <div className="row between wrap">
+                            <div>
+                              <div className="row wrap">
+                                <strong>{r.fileTypeName}</strong>
+                                <StatusBadge
+                                  variant={
+                                    r.requirementMode.toUpperCase() === 'REQUIRED'
+                                      ? 'info'
+                                      : r.requirementMode.toUpperCase() === 'OPTIONAL'
+                                        ? 'neutral'
+                                        : 'warning'
+                                  }
+                                >
+                                  {formatModeLabel(r.requirementMode)}
+                                </StatusBadge>
+                                <span className="tag ltr-code">
                                   {r.minCount} – {r.maxCount}
-                                </code>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                </span>
+                              </div>
+                              <div className="item-sub">
+                                <code className="ltr-code">{r.extensions.join(', ')}</code>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -1280,7 +2756,8 @@ export function IntegrationsPage({
                           )}
                         </div>
                         {filesWorkspace?.selectedRevision &&
-                          filesWorkspace.selectedRevision.status === 'DRAFT' &&
+                          (filesWorkspace.selectedRevision.status === 'DRAFT' ||
+                            filesWorkspace.selectedRevision.status === 'RETURNED') &&
                           filesWorkspace.canUploadFiles && (
                             <Button variant="primary" size="sm" disabled={submitting} onClick={openUploadFile}>
                               {c.filesUploadBtn}
@@ -1297,7 +2774,7 @@ export function IntegrationsPage({
                           ) : (
                             <>
                               <div className="button-row" style={{ marginBottom: 12, alignItems: 'flex-end' }}>
-                                <div style={{ minWidth: 260 }}>
+                                <div style={{ minWidth: 220 }}>
                                   <FormField id="ws-version-select" label={c.filesSelectVersionLabel}>
                                     <SelectInput
                                       id="ws-version-select"
@@ -1305,6 +2782,7 @@ export function IntegrationsPage({
                                       onChange={(e) => {
                                         const verId = e.target.value;
                                         setSelectedWorkspaceVersionId(verId);
+                                        setSelectedWorkspaceRevisionId('');
                                         if (details) {
                                           void loadFilesWorkspaceTab(details.summary.id, verId);
                                         }
@@ -1317,13 +2795,86 @@ export function IntegrationsPage({
                                   </FormField>
                                 </div>
 
+                                {filesWorkspace.revisions.length > 1 && filesWorkspace.selectedRevision && (
+                                  <div style={{ minWidth: 210 }}>
+                                    <FormField id="ws-revision-select" label={c.colRevNumber}>
+                                      <SelectInput
+                                        id="ws-revision-select"
+                                        value={filesWorkspace.selectedRevision.id}
+                                        onChange={(e) => {
+                                          const revId = e.target.value;
+                                          setSelectedWorkspaceRevisionId(revId);
+                                          if (details) {
+                                            void loadFilesWorkspaceTab(
+                                              details.summary.id,
+                                              selectedWorkspaceVersionId || undefined,
+                                              revId
+                                            );
+                                          }
+                                        }}
+                                        options={filesWorkspace.revisions.map((rev) => ({
+                                          value: rev.id,
+                                          label: `#${rev.revisionNumber} · ${rev.status}`,
+                                        }))}
+                                      />
+                                    </FormField>
+                                  </div>
+                                )}
+
                                 {filesWorkspace.selectedRevision ? (
-                                  <StatusBadge variant="info">
-                                    {c.filesDraftInfoBadge(
-                                      filesWorkspace.selectedRevision.revisionNumber,
-                                      filesWorkspace.selectedRevision.status
-                                    )}
-                                  </StatusBadge>
+                                  <div className="button-row" style={{ alignItems: 'center' }}>
+                                    <StatusBadge
+                                      variant={
+                                        filesWorkspace.selectedRevision.status === 'APPROVED'
+                                          ? 'success'
+                                          : filesWorkspace.selectedRevision.status === 'DRAFT'
+                                            ? 'info'
+                                            : 'warning'
+                                      }
+                                    >
+                                      {c.filesDraftInfoBadge(
+                                        filesWorkspace.selectedRevision.revisionNumber,
+                                        filesWorkspace.selectedRevision.status
+                                      )}
+                                    </StatusBadge>
+
+                                    {(filesWorkspace.selectedRevision.status === 'DRAFT' ||
+                                      filesWorkspace.selectedRevision.status === 'RETURNED') &&
+                                      filesWorkspace.canSubmitRevision && (
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          disabled={submitting || filesWorkspace.selectedRevision.isReadyForSubmission === false}
+                                          onClick={() =>
+                                            promptSubmitRevision(
+                                              filesWorkspace.selectedRevision!.id,
+                                              filesWorkspace.selectedRevision!.revisionNumber
+                                            )
+                                          }
+                                        >
+                                          {c.submitRevisionBtn}
+                                        </Button>
+                                      )}
+
+                                    {filesWorkspace.canCreateWorkingCopy &&
+                                      filesWorkspace.revisions.some((r) => r.status === 'APPROVED') &&
+                                      !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() =>
+                                            openCreateWorkingCopy(
+                                              filesWorkspace.selectedRevision?.status === 'APPROVED'
+                                                ? filesWorkspace.selectedRevision.id
+                                                : undefined
+                                            )
+                                          }
+                                        >
+                                          {c.createWorkingCopyBtn}
+                                        </Button>
+                                      )}
+                                  </div>
                                 ) : (
                                   filesWorkspace.canCreateDraftRevision &&
                                   selectedWorkspaceVersionId && (
@@ -1339,82 +2890,253 @@ export function IntegrationsPage({
                                 )}
                               </div>
 
-                              {!filesWorkspace.selectedRevision ? (
+                              {filesWorkspace.selectedRevision &&
+                                (filesWorkspace.selectedRevision.isProtected ??
+                                  (filesWorkspace.selectedRevision.status !== 'DRAFT' &&
+                                    filesWorkspace.selectedRevision.status !== 'RETURNED')) && (
+                                  <div
+                                    className="slot-stat-box"
+                                    style={{ marginBottom: 12, borderInlineStart: '4px solid var(--brand-gold, #c68d28)' }}
+                                  >
+                                    <div className="slot-stat-label">{c.protectedTag}</div>
+                                    <div className="slot-stat-value" style={{ fontSize: '0.9rem' }}>
+                                      {c.protectedRevisionBanner(filesWorkspace.selectedRevision.status)}
+                                    </div>
+                                  </div>
+                                )}
+
+                              {filesWorkspace.selectedRevision?.status === 'RETURNED' && (
+                                <div
+                                  className="slot-stat-box"
+                                  style={{ marginBottom: 12, borderInlineStart: '4px solid var(--brand-gold, #c68d28)' }}
+                                >
+                                  <div className="slot-stat-label">{c.workflowReworkAlertTitle}</div>
+                                  {filesWorkspace.selectedRevision.latestDecisionNotes && (
+                                    <div className="slot-stat-value" style={{ fontSize: '0.9rem' }}>
+                                      {filesWorkspace.selectedRevision.latestDecisionNotes}
+                                    </div>
+                                  )}
+                                  <p className="card-subtitle" style={{ marginTop: 4, marginBottom: 0 }}>
+                                    {c.workflowReworkInstruction}
+                                  </p>
+                                </div>
+                              )}
+
+                              {filesWorkspace.selectedRevision &&
+                                filesWorkspace.selectedRevision.requirements.length > 0 && (
+                                  <div className="slot-stat-box" style={{ marginBottom: 12 }}>
+                                    <div className="slot-stat-label" style={{ marginBottom: 8 }}>
+                                      {c.requirementsChecklistTitle}
+                                    </div>
+                                    <div className="badge-wrap-list">
+                                      {filesWorkspace.selectedRevision.requirements.map((req) => {
+                                        const isDone =
+                                          req.isSatisfied ??
+                                          (req.requirementMode.toUpperCase() !== 'REQUIRED' ||
+                                            req.uploadedCleanCount >= req.minCount);
+                                        const exceeds = req.exceedsMaxCount ?? req.uploadedCleanCount > req.maxCount;
+                                        return (
+                                          <StatusBadge
+                                            key={req.fileTypeId}
+                                            variant={exceeds ? 'danger' : isDone ? 'success' : 'warning'}
+                                          >
+                                            {`${req.fileTypeName}: ${req.uploadedCleanCount}/${req.minCount}–${req.maxCount} (${
+                                              exceeds
+                                                ? c.reqExceedsBadge
+                                                : isDone
+                                                  ? c.reqSatisfiedBadge
+                                                  : c.reqMissingBadge
+                                            })`}
+                                          </StatusBadge>
+                                        );
+                                      })}
+                                    </div>
+                                    {filesWorkspace.selectedRevision.status === 'DRAFT' &&
+                                      (lang === 'ar'
+                                        ? filesWorkspace.selectedRevision.submissionBlockersAr
+                                        : filesWorkspace.selectedRevision.submissionBlockersEn
+                                      )?.length ? (
+                                      <ul style={{ marginTop: 8, marginBottom: 0, paddingInlineStart: 18, fontSize: '0.86rem' }}>
+                                        {(lang === 'ar'
+                                          ? filesWorkspace.selectedRevision.submissionBlockersAr ?? []
+                                          : filesWorkspace.selectedRevision.submissionBlockersEn ?? []
+                                        ).map((blocker, idx) => (
+                                          <li key={idx}>{blocker}</li>
+                                        ))}
+                                      </ul>
+                                    ) : null}
+                                  </div>
+                                )}
+
+                              {verifiedDownloadNotice && (
+                                <div className="slot-stat-box" style={{ marginBottom: 12 }}>
+                                  <div className="slot-stat-value" style={{ fontSize: '0.88rem' }}>
+                                    {verifiedDownloadNotice}
+                                  </div>
+                                </div>
+                              )}
+
+                               {!filesWorkspace.selectedRevision ? (
                                 <p className="card-subtitle">{c.filesNoDraftNote}</p>
                               ) : filesWorkspace.files.length === 0 ? (
                                 <p className="card-subtitle">{c.filesEmptyList}</p>
                               ) : (
-                                <div className="table-scroll-container">
-                                  <table className="data-table">
-                                    <thead>
-                                      <tr>
-                                        <th>{c.colFileName}</th>
-                                        <th>{c.colFileType}</th>
-                                        <th>{c.colFileSizeSha}</th>
-                                        <th>{c.colScanStatus}</th>
-                                        <th>{c.colActions}</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {filesWorkspace.files.map((f) => (
-                                        <tr key={f.id}>
-                                          <td>
-                                            <strong>{f.originalName}</strong>
-                                          </td>
-                                          <td>{f.fileTypeName}</td>
-                                          <td>
-                                            <div>
-                                              <code className="ltr-code">{formatFileSize(f.sizeBytes)}</code>
-                                            </div>
-                                            <div className="muted-cell-text">
-                                              <code className="ltr-code">{f.sha256.slice(0, 16)}…</code>
-                                            </div>
-                                          </td>
-                                          <td>
-                                            <div className="badge-wrap-list">
+                                <div className="stack">
+                                  {filesWorkspace.files.map((f) => {
+                                    const isDocx = f.originalName.toLowerCase().endsWith('.docx');
+                                    return (
+                                      <div key={f.id} className="file-entry">
+                                        <div className="row between wrap">
+                                          <div>
+                                            <div className="row wrap">
+                                              <strong>{f.originalName}</strong>
+                                              <span className="tag">{f.fileTypeName}</span>
                                               {renderScanStatusBadge(f.scanStatus)}
                                               <StatusBadge variant={f.isQuarantined ? 'warning' : 'neutral'}>
                                                 {f.isQuarantined ? c.tierQuarantine : c.tierPrivate}
                                               </StatusBadge>
                                             </div>
-                                          </td>
-                                          <td>
-                                            <div className="button-row">
-                                              {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
+                                            <div className="item-sub" style={{ marginTop: 4 }}>
+                                              <code className="ltr-code">{formatFileSize(f.sizeBytes)}</code>
+                                              {' · '}
+                                              <code className="ltr-code">{f.sha256.slice(0, 16)}…</code>
+                                            </div>
+                                          </div>
+                                          <div className="button-row">
+                                            {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
+                                              <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={submitting}
+                                                onClick={() => void handleRescanFile(f)}
+                                              >
+                                                {c.rescanBtn}
+                                              </Button>
+                                            )}
+                                            {f.isAvailableForUse && filesWorkspace.canDownloadFiles && (
+                                              <a
+                                                className="btn btn-outline btn-sm"
+                                                href={getRevisionFileDownloadUrl(f.revisionId, f.id)}
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  void handleDownloadRevisionFile(f);
+                                                }}
+                                              >
+                                                {c.downloadBtn}
+                                              </a>
+                                            )}
+                                            {f.isAvailableForUse &&
+                                              isDocx &&
+                                              filesWorkspace.canUploadFiles && (
                                                 <Button
                                                   variant="secondary"
                                                   size="sm"
                                                   disabled={submitting}
-                                                  onClick={() => void handleRescanFile(f)}
+                                                  onClick={() => void handleGenerateWordDerivative(f)}
                                                 >
-                                                  {c.rescanBtn}
+                                                  {c.wordUpdateBtn}
                                                 </Button>
                                               )}
-                                              {f.isAvailableForUse && filesWorkspace.canDownloadFiles && (
-                                                <a
-                                                  className="btn btn-outline btn-sm"
-                                                  href={getRevisionFileDownloadUrl(f.revisionId, f.id)}
+                                            {filesWorkspace.canDeleteFiles &&
+                                              (filesWorkspace.selectedRevision?.status === 'DRAFT' ||
+                                                filesWorkspace.selectedRevision?.status === 'RETURNED') && (
+                                                <Button
+                                                  variant="danger"
+                                                  size="sm"
+                                                  disabled={submitting}
+                                                  onClick={() => promptRemoveFile(f)}
                                                 >
-                                                  {c.downloadBtn}
-                                                </a>
+                                                  {c.removeBtn}
+                                                </Button>
                                               )}
-                                              {filesWorkspace.canDeleteFiles &&
-                                                filesWorkspace.selectedRevision?.status === 'DRAFT' && (
-                                                  <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    disabled={submitting}
-                                                    onClick={() => promptRemoveFile(f)}
-                                                  >
-                                                    {c.removeBtn}
-                                                  </Button>
-                                                )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {(filesWorkspace.wordDerivatives ?? []).length > 0 && (
+                                <div style={{ marginTop: 18, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+                                  <h4 className="card-title heading-font">{c.wordDerivativesTitle}</h4>
+                                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
+                                    {c.wordDerivativesNote}
+                                  </p>
+                                  <div style={{ display: 'grid', gap: 10 }}>
+                                    {(filesWorkspace.wordDerivatives ?? []).map((wd) => {
+                                      const statusBadge =
+                                        wd.status === 'VERIFIED' ? (
+                                          <StatusBadge variant="success">{c.wordStatusVerified}</StatusBadge>
+                                        ) : wd.status === 'NO_RECOGNIZED_FIELDS' ? (
+                                          <StatusBadge variant="warning">{c.wordStatusNoFields}</StatusBadge>
+                                        ) : wd.status === 'PENDING_SCAN' ? (
+                                          <StatusBadge variant="warning">{c.wordStatusPending}</StatusBadge>
+                                        ) : (
+                                          <StatusBadge variant="danger">{c.wordStatusFailed}</StatusBadge>
+                                        );
+                                      const matchingSourceFile = filesWorkspace.files.find(
+                                        (f) => f.id === wd.revisionFileId
+                                      );
+                                      const derivedName = matchingSourceFile
+                                        ? `${matchingSourceFile.originalName.replace(/\.docx$/i, '')}-governance-updated.docx`
+                                        : 'governance-updated.docx';
+
+                                      return (
+                                        <div key={wd.id} className="slot-stat-box">
+                                          <div className="card-header-row" style={{ marginBottom: 6 }}>
+                                            <div className="badge-wrap-list">
+                                              {statusBadge}
+                                              <StatusBadge variant="neutral">
+                                                {`${c.wordStrategyLabel}: ${wd.templateKindDetected}`}
+                                              </StatusBadge>
+                                              <StatusBadge variant="info">
+                                                {`${c.wordFieldsCountLabel}: ${wd.fieldsUpdatedCount}`}
+                                              </StatusBadge>
                                             </div>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
+                                            {wd.isPublishable && filesWorkspace.canDownloadFiles ? (
+                                              <Button
+                                                variant="primary"
+                                                size="sm"
+                                                disabled={submitting}
+                                                onClick={() => void handleDownloadWordDerivative(wd, derivedName)}
+                                              >
+                                                {c.wordDownloadDerivedBtn}
+                                              </Button>
+                                            ) : (
+                                              <StatusBadge variant="danger">{c.wordBlockedDownloadTag}</StatusBadge>
+                                            )}
+                                          </div>
+                                          <div style={{ fontSize: '0.84rem', display: 'grid', gap: 4 }}>
+                                            <div>
+                                              {c.wordSourceShaLabel}:{' '}
+                                              <code className="ltr-code">{wd.sourceSha256}</code>
+                                            </div>
+                                            {wd.derivedSha256 && (
+                                              <div>
+                                                {c.wordDerivedShaLabel}:{' '}
+                                                <code className="ltr-code">{wd.derivedSha256}</code>
+                                              </div>
+                                            )}
+                                            {wd.matchedFields.length > 0 && (
+                                              <div className="badge-wrap-list" style={{ marginTop: 4 }}>
+                                                {wd.matchedFields.map((mf, i) => (
+                                                  <StatusBadge key={`${mf.fieldKey}-${i}`} variant="neutral">
+                                                    {`${mf.fieldKey} (${mf.mechanism} · ${mf.location})`}
+                                                  </StatusBadge>
+                                                ))}
+                                              </div>
+                                            )}
+                                            {wd.validationErrors.length > 0 && (
+                                              <div style={{ color: 'var(--status-danger, #b42318)' }}>
+                                                {wd.validationErrors.join(' · ')}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
                             </>
@@ -1428,6 +3150,302 @@ export function IntegrationsPage({
 
               {activeTab === 'revisions' && (
                 <div>
+                  {canViewFilesGlobal && filesWorkspace && filesWorkspace.versions.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div className="card-header-row" style={{ marginBottom: 10 }}>
+                        <h3 className="card-title heading-font">{c.revisionsHistoryTitle}</h3>
+                        {filesWorkspace.canCreateWorkingCopy &&
+                          filesWorkspace.revisions.some((r) => r.status === 'APPROVED') &&
+                          !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() => openCreateWorkingCopy()}
+                            >
+                              {c.createWorkingCopyBtn}
+                            </Button>
+                          )}
+                      </div>
+                      <div className="table-scroll-container">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>{c.colRevNumber}</th>
+                              <th>{c.colRevStatus}</th>
+                              <th>{c.colRevLineage}</th>
+                              <th>{c.colRevFiles}</th>
+                              <th>{c.colActions}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filesWorkspace.revisions.map((rev) => (
+                              <tr key={rev.id}>
+                                <td>
+                                  <code className="ltr-code">{`#${rev.revisionNumber}`}</code>{' '}
+                                  {filesWorkspace.selectedRevision?.id === rev.id && (
+                                    <StatusBadge variant="info">{c.selectedRevisionTag}</StatusBadge>
+                                  )}
+                                </td>
+                                <td>
+                                  <div className="badge-wrap-list">
+                                    <StatusBadge
+                                      variant={
+                                        rev.status === 'APPROVED'
+                                          ? 'success'
+                                          : rev.status === 'DRAFT'
+                                            ? 'info'
+                                            : 'warning'
+                                      }
+                                    >
+                                      {rev.status}
+                                    </StatusBadge>
+                                    <StatusBadge
+                                      variant={
+                                        rev.status === 'DRAFT' || rev.status === 'RETURNED' ? 'neutral' : 'warning'
+                                      }
+                                    >
+                                      {rev.status === 'DRAFT' || rev.status === 'RETURNED'
+                                        ? c.editableDraftTag
+                                        : c.protectedTag}
+                                    </StatusBadge>
+                                  </div>
+                                </td>
+                                <td>
+                                  <code className="ltr-code">
+                                    {rev.baseRevisionId ? `Base:${rev.baseRevisionId.slice(0, 8)}` : 'Initial'}
+                                    {rev.changeRequestId ? ` · CR:${rev.changeRequestId.slice(0, 8)}` : ''}
+                                  </code>
+                                </td>
+                                <td>
+                                  <code className="ltr-code">
+                                    {rev.filesCount} / {rev.pendingScanCount}
+                                  </code>
+                                </td>
+                                <td>
+                                  <div className="button-row">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedWorkspaceRevisionId(rev.id);
+                                        setActiveTab('files');
+                                        if (details) {
+                                          void loadFilesWorkspaceTab(
+                                            details.summary.id,
+                                            selectedWorkspaceVersionId || undefined,
+                                            rev.id
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      {c.selectRevisionBtn}
+                                    </Button>
+                                    {(rev.status === 'DRAFT' || rev.status === 'RETURNED') &&
+                                      filesWorkspace.canSubmitRevision && (
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          disabled={submitting || rev.isReadyForSubmission === false}
+                                          onClick={() => promptSubmitRevision(rev.id, rev.revisionNumber)}
+                                        >
+                                          {c.submitRevisionBtn}
+                                        </Button>
+                                      )}
+                                    {rev.status === 'APPROVED' &&
+                                      filesWorkspace.canCreateWorkingCopy &&
+                                      !filesWorkspace.revisions.some((r) => r.status === 'DRAFT') && (
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() => openCreateWorkingCopy(rev.id)}
+                                        >
+                                          {c.createWorkingCopyBtn}
+                                        </Button>
+                                      )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {filesWorkspace.selectedRevision?.latestDecisionNotes &&
+                        (filesWorkspace.selectedRevision.status === 'RETURNED' ||
+                          filesWorkspace.selectedRevision.status === 'REJECTED') && (
+                          <div
+                            className="slot-stat-box"
+                            style={{
+                              marginTop: 14,
+                              borderInlineStart:
+                                filesWorkspace.selectedRevision.status === 'RETURNED'
+                                  ? '4px solid var(--brand-gold, #c68d28)'
+                                  : '4px solid var(--status-danger, #b42318)',
+                            }}
+                          >
+                            <div className="slot-stat-label">
+                              {filesWorkspace.selectedRevision.status === 'RETURNED'
+                                ? c.workflowReworkAlertTitle
+                                : c.workflowRejectedAlertTitle}
+                            </div>
+                            <div className="slot-stat-value" style={{ fontSize: '0.92rem' }}>
+                              {filesWorkspace.selectedRevision.latestDecisionNotes}
+                            </div>
+                            {filesWorkspace.selectedRevision.status === 'RETURNED' && (
+                              <p className="card-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                                {c.workflowReworkInstruction}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                      {canViewWorkflowsGlobal && selectedWorkflowRun && (
+                        <div style={{ marginTop: 18, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+                          <div className="card-header-row" style={{ marginBottom: 8 }}>
+                            <div>
+                              <h4 className="card-title heading-font">{c.workflowRunTitle}</h4>
+                              <p className="card-subtitle">{c.workflowSnapshotNote}</p>
+                            </div>
+                            <StatusBadge
+                              variant={
+                                selectedWorkflowRun.status === 'APPROVED'
+                                  ? 'success'
+                                  : selectedWorkflowRun.status === 'REJECTED'
+                                    ? 'danger'
+                                    : selectedWorkflowRun.status === 'RETURNED'
+                                      ? 'warning'
+                                      : 'info'
+                              }
+                            >
+                              {selectedWorkflowRun.status}
+                            </StatusBadge>
+                          </div>
+
+                          {workflowLoading ? (
+                            <LoadingState title={commonStrings.tableLoadingTitle} />
+                          ) : (
+                            <>
+                              <div className="table-scroll-container" style={{ marginBottom: 14 }}>
+                                <table className="data-table">
+                                  <thead>
+                                    <tr>
+                                      <th>{c.colStageOrder}</th>
+                                      <th>{c.colStageName}</th>
+                                      <th>{c.colStageRole}</th>
+                                      <th>{c.colRevStatus}</th>
+                                      <th>{c.colActions}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedWorkflowRun.stages.map((st) => (
+                                      <tr key={st.id}>
+                                        <td>
+                                          <code className="ltr-code">{st.position}</code>
+                                        </td>
+                                        <td>
+                                          <strong>{st.stageNameSnapshot}</strong>
+                                          {st.decision && (
+                                            <div className="muted-cell-text">
+                                              {`${st.decision.decision} · ${st.decision.actorUserName}${
+                                                st.decision.notes ? ` — ${st.decision.notes}` : ''
+                                              }`}
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td>{st.responsibleRoleName}</td>
+                                        <td>
+                                          <StatusBadge
+                                            variant={
+                                              st.status === 'APPROVED'
+                                                ? 'success'
+                                                : st.status === 'ACTIVE'
+                                                  ? 'info'
+                                                  : st.status === 'REJECTED'
+                                                    ? 'danger'
+                                                    : 'neutral'
+                                            }
+                                          >
+                                            {st.status === 'ACTIVE' ? c.workflowActiveStageTag : st.status}
+                                          </StatusBadge>
+                                        </td>
+                                        <td>
+                                          {st.status === 'ACTIVE' &&
+                                            selectedWorkflowRun.canCurrentUserDecideActiveStage &&
+                                            canDecideWorkflowsGlobal && (
+                                              <Button
+                                                variant="primary"
+                                                size="sm"
+                                                disabled={submitting}
+                                                onClick={() =>
+                                                  openDecideStage(
+                                                    selectedWorkflowRun.id,
+                                                    st,
+                                                    `${selectedWorkflowRun.derivedTitle} (#${selectedWorkflowRun.revisionNumber ?? ''})`,
+                                                    'details'
+                                                  )
+                                                }
+                                              >
+                                                {c.decideStageBtn}
+                                              </Button>
+                                            )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              <h4 className="card-title heading-font" style={{ marginBottom: 8 }}>
+                                {c.workflowHistoryTitle}
+                              </h4>
+                              {workflowHistory.length === 0 ? (
+                                <p className="card-subtitle">{c.workflowHistoryEmpty}</p>
+                              ) : (
+                                <div className="table-scroll-container">
+                                  <table className="data-table">
+                                    <thead>
+                                      <tr>
+                                        <th>{c.colStageOrder}</th>
+                                        <th>{c.colStageName}</th>
+                                        <th>{c.colAuditActor}</th>
+                                        <th>{c.colAuditRes}</th>
+                                        <th>{c.colAuditTime}</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {workflowHistory.map((h) => (
+                                        <tr key={h.decision.id}>
+                                          <td>
+                                            <code className="ltr-code">{h.stagePosition}</code>
+                                          </td>
+                                          <td>{`${h.stageNameSnapshot} (${h.responsibleRoleName})`}</td>
+                                          <td>{h.decision.actorUserName}</td>
+                                          <td>
+                                            <strong>{h.decision.decision}</strong>
+                                            {h.decision.notes && (
+                                              <div className="muted-cell-text">{h.decision.notes}</div>
+                                            )}
+                                          </td>
+                                          <td>
+                                            <code className="ltr-code">
+                                              {new Date(h.decision.decidedAt).toISOString().replace('T', ' ').slice(0, 19)}
+                                            </code>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <p className="card-subtitle" style={{ marginBottom: 10 }}>
                     {c.revisionsTabDesc}
                   </p>
@@ -1494,46 +3512,49 @@ export function IntegrationsPage({
                       ) : !versionsData || versionsData.versions.length === 0 ? (
                         <p className="card-subtitle">{c.emptyVersions}</p>
                       ) : (
-                        <div className="table-scroll-container">
-                          <table className="data-table">
-                            <thead>
-                              <tr>
-                                <th>{c.colVerLabel}</th>
-                                <th>{c.colVerCreated}</th>
-                                <th>{c.colVerRevCount}</th>
-                                <th>{c.colVerLatestRev}</th>
-                                <th>{c.colActions}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {versionsData.versions.map((ver) => (
-                                <tr key={ver.id}>
-                                  <td>
+                        <div className="grid-2">
+                          {versionsData.versions.map((ver) => (
+                            <div key={ver.id} className="version-card">
+                              <div className="version-head">
+                                <div>
+                                  <div className="version-num">
                                     <code className="ltr-code">{ver.versionLabel}</code>
-                                  </td>
-                                  <td>
-                                    <code className="ltr-code">{new Date(ver.createdAt).toISOString()}</code>
-                                  </td>
-                                  <td>
+                                  </div>
+                                  <div className="panel-desc">
+                                    {`${c.colVerRevCount}: `}
                                     <code className="ltr-code">{ver.revisionsCount}</code>
-                                  </td>
-                                  <td>{ver.latestRevisionStatus ?? '—'}</td>
-                                  <td>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setSelectedWorkspaceVersionId(ver.id);
-                                        setActiveTab('files');
-                                      }}
-                                    >
-                                      {c.openFilesForVersionBtn}
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                    {' · '}
+                                    <code className="ltr-code">{new Date(ver.createdAt).toISOString().slice(0, 10)}</code>
+                                  </div>
+                                </div>
+                                <StatusBadge
+                                  variant={
+                                    ver.latestRevisionStatus === 'APPROVED'
+                                      ? 'success'
+                                      : ver.latestRevisionStatus === 'DRAFT'
+                                        ? 'info'
+                                        : 'neutral'
+                                  }
+                                >
+                                  {ver.latestRevisionStatus ?? '—'}
+                                </StatusBadge>
+                              </div>
+                              <div className="divider" />
+                              <div className="row between wrap">
+                                <span className="tag">{details.summary.apiGroupName}</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedWorkspaceVersionId(ver.id);
+                                    setActiveTab('files');
+                                  }}
+                                >
+                                  {c.openFilesForVersionBtn}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </>
@@ -1545,6 +3566,99 @@ export function IntegrationsPage({
 
               {activeTab === 'changes' && (
                 <div>
+                  {canViewChangesGlobal && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div className="card-header-row" style={{ marginBottom: 10 }}>
+                        <h3 className="card-title heading-font">{c.crWorkspaceTitle}</h3>
+                        {changesWorkspace?.canCreate && changesWorkspace.eligibleRevisions.length > 0 && (
+                          <Button variant="primary" size="sm" disabled={submitting} onClick={openCreateChangeRequest}>
+                            {c.crCreateBtn}
+                          </Button>
+                        )}
+                      </div>
+
+                      {changesLoading ? (
+                        <LoadingState title={commonStrings.tableLoadingTitle} />
+                      ) : !changesWorkspace ? null : (
+                        <>
+                          {changesWorkspace.eligibleRevisions.length === 0 && changesWorkspace.items.length === 0 && (
+                            <p className="card-subtitle" style={{ marginBottom: 8 }}>
+                              {c.crNoEligibleNotice}
+                            </p>
+                          )}
+                           {changesWorkspace.items.length === 0 ? (
+                            <p className="card-subtitle">{c.crEmptyList}</p>
+                          ) : (
+                            <div className="stack">
+                              {changesWorkspace.items.map((cr) => (
+                                <div key={cr.id} className="change-card">
+                                  <div className="row between wrap">
+                                    <div>
+                                      <div className="row wrap">
+                                        <span className="tag">{cr.changeTypeName}</span>
+                                        <StatusBadge
+                                          variant={
+                                            cr.status === 'APPROVED'
+                                              ? 'success'
+                                              : cr.status === 'REJECTED'
+                                                ? 'danger'
+                                                : cr.status === 'RETURNED'
+                                                  ? 'warning'
+                                                  : 'info'
+                                          }
+                                        >
+                                          {cr.status}
+                                        </StatusBadge>
+                                        <span className="tag">{cr.approvalRouteName}</span>
+                                      </div>
+                                      <div className="item-title" style={{ marginTop: 6 }}>
+                                        <strong>{cr.reason}</strong>
+                                      </div>
+                                      <div className="badge-wrap-list" style={{ marginTop: 6 }}>
+                                        {cr.affectedFiles.map((af) => (
+                                          <StatusBadge key={af.revisionFileId} variant="neutral">
+                                            {af.originalName}
+                                          </StatusBadge>
+                                        ))}
+                                      </div>
+                                      {cr.latestDecisionNotes && (
+                                        <div className="item-sub" style={{ marginTop: 4 }}>
+                                          {cr.latestDecisionNotes}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="button-row">
+                                      {cr.isEditable && changesWorkspace.canEdit && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() => openEditChangeRequest(cr)}
+                                        >
+                                          {c.crEditBtn}
+                                        </Button>
+                                      )}
+                                      {cr.isEditable && changesWorkspace.canSubmit && (
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() => void handleSubmitChangeRequest(cr.id)}
+                                        >
+                                          {c.crSubmitBtn}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <p className="card-subtitle" style={{ marginBottom: 10 }}>
                     {c.changesTabDesc}
                   </p>
@@ -1569,6 +3683,154 @@ export function IntegrationsPage({
                         </tbody>
                       </table>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'publishing' && (
+                <div>
+                  {publishingLoading ? (
+                    <LoadingState title={commonStrings.tableLoadingTitle} />
+                  ) : (
+                    <>
+                      {/* P03: Single Active Consumer Version Usage */}
+                      {consumerVersionData && (
+                        <div className="surface-card" style={{ marginBottom: 18, borderStyle: 'dashed' }}>
+                          <div className="card-header-row" style={{ marginBottom: 10 }}>
+                            <div>
+                              <h3 className="card-title heading-font">{c.consumerVersionTitle}</h3>
+                              <p className="card-subtitle">
+                                {c.consumerVersionCurrentLabel}:{' '}
+                                {consumerVersionData.activeUsage ? (
+                                  <StatusBadge variant="success">
+                                    {consumerVersionData.activeUsage.versionLabel}
+                                  </StatusBadge>
+                                ) : (
+                                  <span>{c.consumerVersionUnset}</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          {consumerVersionData.canManage && publicationsData && (
+                            <div className="form-grid-2" style={{ alignItems: 'end' }}>
+                              <FormField
+                                id="consumer-active-version-select"
+                                label={c.consumerVersionSelectLabel}
+                              >
+                                <SelectInput
+                                  id="consumer-active-version-select"
+                                  value={selectedConsumerVerId}
+                                  onChange={(e) => setSelectedConsumerVerId(e.target.value)}
+                                  options={Array.from(
+                                    new Map(
+                                      publicationsData.publications
+                                        .filter((p) => p.state === 'PUBLISHED')
+                                        .map((p) => [p.apiVersionId, p.versionLabel])
+                                    ).entries()
+                                  ).map(([id, label]) => ({ value: id, label }))}
+                                />
+                              </FormField>
+                              <div>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={submitting || !selectedConsumerVerId}
+                                  onClick={() => void handleSaveConsumerVersion()}
+                                >
+                                  {c.consumerVersionSaveBtn}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* P01-P02: Selective Publications & Withdrawal */}
+                      <div className="card-header-row" style={{ marginBottom: 10 }}>
+                        <h3 className="card-title heading-font">{c.publishingWorkspaceTitle}</h3>
+                        {publicationsData?.canCreatePublication && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={submitting}
+                            onClick={() => void openPublishRevisionForm()}
+                          >
+                            {c.publishRevisionBtn}
+                          </Button>
+                        )}
+                      </div>
+
+                      {!publicationsData || publicationsData.publications.length === 0 ? (
+                        <p className="card-subtitle">{c.emptyPublications}</p>
+                      ) : (
+                        <div className="table-scroll-container">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>{c.colPubVersion}</th>
+                                <th>{c.colPubState}</th>
+                                <th>{c.colPubFiles}</th>
+                                <th>{c.colPubActorDate}</th>
+                                <th>{c.colActions}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {publicationsData.publications.map((pub) => (
+                                <tr key={pub.id}>
+                                  <td>
+                                    <code className="ltr-code">{pub.versionLabel}</code> · Rev #
+                                    <code className="ltr-code">{pub.revisionNumber}</code>
+                                  </td>
+                                  <td>
+                                    <StatusBadge
+                                      variant={pub.state === 'PUBLISHED' ? 'success' : 'warning'}
+                                    >
+                                      {pub.state}
+                                    </StatusBadge>
+                                  </td>
+                                  <td>
+                                    <div className="badge-wrap-list">
+                                      {pub.files.map((f) => (
+                                        <StatusBadge key={f.id} variant="neutral">
+                                          {f.originalName}
+                                        </StatusBadge>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div>{pub.publishedByName}</div>
+                                    <div>
+                                      <code className="ltr-code">
+                                        {new Date(pub.publishedAt).toISOString()}
+                                      </code>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    {publicationsData.canWithdrawPublication &&
+                                      pub.state === 'PUBLISHED' && (
+                                        <Button
+                                          variant="danger"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() =>
+                                            handleRequestWithdrawPublication(
+                                              pub.id,
+                                              pub.versionLabel,
+                                              pub.revisionNumber
+                                            )
+                                          }
+                                        >
+                                          {c.withdrawBtn}
+                                        </Button>
+                                      )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1614,9 +3876,10 @@ export function IntegrationsPage({
                   )}
                 </div>
               )}
+              </section>
             </>
           )}
-        </section>
+        </div>
       ) : mode === 'create' ? (
         <StandaloneFormPage
           modeBadgeLabel={c.createBadge}
@@ -1697,12 +3960,28 @@ export function IntegrationsPage({
           </div>
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
+        <>
+          <div className="page-actions">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={c.notificationsBtn}
+              disabled={submitting}
+              onClick={openNotificationsCenter}
+            >
+              {lang === 'ar' ? 'الإشعارات الداخلية' : 'Notifications'}
+            </Button>
+            {canViewWorkflowsGlobal && (
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={c.workflowInboxBtn}
+                disabled={submitting}
+                onClick={openWorkflowInbox}
+              >
+                {lang === 'ar' ? 'صندوق المراجعات بانتظار قراري' : 'Pending Approvals Inbox'}
+              </Button>
+            )}
             {canCreateGlobal && (
               <Button variant="primary" disabled={submitting} onClick={openCreate}>
                 {c.addBtn}
@@ -1710,57 +3989,118 @@ export function IntegrationsPage({
             )}
           </div>
 
-          <SearchFilterBar
-            searchValue={searchQuery}
-            searchPlaceholder={c.searchPlaceholder}
-            searchAriaLabel={c.searchAria}
-            onSearchChange={(val) => {
-              setSearchQuery(val);
-              setPage(1);
-            }}
-            filterValue={scopeFilter}
-            filterAriaLabel={c.scopeFilterAria}
-            filterPlaceholder={c.scopeAll}
-            filterOptions={[{ value: 'assigned', label: c.scopeAssigned }]}
-            onFilterChange={(val) => {
-              setScopeFilter(val);
-              setPage(1);
-            }}
-          />
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">
+                  {lang === 'ar' ? 'قائمة التكاملات' : 'Integration List'}
+                </h2>
+                <span className="sr-only">{c.pageTitle}</span>
+              </div>
+            </div>
 
-          {errorMsg ? (
-            <ErrorState
-              title={commonStrings.tableErrorTitle}
-              message={errorMsg}
-              retryLabel={commonStrings.tableRetryBtn}
-              onRetry={() => void loadIntegrations()}
+            <SearchFilterBar
+              searchValue={searchQuery}
+              searchPlaceholder={c.searchPlaceholder}
+              searchAriaLabel={c.searchAria}
+              onSearchChange={(val) => {
+                setSearchQuery(val);
+                setPage(1);
+              }}
+              filterValue={scopeFilter}
+              filterAriaLabel={c.scopeFilterAria}
+              filterPlaceholder={c.scopeAll}
+              filterOptions={[{ value: 'assigned', label: c.scopeAssigned }]}
+              onFilterChange={(val) => {
+                setScopeFilter(val);
+                setPage(1);
+              }}
             />
-          ) : (
-            <>
-              <DataTable<IntegrationItem>
-                columns={columns}
-                rows={items}
-                getRowKey={(row) => row.id}
-                isLoading={loading}
-                loadingTitle={c.loadingText}
-                emptyTitle={commonStrings.tableEmptyTitle}
-                emptyDescription={commonStrings.tableEmptyDesc}
-              />
 
-              {totalCount > 0 && (
-                <PaginationBar
-                  currentPage={page}
-                  totalPages={totalPages}
-                  totalItems={totalCount}
-                  pageLabel={`${c.pageWord} ${page} ${c.ofWord} ${totalPages}`}
-                  previousLabel={commonStrings.paginationPrev}
-                  nextLabel={commonStrings.paginationNext}
-                  onPageChange={setPage}
-                />
-              )}
-            </>
-          )}
-        </section>
+            {errorMsg ? (
+              <ErrorState
+                title={commonStrings.tableErrorTitle}
+                message={errorMsg}
+                retryLabel={commonStrings.tableRetryBtn}
+                onRetry={() => void loadIntegrations()}
+              />
+            ) : loading ? (
+              <LoadingState title={c.loadingText} />
+            ) : items.length === 0 ? (
+              <div className="empty-state-box empty" role="status">
+                <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
+                <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
+              </div>
+            ) : (
+              <>
+                <div className="stack" style={{ marginTop: 14 }}>
+                  {items.map((row) => {
+                    const st = formatStateBadge(row.documentState);
+                    const myDocPerms = new Set(row.myDocumentPermissions ?? []);
+                    const devsText =
+                      (row.assignedDevelopers ?? []).length === 0
+                        ? c.noDevsLabel
+                        : (row.assignedDevelopers ?? []).map((dev) => dev.fullName).join('، ');
+                    return (
+                      <div key={row.id} className="item-card">
+                        <div>
+                          <div className="row wrap" style={{ marginBottom: 7 }}>
+                            <code className="tag ltr-code">{row.referenceCode}</code>
+                            <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
+                          </div>
+                          <div className="item-title">
+                            <strong>{row.derivedTitle}</strong>
+                          </div>
+                          <div className="item-sub">
+                            {row.apiGroupName} ·{' '}
+                            <code className="ltr-code">{row.versionsCount}</code>{' '}
+                            {lang === 'ar' ? 'إصدار' : 'versions'}
+                          </div>
+                          <div className="item-sub">
+                            <b>{lang === 'ar' ? 'المطورون المسؤولون:' : 'Responsible Developers:'}</b>{' '}
+                            {devsText}
+                          </div>
+                        </div>
+                        <div className="row wrap button-row">
+                          <Button
+                            variant="secondary"
+                            aria-label={c.detailsBtn}
+                            onClick={() => void openDetails(row.id)}
+                          >
+                            <span>{lang === 'ar' ? 'عرض التكامل' : 'Open Integration'}</span>
+                            <ReferenceIcon name="left" size={14} />
+                          </Button>
+                          {canAssignGlobal && myDocPerms.has('doc.assign') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label={c.assignDevsBtn}
+                              onClick={() => void openAssignDevelopers(row)}
+                            >
+                              {lang === 'ar' ? 'تعيين المطورين' : 'Manage Developers'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {totalCount > 0 && (
+                  <PaginationBar
+                    currentPage={page}
+                    totalPages={totalPages}
+                    totalItems={totalCount}
+                    pageLabel={`${c.pageWord} ${page} ${c.ofWord} ${totalPages}`}
+                    previousLabel={commonStrings.paginationPrev}
+                    nextLabel={commonStrings.paginationNext}
+                    onPageChange={setPage}
+                  />
+                )}
+              </>
+            )}
+          </section>
+        </>
       )}
 
       <CentralModalDialog

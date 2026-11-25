@@ -1,5 +1,7 @@
+using System.Text.Json;
 using ApiGovernance.Modules.VersionsFiles.Configuration;
 using ApiGovernance.Modules.VersionsFiles.Contracts;
+using ApiGovernance.Modules.VersionsFiles.OpenXml;
 using ApiGovernance.Modules.VersionsFiles.Scanning;
 using ApiGovernance.Modules.VersionsFiles.Services;
 using ApiGovernance.Modules.VersionsFiles.Storage;
@@ -18,11 +20,15 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ApiGovernance.Modules.VersionsFiles;
 
 /// <summary>
-/// Module 6: Versions &amp; Files (Sprint S08 Tasks V01–V04: Private immutable file store,
-/// upload validation &amp; quarantine, fail-closed security scanning, manual free-text API versions).
+/// Module 6: Versions &amp; Files
+/// - Sprint S08 (V01–V04): Private immutable file store, upload validation &amp; quarantine, fail-closed security scanning, manual free-text API versions.
+/// - Sprint S09 (V05–V08): Documentation package revisions &amp; mandatory file validation, approved-revision immutability &amp; working copies (OP-05),
+///   audited SHA-256 verified downloads, and Open XML SDK Word governance derivative PoC (OP-03).
 /// </summary>
 public sealed class VersionsFilesModule : IBackendModule
 {
+    private static readonly JsonSerializerOptions BodyJsonOpts = new(JsonSerializerDefaults.Web);
+
     public ModuleDescriptor Descriptor { get; } = new(
         Code: "VersionsFiles",
         Name: "API Versions, Revisions & Immutable Files",
@@ -34,8 +40,11 @@ public sealed class VersionsFilesModule : IBackendModule
         services.Configure<FileScanningOptions>(configuration.GetSection(FileScanningOptions.SectionName));
 
         services.AddSingleton<IPrivateFileStore, LocalPrivateFileStore>();
+        services.AddSingleton<IPublishedObjectReadAccessor>(
+            sp => (LocalPrivateFileStore)sp.GetRequiredService<IPrivateFileStore>());
         services.AddSingleton<IFileSecurityScanner, ConfiguredFileSecurityScanner>();
         services.AddSingleton<FileUploadContentValidator>();
+        services.AddSingleton<IWordGovernanceDerivativeService, OpenXmlWordGovernanceDerivativeService>();
         services.AddScoped<IVersionsFilesService, VersionsFilesService>();
     }
 
@@ -43,7 +52,7 @@ public sealed class VersionsFilesModule : IBackendModule
     {
         // 1. Integration API Versions (V04)
         var integrationGroup = endpoints.MapGroup("/integrations")
-            .WithTags("API Versions & Files Workspace (V01-V04)")
+            .WithTags("API Versions & Files Workspace (V01-V08)")
             .RequireAuthorization();
 
         integrationGroup.MapGet("/{integrationId:guid}/versions", async (
@@ -93,10 +102,24 @@ public sealed class VersionsFilesModule : IBackendModule
             .WithName("GetIntegrationFilesWorkspace")
             .Produces<IntegrationFilesWorkspaceResponse>(StatusCodes.Status200OK);
 
-        // 2. Initial Draft Package Revision under an API Version (for UI-10 upload staging)
+        // 2. Documentation Package Revisions & Working Copies (V05-V06)
         var versionGroup = endpoints.MapGroup("/versions")
-            .WithTags("Document Revisions (V04-V05)")
+            .WithTags("Document Revisions (V04-V06)")
             .RequireAuthorization();
+
+        versionGroup.MapGet("/{versionId:guid}/revisions", async (
+                Guid versionId,
+                HttpContext httpContext,
+                IVersionsFilesService service,
+                CancellationToken cancellationToken) =>
+            {
+                var revisions = await service.GetVersionRevisionsAsync(
+                    httpContext.User, versionId, httpContext.TraceIdentifier, cancellationToken);
+                return Results.Ok(revisions);
+            })
+            .RequireGeneralPermission("revisions.view", "REVISION_LIST_DENIED", "DOCUMENT_REVISION")
+            .WithName("ListVersionRevisions")
+            .Produces<IReadOnlyList<DocumentRevisionDto>>(StatusCodes.Status200OK);
 
         versionGroup.MapPost("/{versionId:guid}/revisions", async (
                 Guid versionId,
@@ -104,8 +127,30 @@ public sealed class VersionsFilesModule : IBackendModule
                 IVersionsFilesService service,
                 CancellationToken cancellationToken) =>
             {
-                var created = await service.CreateInitialDraftRevisionAsync(
-                    httpContext.User, versionId, httpContext.TraceIdentifier, cancellationToken);
+                CreateDocumentRevisionRequest? req = null;
+                if (httpContext.Request.ContentLength is > 0 ||
+                    (httpContext.Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) ?? false))
+                {
+                    httpContext.Request.EnableBuffering();
+                    using var reader = new StreamReader(httpContext.Request.Body, leaveOpen: true);
+                    var raw = await reader.ReadToEndAsync(cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(raw))
+                    {
+                        try
+                        {
+                            req = JsonSerializer.Deserialize<CreateDocumentRevisionRequest>(raw, BodyJsonOpts);
+                        }
+                        catch (JsonException)
+                        {
+                            throw ApiContractException.BadRequest(
+                                messageAr: "صيغة طلب إنشاء المراجعة غير صالحة.",
+                                messageEn: "Invalid JSON payload for creating a document revision.");
+                        }
+                    }
+                }
+
+                var created = await service.CreateRevisionAsync(
+                    httpContext.User, versionId, req, httpContext.TraceIdentifier, cancellationToken);
                 return Results.Created($"/api/v1/revisions/{created.Id}", created);
             })
             .WithCsrfValidation()
@@ -113,12 +158,41 @@ public sealed class VersionsFilesModule : IBackendModule
             .WithName("CreateDraftDocumentRevision")
             .Produces<DocumentRevisionDto>(StatusCodes.Status201Created);
 
-        // 3. Revision Files: List, Validated Upload + Quarantine, Re-scan, Delete Draft, Guarded Download (V01-V03)
-        var revisionFilesGroup = endpoints.MapGroup("/revisions")
-            .WithTags("Revision Files & Security Scanning (V01-V03)")
+        // 3. Revision Details, Submission, Files, Verified Download & Word Derivatives (V01-V08)
+        var revisionGroup = endpoints.MapGroup("/revisions")
+            .WithTags("Revision Files, Scanning, Downloads & Word PoC (V01-V08)")
             .RequireAuthorization();
 
-        revisionFilesGroup.MapGet("/{revisionId:guid}/files", async (
+        revisionGroup.MapGet("/{revisionId:guid}", async (
+                Guid revisionId,
+                HttpContext httpContext,
+                IVersionsFilesService service,
+                CancellationToken cancellationToken) =>
+            {
+                var details = await service.GetRevisionDetailsAsync(
+                    httpContext.User, revisionId, httpContext.TraceIdentifier, cancellationToken);
+                return Results.Ok(details);
+            })
+            .RequireGeneralPermission("revisions.view", "REVISION_DETAILS_DENIED", "DOCUMENT_REVISION")
+            .WithName("GetRevisionDetails")
+            .Produces<RevisionDetailsResponse>(StatusCodes.Status200OK);
+
+        revisionGroup.MapPost("/{revisionId:guid}/submit", async (
+                Guid revisionId,
+                HttpContext httpContext,
+                IVersionsFilesService service,
+                CancellationToken cancellationToken) =>
+            {
+                var submitted = await service.SubmitRevisionAsync(
+                    httpContext.User, revisionId, httpContext.TraceIdentifier, cancellationToken);
+                return Results.Ok(submitted);
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("revisions.submit", "REVISION_SUBMIT_DENIED", "DOCUMENT_REVISION")
+            .WithName("SubmitDocumentRevision")
+            .Produces<SubmitRevisionResponse>(StatusCodes.Status200OK);
+
+        revisionGroup.MapGet("/{revisionId:guid}/files", async (
                 Guid revisionId,
                 HttpContext httpContext,
                 IVersionsFilesService service,
@@ -132,7 +206,7 @@ public sealed class VersionsFilesModule : IBackendModule
             .WithName("ListRevisionFiles")
             .Produces<IReadOnlyList<RevisionFileDto>>(StatusCodes.Status200OK);
 
-        revisionFilesGroup.MapPost("/{revisionId:guid}/files", async (
+        revisionGroup.MapPost("/{revisionId:guid}/files", async (
                 Guid revisionId,
                 HttpContext httpContext,
                 IVersionsFilesService service,
@@ -180,7 +254,7 @@ public sealed class VersionsFilesModule : IBackendModule
             .Produces<RevisionFileDto>(StatusCodes.Status201Created)
             .Produces<RevisionFileDto>(StatusCodes.Status202Accepted);
 
-        revisionFilesGroup.MapPost("/{revisionId:guid}/files/{fileId:guid}/rescan", async (
+        revisionGroup.MapPost("/{revisionId:guid}/files/{fileId:guid}/rescan", async (
                 Guid revisionId,
                 Guid fileId,
                 HttpContext httpContext,
@@ -200,7 +274,7 @@ public sealed class VersionsFilesModule : IBackendModule
             .Produces<RevisionFileDto>(StatusCodes.Status200OK)
             .Produces<RevisionFileDto>(StatusCodes.Status202Accepted);
 
-        revisionFilesGroup.MapDelete("/{revisionId:guid}/files/{fileId:guid}", async (
+        revisionGroup.MapDelete("/{revisionId:guid}/files/{fileId:guid}", async (
                 Guid revisionId,
                 Guid fileId,
                 HttpContext httpContext,
@@ -215,22 +289,70 @@ public sealed class VersionsFilesModule : IBackendModule
             .WithName("DeleteDraftRevisionFile")
             .Produces(StatusCodes.Status204NoContent);
 
-        revisionFilesGroup.MapGet("/{revisionId:guid}/files/{fileId:guid}/download", async (
+        revisionGroup.MapGet("/{revisionId:guid}/files/{fileId:guid}/download", async (
                 Guid revisionId,
                 Guid fileId,
                 HttpContext httpContext,
                 IVersionsFilesService service,
                 CancellationToken cancellationToken) =>
             {
-                var (stream, fileName, contentType, _, _) = await service.DownloadCleanRevisionFileAsync(
+                var (stream, fileName, contentType, _, sha256) = await service.DownloadCleanRevisionFileAsync(
                     httpContext.User, revisionId, fileId, cancellationToken);
 
-                httpContext.Response.Headers.XContentTypeOptions = "nosniff";
-                httpContext.Response.Headers.CacheControl = "no-store, no-cache";
+                ApplyDownloadSecurityHeaders(httpContext.Response, sha256);
                 return Results.File(stream, contentType, fileDownloadName: fileName, enableRangeProcessing: false);
             })
             .RequireGeneralPermission("files.download", "REVISION_FILE_DOWNLOAD_DENIED", "REVISION_FILE")
             .WithName("DownloadCleanRevisionFile");
+
+        // 4. Word Governance Derivative PoC (V08 / OP-03)
+        revisionGroup.MapPost("/{revisionId:guid}/files/{fileId:guid}/word-derivative", async (
+                Guid revisionId,
+                Guid fileId,
+                HttpContext httpContext,
+                IVersionsFilesService service,
+                CancellationToken cancellationToken) =>
+            {
+                var report = await service.GenerateWordDerivativeAsync(
+                    httpContext.User, revisionId, fileId, httpContext.TraceIdentifier, cancellationToken);
+                return Results.Ok(report);
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("files.upload", "WORD_DERIVATIVE_GENERATE_DENIED", "REVISION_FILE")
+            .WithName("GenerateWordGovernanceDerivative")
+            .Produces<WordDerivativeRecordDto>(StatusCodes.Status200OK);
+
+        revisionGroup.MapGet("/{revisionId:guid}/files/{fileId:guid}/word-derivative", async (
+                Guid revisionId,
+                Guid fileId,
+                HttpContext httpContext,
+                IVersionsFilesService service,
+                CancellationToken cancellationToken) =>
+            {
+                var report = await service.GetLatestWordDerivativeAsync(
+                    httpContext.User, revisionId, fileId, httpContext.TraceIdentifier, cancellationToken);
+                return report is null ? Results.NoContent() : Results.Ok(report);
+            })
+            .RequireGeneralPermission("files.view", "WORD_DERIVATIVE_READ_DENIED", "REVISION_FILE")
+            .WithName("GetWordGovernanceDerivativeReport")
+            .Produces<WordDerivativeRecordDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status204NoContent);
+
+        revisionGroup.MapGet("/{revisionId:guid}/files/{fileId:guid}/word-derivative/download", async (
+                Guid revisionId,
+                Guid fileId,
+                HttpContext httpContext,
+                IVersionsFilesService service,
+                CancellationToken cancellationToken) =>
+            {
+                var (stream, fileName, contentType, _, sha256) = await service.DownloadVerifiedWordDerivativeAsync(
+                    httpContext.User, revisionId, fileId, cancellationToken);
+
+                ApplyDownloadSecurityHeaders(httpContext.Response, sha256);
+                return Results.File(stream, contentType, fileDownloadName: fileName, enableRangeProcessing: false);
+            })
+            .RequireGeneralPermission("files.download", "WORD_DERIVATIVE_DOWNLOAD_DENIED", "REVISION_FILE")
+            .WithName("DownloadVerifiedWordDerivative");
 
         endpoints.MapGroup("/files")
             .WithTags("File Scan Status (V03)")
@@ -248,5 +370,14 @@ public sealed class VersionsFilesModule : IBackendModule
             .RequireGeneralPermission("files.view", "FILE_SCAN_STATUS_DENIED", "REVISION_FILE")
             .WithName("GetFileScanStatus")
             .Produces<FileScanStatusDto>(StatusCodes.Status200OK);
+    }
+
+    private static void ApplyDownloadSecurityHeaders(HttpResponse response, string sha256)
+    {
+        response.Headers.XContentTypeOptions = "nosniff";
+        response.Headers.CacheControl = "no-store, no-cache";
+        response.Headers.ContentSecurityPolicy = "sandbox";
+        response.Headers.ETag = $"\"{sha256}\"";
+        response.Headers["X-File-Sha256"] = sha256;
     }
 }

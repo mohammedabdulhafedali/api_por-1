@@ -469,11 +469,11 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card">
-          <div className="button-row" style={{ marginBottom: 14, gap: 8 }}>
-            <Button
-              variant={tab === 'internal' ? 'primary' : 'outline'}
-              size="sm"
+        <section className="surface-card panel">
+          <div className="tabs">
+            <button
+              type="button"
+              className={`tab ${tab === 'internal' ? 'active' : ''}`}
               onClick={() => {
                 setTab('internal');
                 setPage(1);
@@ -481,10 +481,10 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
               }}
             >
               {copy.tabInternal}
-            </Button>
-            <Button
-              variant={tab === 'external' ? 'primary' : 'outline'}
-              size="sm"
+            </button>
+            <button
+              type="button"
+              className={`tab ${tab === 'external' ? 'active' : ''}`}
               onClick={() => {
                 setTab('external');
                 setPage(1);
@@ -492,8 +492,13 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
               }}
             >
               {copy.tabExternal}
-            </Button>
+            </button>
           </div>
+          {tab === 'internal' && (
+            <div className="info-box" style={{ marginBottom: 14 }}>
+              {copy.internalDesc}
+            </div>
+          )}
 
           <div className="card-header-row">
             <div>

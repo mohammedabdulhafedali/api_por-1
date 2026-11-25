@@ -386,14 +386,14 @@ export function UserPermissionsMatrixPage({
             )}
           </div>
 
-          <div className="matrix-scroll-container">
-            <table className="selection-matrix">
+          <div className="permission-matrix-scroll matrix-scroll-container">
+            <table className="permission-matrix selection-matrix">
               <thead>
                 <tr>
-                  <th className="matrix-sticky-col matrix-corner-header">{copy.screenColHeader}</th>
+                  <th className="perm-screen matrix-sticky-col matrix-corner-header">{copy.screenColHeader}</th>
                   {matrix.columns.map((col) => (
                     <th key={col.id} className="matrix-col-header">
-                      <span className="matrix-col-title">
+                      <span className="col-title matrix-col-title">
                         {lang === 'ar' ? col.labelAr : col.labelEn}
                       </span>
                     </th>
@@ -403,10 +403,10 @@ export function UserPermissionsMatrixPage({
               <tbody>
                 {groups.map((group) => (
                   <Fragment key={group.groupId}>
-                    <tr className="matrix-group-row">
+                    <tr className="perm-group matrix-group-row">
                       <td colSpan={matrix.columns.length + 1}>
                         <div className="matrix-group-bar">
-                          <span className="heading-font">{group.groupLabel}</span>
+                          <span className="section-name heading-font">{group.groupLabel}</span>
                         </div>
                       </td>
                     </tr>
@@ -414,11 +414,11 @@ export function UserPermissionsMatrixPage({
                       const screenTitle = lang === 'ar' ? screenRow.titleAr : screenRow.titleEn;
                       return (
                         <tr key={screenRow.id}>
-                          <td className="matrix-sticky-col matrix-row-header">
-                            <div className="matrix-header-row-between" style={{ gap: 8 }}>
-                              <div>
-                                <div className="matrix-row-title">{screenTitle}</div>
-                                <span className="matrix-row-path ltr-code">
+                          <td className="perm-screen matrix-sticky-col matrix-row-header">
+                            <div className="all-row-toggle matrix-header-row-between" style={{ gap: 8 }}>
+                              <div className="row-title">
+                                <b className="matrix-row-title">{screenTitle}</b>
+                                <span className="perm-path matrix-row-path ltr-code">
                                   {screenRow.technicalPath}
                                 </span>
                               </div>
@@ -437,7 +437,7 @@ export function UserPermissionsMatrixPage({
                             const entry = entryByCell.get(`${screenRow.id}::${col.id}`);
                             if (!entry) {
                               return (
-                                <td key={col.id} className="matrix-cell-na" aria-disabled="true">
+                                <td key={col.id} className="not-applicable matrix-cell-na" aria-disabled="true">
                                   —
                                 </td>
                               );
@@ -467,7 +467,7 @@ export function UserPermissionsMatrixPage({
                             return (
                               <td
                                 key={col.id}
-                                className="matrix-cell"
+                                className={`matrix-cell ${state !== 'INHERIT' ? 'perm-override' : 'perm-inherited'}`}
                                 style={{ minWidth: 145, padding: '8px 6px' }}
                               >
                                 <div

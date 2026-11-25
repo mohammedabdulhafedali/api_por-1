@@ -6,7 +6,7 @@ import {
   loginWithLocalIdentity,
 } from '../../api/authApi';
 import { AppLanguage, AppTheme, UI_STRINGS } from '../../constants/uiBaseline';
-import { Button, CentralModalDialog, FormField, TextInput } from '../ui';
+import { Button, CentralModalDialog, FormField, ReferenceIcon, TextInput } from '../ui';
 
 type AuthScreenMode = 'login' | 'activate-reset';
 
@@ -242,7 +242,7 @@ export function LoginPage({
       <header className="auth-topbar">
         <div className="brand-header" style={{ borderBottom: 'none', marginBottom: 0, padding: 0 }}>
           <div className="brand-mark" aria-hidden="true">
-            AG
+            <ReferenceIcon name="network" size={22} />
           </div>
           <div>
             <div className="brand-title heading-font">{t.brandTitle}</div>
@@ -284,10 +284,15 @@ export function LoginPage({
 
       <main className="auth-card-container">
         <section className="auth-card" aria-labelledby="ui24-auth-heading">
-          <h1 id="ui24-auth-heading" className="auth-heading heading-font">
+          <div className="login-logo" aria-hidden="true">
+            <ReferenceIcon name="network" size={29} />
+          </div>
+          <h1 id="ui24-auth-heading" className="auth-heading heading-font" style={{ textAlign: 'center' }}>
             {copy.pageTitle}
           </h1>
-          <p className="auth-subtitle">{copy.pageSubtitle}</p>
+          <p className="auth-subtitle" style={{ textAlign: 'center' }}>
+            {copy.pageSubtitle}
+          </p>
 
           <div className="auth-tabs" role="tablist" aria-label={copy.pageTitle}>
             <button

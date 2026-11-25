@@ -15,6 +15,10 @@ public interface IPrivateFileStore
 {
     string RootDirectory { get; }
 
+    string CreateStagingFilePath(string extension);
+
+    Task<string> ComputeFileSha256Async(string filePath, CancellationToken cancellationToken = default);
+
     Task<StagedFileWriteResult> StageStreamAsync(
         Stream source,
         long maxAllowedBytes,
@@ -41,7 +45,7 @@ public interface IPrivateFileStore
         CancellationToken cancellationToken = default);
 }
 
-public sealed class LocalPrivateFileStore : IPrivateFileStore
+public sealed class LocalPrivateFileStore : IPrivateFileStore, IPublishedObjectReadAccessor
 {
     private const string ObjectsPrefix = "objects/";
     private const string QuarantinePrefix = "quarantine/";
@@ -75,6 +79,20 @@ public sealed class LocalPrivateFileStore : IPrivateFileStore
     }
 
     public string RootDirectory => _rootPath;
+
+    public string CreateStagingFilePath(string extension)
+    {
+        Directory.CreateDirectory(_stagingPath);
+        var ext = string.IsNullOrWhiteSpace(extension) ? ".stage" : (extension.StartsWith('.') ? extension : "." + extension);
+        return Path.Combine(_stagingPath, $"{Guid.NewGuid():N}{ext}");
+    }
+
+    public async Task<string> ComputeFileSha256Async(string filePath, CancellationToken cancellationToken = default)
+    {
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
+        var hashBytes = await SHA256.HashDataAsync(stream, cancellationToken);
+        return Convert.ToHexStringLower(hashBytes);
+    }
 
     public async Task<StagedFileWriteResult> StageStreamAsync(
         Stream source,
@@ -212,6 +230,12 @@ public sealed class LocalPrivateFileStore : IPrivateFileStore
         return Task.CompletedTask;
     }
 
+    public Task<(Stream Stream, long SizeBytes)> OpenVerifiedObjectStreamAsync(
+        string storageKey,
+        string expectedSha256,
+        CancellationToken cancellationToken = default)
+        => OpenVerifiedImmutableObjectReadStreamAsync(storageKey, expectedSha256, cancellationToken);
+
     public async Task<(Stream Stream, long SizeBytes)> OpenVerifiedImmutableObjectReadStreamAsync(
         string storageKey,
         string expectedSha256,
@@ -256,13 +280,6 @@ public sealed class LocalPrivateFileStore : IPrivateFileStore
         }
 
         return combined;
-    }
-
-    private static async Task<string> ComputeFileSha256Async(string filePath, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
-        var hashBytes = await SHA256.HashDataAsync(stream, cancellationToken);
-        return Convert.ToHexStringLower(hashBytes);
     }
 }
 

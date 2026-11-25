@@ -539,41 +539,23 @@ export function ApiDocumentsPage({
     {
       key: 'title',
       header: c.colTitle,
-      render: (row) => (
-        <div>
-          <strong>{row.derivedTitle}</strong>
-          <div className="muted-cell-text">
-            {row.providerName} → {row.consumerName}
-          </div>
-        </div>
-      ),
+      render: (row) => <b>{row.derivedTitle}</b>,
     },
     {
       key: 'group',
       header: c.colGroup,
-      render: (row) => (
-        <div>
-          <div>{row.apiGroupName}</div>
-          <div className="muted-cell-text">
-            {row.requirementTemplateName} · {row.approvalRouteName}
-          </div>
-        </div>
-      ),
+      render: (row) => <span>{row.apiGroupName}</span>,
     },
     {
       key: 'devs',
       header: c.colDevs,
       render: (row) =>
         row.assignedDevelopers.length === 0 ? (
-          <span className="muted-cell-text">{c.noDevsLabel}</span>
+          <span className="smalltxt dim">{c.noDevsLabel}</span>
         ) : (
-          <div className="badge-wrap-list">
-            {row.assignedDevelopers.map((dev) => (
-              <StatusBadge key={dev.userId} variant="info">
-                {dev.fullName}
-              </StatusBadge>
-            ))}
-          </div>
+          <span className="smalltxt">
+            {row.assignedDevelopers.map((dev) => dev.fullName).join('، ')}
+          </span>
         ),
     },
     {
@@ -581,29 +563,10 @@ export function ApiDocumentsPage({
       header: c.colIntegration,
       render: (row) =>
         row.hasIntegration ? (
-          <StatusBadge variant="success">
-            {`${c.linkedBadge} (${row.integrationReferenceCode ?? ''})`}
-          </StatusBadge>
+          <StatusBadge variant="success">{c.linkedBadge}</StatusBadge>
         ) : (
           <StatusBadge variant="neutral">{c.unlinkedBadge}</StatusBadge>
         ),
-    },
-    {
-      key: 'state',
-      header: c.colState,
-      render: (row) => (
-        <StatusBadge
-          variant={
-            row.state === 'ACTIVE' ? 'success' : row.state === 'DRAFT' ? 'warning' : 'danger'
-          }
-        >
-          {row.state === 'ACTIVE'
-            ? c.filterActive
-            : row.state === 'DRAFT'
-              ? c.filterDraft
-              : c.filterArchived}
-        </StatusBadge>
-      ),
     },
     {
       key: 'actions',
@@ -611,7 +574,7 @@ export function ApiDocumentsPage({
       render: (row) => {
         const myDocPerms = new Set(row.myDocumentPermissions);
         return (
-          <div className="button-row">
+          <div className="row wrap button-row">
             <Button
               variant="outline"
               size="sm"
@@ -623,7 +586,7 @@ export function ApiDocumentsPage({
               {c.detailsBtn}
             </Button>
             {canEditGlobal && myDocPerms.has('doc.edit') && (
-              <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
+              <Button variant="secondary" size="sm" onClick={() => openEdit(row)}>
                 {c.editBtn}
               </Button>
             )}
@@ -645,7 +608,12 @@ export function ApiDocumentsPage({
               </Button>
             )}
             {canDeleteGlobal && myDocPerms.has('doc.delete') && (
-              <Button variant="danger" size="sm" onClick={() => handleDelete(row)}>
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={row.hasIntegration}
+                onClick={() => handleDelete(row)}
+              >
                 {c.deleteBtn}
               </Button>
             )}
@@ -937,18 +905,23 @@ export function ApiDocumentsPage({
           </p>
         </StandaloneFormPage>
       ) : (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">{c.pageTitle}</h2>
-              <p className="card-subtitle">{c.pageDesc}</p>
-            </div>
-            {canCreateGlobal && (
+        <>
+          {canCreateGlobal && (
+            <div className="page-actions">
               <Button variant="primary" disabled={submitting} onClick={openCreate}>
                 {c.addBtn}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          <section className="surface-card panel">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title heading-font">
+                  {lang === 'ar' ? 'الوثائق المتاحة' : 'Accessible Documents'}
+                </h2>
+                <span className="sr-only">{c.pageTitle}</span>
+              </div>
+            </div>
 
           <SearchFilterBar
             searchValue={searchQuery}
@@ -1004,7 +977,8 @@ export function ApiDocumentsPage({
               )}
             </>
           )}
-        </section>
+          </section>
+        </>
       )}
 
       <CentralModalDialog

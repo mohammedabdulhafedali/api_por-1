@@ -5,33 +5,33 @@
 BEGIN;
 
 -- 1. Synthetic Company Systems (M01)
-INSERT INTO company_systems (id, name, owner_email, description, is_active, created_at)
+INSERT INTO company_systems (id, name, description, is_active)
 VALUES
-  ('11111111-1111-1111-1111-111111111101', 'BillingCore Demo', 'billing-demo@example.invalid', 'Synthetic internal billing platform for local development', true, NOW()),
-  ('11111111-1111-1111-1111-111111111102', 'PortalCore Demo', 'portal-demo@example.invalid', 'Synthetic internal portal platform for local development', true, NOW())
+  ('11111111-1111-1111-1111-111111111101', 'BillingCore Demo', 'Synthetic internal billing platform for local development', true),
+  ('11111111-1111-1111-1111-111111111102', 'PortalCore Demo', 'Synthetic internal portal platform for local development', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Synthetic Internal Provider (M02)
-INSERT INTO internal_provider_systems (id, company_system_id, description, is_active)
+INSERT INTO internal_provider_systems (id, company_system_id, is_active)
 VALUES
-  ('22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111101', 'Synthetic internal API provider', true)
+  ('22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111101', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. Synthetic External Provider (M02)
-INSERT INTO external_providers (id, name, description, is_active)
+INSERT INTO external_provider_systems (id, name, description, is_active)
 VALUES
   ('33333333-3333-3333-3333-333333333301', 'External Partner Demo', 'Synthetic external API provider', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- 4. Synthetic Consumer Category & Entities (M03)
-INSERT INTO consumer_categories (id, name, description, is_active)
+INSERT INTO consumer_categories (id, name, is_active)
 VALUES
-  ('44444444-4444-4444-4444-444444444401', 'الشركاء التجريبيون', 'تصنيف افتراضي لاختبار بيئة التطوير', true)
+  ('44444444-4444-4444-4444-444444444401', 'الشركاء التجريبيون', true)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO consumer_entities (id, category_id, name, description, is_active)
+INSERT INTO consumer_entities (id, category_id, name, is_active)
 VALUES
-  ('55555555-5555-5555-5555-555555555501', '44444444-4444-4444-4444-444444444401', 'جهة مستهلكة تجريبية أ', 'جهة اختبار اصطناعية', true)
+  ('55555555-5555-5555-5555-555555555501', '44444444-4444-4444-4444-444444444401', 'جهة مستهلكة تجريبية أ', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- 5. Synthetic API Groups (M04)
@@ -70,9 +70,9 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- 8. Standard Non-Sensitive Roles & Clean Approval Route / Change Types / Change Policy (I03/M06/M07)
-INSERT INTO roles (id, name, is_pinned, is_active, created_at)
+INSERT INTO roles (id, name, is_pinned, is_active)
 VALUES
-  ('99999999-9999-9999-9999-999999999901', 'ReviewerDemoRole', false, true, NOW())
+  ('99999999-9999-9999-9999-999999999901', 'ReviewerDemoRole', false, true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO approval_routes (id, name, is_active)

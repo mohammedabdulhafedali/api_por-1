@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host "=========================================================="
@@ -35,7 +35,7 @@ Push-Location (Join-Path $repoRoot "backend")
 try {
   Write-Host ""
   Write-Host "[5/6] Running Backend Solution Build (dotnet build -c Release --warnaserror)..."
-  dotnet build ApiGovernance.sln -c Release --nologo --warnaserror
+  dotnet build ApiGovernance.sln -c Release --no-restore --nologo --warnaserror
   if ($LASTEXITCODE -ne 0) { throw "Backend Solution Build failed with exit code $LASTEXITCODE" }
 
   Write-Host ""
