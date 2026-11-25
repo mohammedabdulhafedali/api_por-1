@@ -39,32 +39,35 @@ export function StandaloneFormPage({
   };
 
   return (
-    <section className="standalone-editor-page" aria-labelledby="standalone-form-heading">
-      <div className="editor-top-bar">
-        <Button variant="outline" size="sm" onClick={onBack}>
-          {backButtonLabel}
-        </Button>
-        <StatusBadge variant="info">{modeBadgeLabel}</StatusBadge>
+    <section className="standalone-editor-page editor-page" aria-labelledby="standalone-form-heading">
+      <div className="editor-top-bar editor-toolbar">
+        <button type="button" className="editor-back" onClick={onBack}>
+          <span>{backButtonLabel}</span>
+        </button>
+        <span className="sr-only">
+          <StatusBadge variant="info">{modeBadgeLabel}</StatusBadge>
+        </span>
       </div>
 
-      <form className="surface-card editor-form-card" onSubmit={handleFormSubmit} noValidate>
-        <div className="editor-card-header">
+      <form className="surface-card editor-form-card editor-card" onSubmit={handleFormSubmit} noValidate>
+        <div className="editor-card-header editor-card-top">
           <div>
             <h2 id="standalone-form-heading" className="card-title heading-font">
               {formTitle}
             </h2>
             <p className="card-subtitle">{formSubtitle}</p>
           </div>
+          <span className="tag">{modeBadgeLabel.split('·')[0].trim()}</span>
         </div>
 
-        <div className="editor-card-body">{children}</div>
+        <div className="editor-card-body editor-card-content">{children}</div>
 
-        <div className="editor-card-footer">
-          <Button type="submit" variant="primary" isLoading={isSubmitting}>
-            {submitButtonLabel}
-          </Button>
+        <div className="editor-card-footer editor-card-actions">
           <Button type="button" variant="outline" onClick={onCancel}>
             {cancelButtonLabel}
+          </Button>
+          <Button type="submit" variant="primary" isLoading={isSubmitting}>
+            {submitButtonLabel}
           </Button>
         </div>
       </form>

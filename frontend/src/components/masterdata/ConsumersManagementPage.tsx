@@ -453,57 +453,112 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card">
-          <div className="button-row" style={{ marginBottom: 14, gap: 8 }}>
-            <Button
-              variant={tab === 'consumers' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setTab('consumers');
-                setPage(1);
-                setSearch('');
-              }}
-            >
-              {copy.tabConsumers}
-            </Button>
-            <Button
-              variant={tab === 'categories' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setTab('categories');
-                setPage(1);
-                setSearch('');
-              }}
-            >
-              {copy.tabCategories}
-            </Button>
-          </div>
+        <div className={tab === 'consumers' ? 'consumers-cols' : ''}>
+          {tab === 'consumers' && (
+            <section className="surface-card panel">
+              <div className="panel-head">
+                <h3 className="panel-title">{lang === 'ar' ? 'التصنيفات' : 'Categories'}</h3>
+                {canManage && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setTab('categories');
+                      setEditingId(null);
+                      setFormName('');
+                      setFormActive(true);
+                      setFieldErrors({});
+                      setMode('create');
+                    }}
+                  >
+                    + {lang === 'ar' ? 'تصنيف' : 'Category'}
+                  </Button>
+                )}
+              </div>
+              <div className="stack">
+                <button
+                  type="button"
+                  className={`pager-link consumer-category ${!categoryFilter ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setCategoryFilter('');
+                    setPage(1);
+                  }}
+                >
+                  <b>{copy.filterAll}</b>
+                  <span className="tag">{totalCount}</span>
+                </button>
+                {allCategories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`pager-link consumer-category ${categoryFilter === c.id ? 'is-active' : ''}`}
+                    aria-pressed={categoryFilter === c.id}
+                    onClick={() => {
+                      setCategoryFilter(c.id);
+                      setPage(1);
+                    }}
+                  >
+                    <b>{c.name}</b>
+                    <span className="tag">{c.consumersCount}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">
-                {tab === 'consumers' ? copy.consTitle : copy.catTitle}
-              </h2>
-              <p className="card-subtitle">
-                {tab === 'consumers' ? copy.consDesc : copy.catDesc}
-              </p>
-            </div>
-            {canManage && (
-              <Button
-                variant="primary"
+          <section className="surface-card panel">
+            <div className="tabs">
+              <button
+                type="button"
+                className={`tab ${tab === 'consumers' ? 'active' : ''}`}
                 onClick={() => {
-                  setEditingId(null);
-                  setFormCategoryId(allCategories.find((c) => c.isActive)?.id ?? '');
-                  setFormName('');
-                  setFormActive(true);
-                  setFieldErrors({});
-                  setMode('create');
+                  setTab('consumers');
+                  setPage(1);
+                  setSearch('');
                 }}
               >
-                {tab === 'consumers' ? copy.addConsBtn : copy.addCatBtn}
-              </Button>
-            )}
-          </div>
+                {copy.tabConsumers}
+              </button>
+              <button
+                type="button"
+                className={`tab ${tab === 'categories' ? 'active' : ''}`}
+                onClick={() => {
+                  setTab('categories');
+                  setPage(1);
+                  setSearch('');
+                }}
+              >
+                {copy.tabCategories}
+              </button>
+            </div>
+
+            <div className="card-header-row">
+              <div>
+                <h2 className="card-title heading-font">
+                  {tab === 'consumers' ? copy.consTitle : copy.catTitle}
+                </h2>
+                <p className="card-subtitle">
+                  {tab === 'consumers' ? copy.consDesc : copy.catDesc}
+                </p>
+              </div>
+              {canManage && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setEditingId(null);
+                    setFormCategoryId(
+                      categoryFilter || (allCategories.find((c) => c.isActive)?.id ?? '')
+                    );
+                    setFormName('');
+                    setFormActive(true);
+                    setFieldErrors({});
+                    setMode('create');
+                  }}
+                >
+                  {tab === 'consumers' ? copy.addConsBtn : copy.addCatBtn}
+                </Button>
+              )}
+            </div>
 
           <SearchFilterBar
             searchValue={search}
@@ -575,7 +630,8 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
               )}
             </>
           )}
-        </section>
+          </section>
+        </div>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={

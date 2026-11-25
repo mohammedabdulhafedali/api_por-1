@@ -66,8 +66,6 @@ import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
   CentralModalDialog,
-  DataTable,
-  DataTableColumn,
   ErrorState,
   FormField,
   LoadingState,
@@ -1916,73 +1914,6 @@ export function IntegrationsPage({
     </tr>
   );
 
-  const columns: DataTableColumn<IntegrationItem>[] = [
-    {
-      key: 'ref',
-      header: c.colRef,
-      render: (row) => <code className="ltr-code">{row.referenceCode}</code>,
-    },
-    {
-      key: 'doc',
-      header: c.colDoc,
-      render: (row) => {
-        const st = formatStateBadge(row.documentState);
-        return (
-          <div>
-            <strong>{row.derivedTitle}</strong>
-            <div className="badge-wrap-list" style={{ marginTop: 4 }}>
-              <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
-              <StatusBadge variant={row.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
-                {row.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
-              </StatusBadge>
-            </div>
-          </div>
-        );
-      },
-    },
-    { key: 'group', header: c.colGroup, render: (row) => row.apiGroupName },
-    {
-      key: 'devs',
-      header: c.colDevs,
-      render: (row) =>
-        (row.assignedDevelopers ?? []).length === 0 ? (
-          <span className="muted-cell-text">{c.noDevsLabel}</span>
-        ) : (
-          <div className="badge-wrap-list">
-            {(row.assignedDevelopers ?? []).map((dev) => (
-              <StatusBadge key={dev.userId} variant="info">
-                {dev.fullName}
-              </StatusBadge>
-            ))}
-          </div>
-        ),
-    },
-    {
-      key: 'versions',
-      header: c.colVersions,
-      render: (row) => <code className="ltr-code">{row.versionsCount}</code>,
-    },
-    {
-      key: 'actions',
-      header: c.colActions,
-      render: (row) => {
-        const myDocPerms = new Set(row.myDocumentPermissions ?? []);
-        return (
-          <div className="button-row">
-            <Button variant="outline" size="sm" onClick={() => void openDetails(row.id)}>
-              {c.detailsBtn}
-            </Button>
-            {canAssignGlobal && myDocPerms.has('doc.assign') && (
-              <Button variant="secondary" size="sm" onClick={() => void openAssignDevelopers(row)}>
-                {c.assignDevsBtn}
-              </Button>
-            )}
-          </div>
-        );
-      },
-    },
-  ];
-
   return (
     <>
       {mode === 'create-version' && details ? (
@@ -2607,41 +2538,65 @@ export function IntegrationsPage({
                     </StatusBadge>
                   </div>
                 </div>
-                <Button variant="outline" onClick={() => setMode('list')}>
-                  {c.backBtn}
-                </Button>
-              </div>
-
-              {/* Persistent Read-Only Party & Governance Summary */}
-              <div className="slot-grid-3" style={{ marginBottom: 18 }}>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.providerLabel}</div>
-                  <div className="slot-stat-value">{details.summary.providerName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.consumerLabel}</div>
-                  <div className="slot-stat-value">{details.summary.consumerName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.groupLabel}</div>
-                  <div className="slot-stat-value">{details.summary.apiGroupName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.reqTemplateLabel}</div>
-                  <div className="slot-stat-value">{details.summary.requirementTemplateName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.routeLabel}</div>
-                  <div className="slot-stat-value">{details.summary.approvalRouteName}</div>
-                </div>
-                <div className="slot-stat-box">
-                  <div className="slot-stat-label">{c.policyLabel}</div>
-                  <div className="slot-stat-value">{details.summary.changePolicyName}</div>
+                <div className="button-row">
+                  <Button variant="outline" onClick={() => setMode('list')}>
+                    {c.backBtn}
+                  </Button>
                 </div>
               </div>
 
-              {/* UI-09 6-Tab Navigation */}
-              <div className="button-row" style={{ marginBottom: 16 }}>
+              {/* Persistent Read-Only Party & Governance Summary + Lifecycle Workflow (intHeader) */}
+              <div className="grid-2" style={{ marginBottom: 18 }}>
+                <div className="panel" style={{ marginBottom: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 10 }}>
+                    {lang === 'ar' ? 'بيانات التكامل' : 'Integration Data'}
+                  </div>
+                  <div className="grid-3">
+                    <div className="slot-stat-box">
+                      <div className="slot-stat-label">{c.providerLabel}</div>
+                      <div className="slot-stat-value">{details.summary.providerName}</div>
+                    </div>
+                    <div className="slot-stat-box">
+                      <div className="slot-stat-label">{c.consumerLabel}</div>
+                      <div className="slot-stat-value">{details.summary.consumerName}</div>
+                    </div>
+                    <div className="slot-stat-box">
+                      <div className="slot-stat-label">{c.groupLabel}</div>
+                      <div className="slot-stat-value">{details.summary.apiGroupName}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel" style={{ marginBottom: 0 }}>
+                  <div className="panel-title" style={{ marginBottom: 10 }}>
+                    {lang === 'ar' ? 'حالة دورة الحياة والحوكمة' : 'Lifecycle & Governance'}
+                  </div>
+                  <div className="workflow" style={{ marginBottom: 10 }}>
+                    <span className="step on">{lang === 'ar' ? 'وثيقة API' : 'API Doc'}</span>
+                    <span className="arrow">‹</span>
+                    <span className="step on">{lang === 'ar' ? 'تكامل' : 'Integration'}</span>
+                    <span className="arrow">‹</span>
+                    <span className={`step ${details.summary.versionsCount > 0 ? 'on' : ''}`}>
+                      {lang === 'ar' ? 'إصدار' : 'Version'}
+                    </span>
+                    <span className="arrow">‹</span>
+                    <span className={`step ${details.revisionsCount > 0 ? 'on' : ''}`}>
+                      {lang === 'ar' ? 'اعتماد' : 'Approval'}
+                    </span>
+                    <span className="arrow">‹</span>
+                    <span className={`step ${details.publicationsCount > 0 ? 'on' : ''}`}>
+                      {lang === 'ar' ? 'نشر' : 'Publish'}
+                    </span>
+                  </div>
+                  <div className="row wrap">
+                    <span className="tag">{`${c.reqTemplateLabel}: ${details.summary.requirementTemplateName}`}</span>
+                    <span className="tag">{`${c.routeLabel}: ${details.summary.approvalRouteName}`}</span>
+                    <span className="tag">{`${c.policyLabel}: ${details.summary.changePolicyName}`}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* UI-09 Tab Navigation */}
+              <div className="tabs" style={{ marginBottom: 18 }}>
                 {(
                   [
                     ['developers', c.tabDevelopers],
@@ -2653,14 +2608,14 @@ export function IntegrationsPage({
                     ['audit', c.tabAudit],
                   ] as Array<[DetailsTab, string]>
                 ).map(([tabKey, label]) => (
-                  <Button
+                  <button
                     key={tabKey}
-                    variant={activeTab === tabKey ? 'primary' : 'outline'}
-                    size="sm"
+                    type="button"
+                    className={`tab ${activeTab === tabKey ? 'active' : ''}`}
                     onClick={() => setActiveTab(tabKey)}
                   >
                     {label}
-                  </Button>
+                  </button>
                 ))}
               </div>
 
@@ -2719,33 +2674,35 @@ export function IntegrationsPage({
                   {details.requirementRules.length === 0 ? (
                     <p className="card-subtitle">{c.emptyRules}</p>
                   ) : (
-                    <div className="table-scroll-container" style={{ marginBottom: 18 }}>
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>{c.colFileType}</th>
-                            <th>{c.colExtensions}</th>
-                            <th>{c.colMode}</th>
-                            <th>{c.colCounts}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {details.requirementRules.map((r) => (
-                            <tr key={r.fileTypeId}>
-                              <td>{r.fileTypeName}</td>
-                              <td>
-                                <code className="ltr-code">{r.extensions.join(', ')}</code>
-                              </td>
-                              <td>{formatModeLabel(r.requirementMode)}</td>
-                              <td>
-                                <code className="ltr-code">
+                    <div className="stack" style={{ marginBottom: 18 }}>
+                      {details.requirementRules.map((r) => (
+                        <div key={r.fileTypeId} className="item-card file-card">
+                          <div className="row between wrap">
+                            <div>
+                              <div className="row wrap">
+                                <strong>{r.fileTypeName}</strong>
+                                <StatusBadge
+                                  variant={
+                                    r.requirementMode.toUpperCase() === 'REQUIRED'
+                                      ? 'info'
+                                      : r.requirementMode.toUpperCase() === 'OPTIONAL'
+                                        ? 'neutral'
+                                        : 'warning'
+                                  }
+                                >
+                                  {formatModeLabel(r.requirementMode)}
+                                </StatusBadge>
+                                <span className="tag ltr-code">
                                   {r.minCount} – {r.maxCount}
-                                </code>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                </span>
+                              </div>
+                              <div className="item-sub">
+                                <code className="ltr-code">{r.extensions.join(', ')}</code>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -2983,102 +2940,84 @@ export function IntegrationsPage({
                                 </div>
                               )}
 
-                              {!filesWorkspace.selectedRevision ? (
+                               {!filesWorkspace.selectedRevision ? (
                                 <p className="card-subtitle">{c.filesNoDraftNote}</p>
                               ) : filesWorkspace.files.length === 0 ? (
                                 <p className="card-subtitle">{c.filesEmptyList}</p>
                               ) : (
-                                <div className="table-scroll-container">
-                                  <table className="data-table">
-                                    <thead>
-                                      <tr>
-                                        <th>{c.colFileName}</th>
-                                        <th>{c.colFileType}</th>
-                                        <th>{c.colFileSizeSha}</th>
-                                        <th>{c.colScanStatus}</th>
-                                        <th>{c.colActions}</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {filesWorkspace.files.map((f) => {
-                                        const isDocx = f.originalName.toLowerCase().endsWith('.docx');
-                                        return (
-                                          <tr key={f.id}>
-                                            <td>
+                                <div className="stack">
+                                  {filesWorkspace.files.map((f) => {
+                                    const isDocx = f.originalName.toLowerCase().endsWith('.docx');
+                                    return (
+                                      <div key={f.id} className="file-entry">
+                                        <div className="row between wrap">
+                                          <div>
+                                            <div className="row wrap">
                                               <strong>{f.originalName}</strong>
-                                            </td>
-                                            <td>{f.fileTypeName}</td>
-                                            <td>
-                                              <div>
-                                                <code className="ltr-code">{formatFileSize(f.sizeBytes)}</code>
-                                              </div>
-                                              <div className="muted-cell-text">
-                                                <code className="ltr-code">{f.sha256.slice(0, 16)}…</code>
-                                              </div>
-                                            </td>
-                                            <td>
-                                              <div className="badge-wrap-list">
-                                                {renderScanStatusBadge(f.scanStatus)}
-                                                <StatusBadge variant={f.isQuarantined ? 'warning' : 'neutral'}>
-                                                  {f.isQuarantined ? c.tierQuarantine : c.tierPrivate}
-                                                </StatusBadge>
-                                              </div>
-                                            </td>
-                                            <td>
-                                              <div className="button-row">
-                                                {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
-                                                  <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    disabled={submitting}
-                                                    onClick={() => void handleRescanFile(f)}
-                                                  >
-                                                    {c.rescanBtn}
-                                                  </Button>
-                                                )}
-                                                {f.isAvailableForUse && filesWorkspace.canDownloadFiles && (
-                                                  <a
-                                                    className="btn btn-outline btn-sm"
-                                                    href={getRevisionFileDownloadUrl(f.revisionId, f.id)}
-                                                    onClick={(e) => {
-                                                      e.preventDefault();
-                                                      void handleDownloadRevisionFile(f);
-                                                    }}
-                                                  >
-                                                    {c.downloadBtn}
-                                                  </a>
-                                                )}
-                                                {f.isAvailableForUse &&
-                                                  isDocx &&
-                                                  filesWorkspace.canUploadFiles && (
-                                                    <Button
-                                                      variant="secondary"
-                                                      size="sm"
-                                                      disabled={submitting}
-                                                      onClick={() => void handleGenerateWordDerivative(f)}
-                                                    >
-                                                      {c.wordUpdateBtn}
-                                                    </Button>
-                                                  )}
-                                                {filesWorkspace.canDeleteFiles &&
-                                                  (filesWorkspace.selectedRevision?.status === 'DRAFT' ||
-                                                    filesWorkspace.selectedRevision?.status === 'RETURNED') && (
-                                                    <Button
-                                                      variant="danger"
-                                                      size="sm"
-                                                      disabled={submitting}
-                                                      onClick={() => promptRemoveFile(f)}
-                                                    >
-                                                      {c.removeBtn}
-                                                    </Button>
-                                                  )}
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
+                                              <span className="tag">{f.fileTypeName}</span>
+                                              {renderScanStatusBadge(f.scanStatus)}
+                                              <StatusBadge variant={f.isQuarantined ? 'warning' : 'neutral'}>
+                                                {f.isQuarantined ? c.tierQuarantine : c.tierPrivate}
+                                              </StatusBadge>
+                                            </div>
+                                            <div className="item-sub" style={{ marginTop: 4 }}>
+                                              <code className="ltr-code">{formatFileSize(f.sizeBytes)}</code>
+                                              {' · '}
+                                              <code className="ltr-code">{f.sha256.slice(0, 16)}…</code>
+                                            </div>
+                                          </div>
+                                          <div className="button-row">
+                                            {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
+                                              <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                disabled={submitting}
+                                                onClick={() => void handleRescanFile(f)}
+                                              >
+                                                {c.rescanBtn}
+                                              </Button>
+                                            )}
+                                            {f.isAvailableForUse && filesWorkspace.canDownloadFiles && (
+                                              <a
+                                                className="btn btn-outline btn-sm"
+                                                href={getRevisionFileDownloadUrl(f.revisionId, f.id)}
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  void handleDownloadRevisionFile(f);
+                                                }}
+                                              >
+                                                {c.downloadBtn}
+                                              </a>
+                                            )}
+                                            {f.isAvailableForUse &&
+                                              isDocx &&
+                                              filesWorkspace.canUploadFiles && (
+                                                <Button
+                                                  variant="secondary"
+                                                  size="sm"
+                                                  disabled={submitting}
+                                                  onClick={() => void handleGenerateWordDerivative(f)}
+                                                >
+                                                  {c.wordUpdateBtn}
+                                                </Button>
+                                              )}
+                                            {filesWorkspace.canDeleteFiles &&
+                                              (filesWorkspace.selectedRevision?.status === 'DRAFT' ||
+                                                filesWorkspace.selectedRevision?.status === 'RETURNED') && (
+                                                <Button
+                                                  variant="danger"
+                                                  size="sm"
+                                                  disabled={submitting}
+                                                  onClick={() => promptRemoveFile(f)}
+                                                >
+                                                  {c.removeBtn}
+                                                </Button>
+                                              )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
 
@@ -3537,46 +3476,49 @@ export function IntegrationsPage({
                       ) : !versionsData || versionsData.versions.length === 0 ? (
                         <p className="card-subtitle">{c.emptyVersions}</p>
                       ) : (
-                        <div className="table-scroll-container">
-                          <table className="data-table">
-                            <thead>
-                              <tr>
-                                <th>{c.colVerLabel}</th>
-                                <th>{c.colVerCreated}</th>
-                                <th>{c.colVerRevCount}</th>
-                                <th>{c.colVerLatestRev}</th>
-                                <th>{c.colActions}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {versionsData.versions.map((ver) => (
-                                <tr key={ver.id}>
-                                  <td>
+                        <div className="grid-2">
+                          {versionsData.versions.map((ver) => (
+                            <div key={ver.id} className="version-card">
+                              <div className="version-head">
+                                <div>
+                                  <div className="version-num">
                                     <code className="ltr-code">{ver.versionLabel}</code>
-                                  </td>
-                                  <td>
-                                    <code className="ltr-code">{new Date(ver.createdAt).toISOString()}</code>
-                                  </td>
-                                  <td>
+                                  </div>
+                                  <div className="panel-desc">
+                                    {`${c.colVerRevCount}: `}
                                     <code className="ltr-code">{ver.revisionsCount}</code>
-                                  </td>
-                                  <td>{ver.latestRevisionStatus ?? '—'}</td>
-                                  <td>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setSelectedWorkspaceVersionId(ver.id);
-                                        setActiveTab('files');
-                                      }}
-                                    >
-                                      {c.openFilesForVersionBtn}
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                    {' · '}
+                                    <code className="ltr-code">{new Date(ver.createdAt).toISOString().slice(0, 10)}</code>
+                                  </div>
+                                </div>
+                                <StatusBadge
+                                  variant={
+                                    ver.latestRevisionStatus === 'APPROVED'
+                                      ? 'success'
+                                      : ver.latestRevisionStatus === 'DRAFT'
+                                        ? 'info'
+                                        : 'neutral'
+                                  }
+                                >
+                                  {ver.latestRevisionStatus ?? '—'}
+                                </StatusBadge>
+                              </div>
+                              <div className="divider" />
+                              <div className="row between wrap">
+                                <span className="tag">{details.summary.apiGroupName}</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedWorkspaceVersionId(ver.id);
+                                    setActiveTab('files');
+                                  }}
+                                >
+                                  {c.openFilesForVersionBtn}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </>
@@ -3608,40 +3550,16 @@ export function IntegrationsPage({
                               {c.crNoEligibleNotice}
                             </p>
                           )}
-                          {changesWorkspace.items.length === 0 ? (
+                           {changesWorkspace.items.length === 0 ? (
                             <p className="card-subtitle">{c.crEmptyList}</p>
                           ) : (
-                            <div className="table-scroll-container">
-                              <table className="data-table">
-                                <thead>
-                                  <tr>
-                                    <th>{c.crReasonLabel}</th>
-                                    <th>{c.colChangeType}</th>
-                                    <th>{c.colRevStatus}</th>
-                                    <th>{c.colActions}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {changesWorkspace.items.map((cr) => (
-                                    <tr key={cr.id}>
-                                      <td>
-                                        <strong>{cr.reason}</strong>
-                                        <div className="badge-wrap-list" style={{ marginTop: 4 }}>
-                                          {cr.affectedFiles.map((af) => (
-                                            <StatusBadge key={af.revisionFileId} variant="neutral">
-                                              {af.originalName}
-                                            </StatusBadge>
-                                          ))}
-                                        </div>
-                                        {cr.latestDecisionNotes && (
-                                          <div className="muted-cell-text">{cr.latestDecisionNotes}</div>
-                                        )}
-                                      </td>
-                                      <td>
-                                        <div>{cr.changeTypeName}</div>
-                                        <div className="muted-cell-text">{cr.approvalRouteName}</div>
-                                      </td>
-                                      <td>
+                            <div className="stack">
+                              {changesWorkspace.items.map((cr) => (
+                                <div key={cr.id} className="change-card">
+                                  <div className="row between wrap">
+                                    <div>
+                                      <div className="row wrap">
+                                        <span className="tag">{cr.changeTypeName}</span>
                                         <StatusBadge
                                           variant={
                                             cr.status === 'APPROVED'
@@ -3655,35 +3573,49 @@ export function IntegrationsPage({
                                         >
                                           {cr.status}
                                         </StatusBadge>
-                                      </td>
-                                      <td>
-                                        <div className="button-row">
-                                          {cr.isEditable && changesWorkspace.canEdit && (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              disabled={submitting}
-                                              onClick={() => openEditChangeRequest(cr)}
-                                            >
-                                              {c.crEditBtn}
-                                            </Button>
-                                          )}
-                                          {cr.isEditable && changesWorkspace.canSubmit && (
-                                            <Button
-                                              variant="primary"
-                                              size="sm"
-                                              disabled={submitting}
-                                              onClick={() => void handleSubmitChangeRequest(cr.id)}
-                                            >
-                                              {c.crSubmitBtn}
-                                            </Button>
-                                          )}
+                                        <span className="tag">{cr.approvalRouteName}</span>
+                                      </div>
+                                      <div className="item-title" style={{ marginTop: 6 }}>
+                                        <strong>{cr.reason}</strong>
+                                      </div>
+                                      <div className="badge-wrap-list" style={{ marginTop: 6 }}>
+                                        {cr.affectedFiles.map((af) => (
+                                          <StatusBadge key={af.revisionFileId} variant="neutral">
+                                            {af.originalName}
+                                          </StatusBadge>
+                                        ))}
+                                      </div>
+                                      {cr.latestDecisionNotes && (
+                                        <div className="item-sub" style={{ marginTop: 4 }}>
+                                          {cr.latestDecisionNotes}
                                         </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                      )}
+                                    </div>
+                                    <div className="button-row">
+                                      {cr.isEditable && changesWorkspace.canEdit && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() => openEditChangeRequest(cr)}
+                                        >
+                                          {c.crEditBtn}
+                                        </Button>
+                                      )}
+                                      {cr.isEditable && changesWorkspace.canSubmit && (
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          disabled={submitting}
+                                          onClick={() => void handleSubmitChangeRequest(cr.id)}
+                                        >
+                                          {c.crSubmitBtn}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </>
@@ -4039,17 +3971,64 @@ export function IntegrationsPage({
               retryLabel={commonStrings.tableRetryBtn}
               onRetry={() => void loadIntegrations()}
             />
+          ) : loading ? (
+            <LoadingState title={c.loadingText} />
+          ) : items.length === 0 ? (
+            <div className="empty-state-box empty" role="status">
+              <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
+              <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
+            </div>
           ) : (
             <>
-              <DataTable<IntegrationItem>
-                columns={columns}
-                rows={items}
-                getRowKey={(row) => row.id}
-                isLoading={loading}
-                loadingTitle={c.loadingText}
-                emptyTitle={commonStrings.tableEmptyTitle}
-                emptyDescription={commonStrings.tableEmptyDesc}
-              />
+              <div className="stack" style={{ marginTop: 14 }}>
+                {items.map((row) => {
+                  const st = formatStateBadge(row.documentState);
+                  const myDocPerms = new Set(row.myDocumentPermissions ?? []);
+                  return (
+                    <div key={row.id} className="item-card">
+                      <div className="row between wrap">
+                        <div>
+                          <div className="row wrap">
+                            <code className="tag ltr-code">{row.referenceCode}</code>
+                            <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
+                            <StatusBadge variant={row.isCurrentUserAssignedDeveloper ? 'info' : 'neutral'}>
+                              {row.isCurrentUserAssignedDeveloper ? c.scopeAssignedBadge : c.scopeViewOnlyBadge}
+                            </StatusBadge>
+                          </div>
+                          <div className="item-title" style={{ marginTop: 6 }}>
+                            <strong>{row.derivedTitle}</strong>
+                          </div>
+                          <div className="item-sub">
+                            {row.apiGroupName} · {c.colVersions}:{' '}
+                            <code className="ltr-code">{row.versionsCount}</code>
+                          </div>
+                          <div className="badge-wrap-list" style={{ marginTop: 6 }}>
+                            {(row.assignedDevelopers ?? []).length === 0 ? (
+                              <span className="muted-cell-text">{c.noDevsLabel}</span>
+                            ) : (
+                              (row.assignedDevelopers ?? []).map((dev) => (
+                                <StatusBadge key={dev.userId} variant="info">
+                                  {dev.fullName}
+                                </StatusBadge>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                        <div className="button-row">
+                          <Button variant="outline" size="sm" onClick={() => void openDetails(row.id)}>
+                            {c.detailsBtn}
+                          </Button>
+                          {canAssignGlobal && myDocPerms.has('doc.assign') && (
+                            <Button variant="secondary" size="sm" onClick={() => void openAssignDevelopers(row)}>
+                              {c.assignDevsBtn}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
               {totalCount > 0 && (
                 <PaginationBar

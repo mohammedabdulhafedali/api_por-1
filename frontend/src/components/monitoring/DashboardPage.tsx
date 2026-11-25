@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiProblemError } from '../../api/authApi';
 import { DashboardSummaryResponse, getDashboardSummary } from '../../api/monitoringApi';
 import { AppLanguage } from '../../constants/uiBaseline';
-import { Button, ErrorState, LoadingState, StatusBadge } from '../ui';
+import { Button, ErrorState, LoadingState, ReferenceIcon, StatusBadge } from '../ui';
 
 interface DashboardPageProps {
   lang: AppLanguage;
@@ -131,173 +131,226 @@ export function DashboardPage({
 
   return (
     <div className="module-stack" data-testid="dashboard-page">
-      <div className="content-card">
-        <div className="card-header-row">
-          <div>
+      <div className="page-actions" style={{ justifyContent: 'space-between' }}>
+        <div className="row wrap">
+          <span className="sr-only">
             <StatusBadge variant="info">{txt.badge}</StatusBadge>
-            <h2 className="section-title" style={{ marginTop: 8 }}>
-              {txt.welcome(userName)}
-            </h2>
-            <p className="section-subtitle">{txt.subtitle}</p>
-          </div>
-          <div className="monitoring-filter-actions">
-            <Button variant="outline" size="sm" onClick={() => void loadSummary()}>
-              {txt.refreshBtn}
-            </Button>
-          </div>
-        </div>
-
-        <div className="dashboard-quick-links" style={{ marginTop: 12 }}>
-          <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-18')}>
-            {txt.openSearchBtn}
+            <span>{txt.welcome(userName)}</span>
+            <span>{txt.subtitle}</span>
+          </span>
+          <Button variant="outline" size="sm" onClick={() => void loadSummary()}>
+            {txt.refreshBtn}
           </Button>
-          {data.canViewDocuments && (
-            <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-21')}>
-              {txt.openDocsBtn}
+          <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-18')}>
+            <ReferenceIcon name="search" size={15} /> {txt.openSearchBtn}
+          </Button>
+          {data.canViewPortal && (
+            <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-19')}>
+              <ReferenceIcon name="external" size={15} /> {txt.openPortalBtn}
             </Button>
           )}
+        </div>
+        <div className="row wrap">
+          {data.canViewDocuments && (
+            <Button variant="primary" onClick={() => onNavigateToScreen('UI-07')}>
+              <ReferenceIcon name="plus" size={15} /> {txt.openDocsBtn}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Exact 5-card reference stat-grid.stat-five */}
+      <div className="stat-grid stat-five">
+        <div className="stat dashboard-kpi-card">
+          <div className="stat-top">
+            <span className="dashboard-kpi-label">{txt.kpiDocs}</span>
+            <span className="stat-icon">
+              <ReferenceIcon name="file" size={18} />
+            </span>
+          </div>
+          <div className="stat-num dashboard-kpi-value">{data.visibleDocumentsCount}</div>
+        </div>
+
+        <div className="stat dashboard-kpi-card">
+          <div className="stat-top">
+            <span className="dashboard-kpi-label">{txt.kpiIntegs}</span>
+            <span className="stat-icon">
+              <ReferenceIcon name="network" size={18} />
+            </span>
+          </div>
+          <div className="stat-num dashboard-kpi-value">{data.visibleIntegrationsCount}</div>
+        </div>
+
+        <div className="stat dashboard-kpi-card">
+          <div className="stat-top">
+            <span className="dashboard-kpi-label">{txt.kpiPendingStages}</span>
+            <span className="stat-icon">
+              <ReferenceIcon name="clock" size={18} />
+            </span>
+          </div>
+          <div className="stat-num dashboard-kpi-value">{data.pendingMyApprovalStagesCount}</div>
+        </div>
+
+        <div className="stat dashboard-kpi-card">
+          <div className="stat-top">
+            <span className="dashboard-kpi-label">{txt.kpiOpenChanges}</span>
+            <span className="stat-icon">
+              <ReferenceIcon name="repeat" size={18} />
+            </span>
+          </div>
+          <div className="stat-num dashboard-kpi-value">{data.openChangeRequestsCount}</div>
+        </div>
+
+        <div className="stat dashboard-kpi-card">
+          <div className="stat-top">
+            <span className="dashboard-kpi-label">{txt.kpiPublished}</span>
+            <span className="stat-icon">
+              <ReferenceIcon name="external" size={18} />
+            </span>
+          </div>
+          <div className="stat-num dashboard-kpi-value">{data.publishedRevisionsCount}</div>
+          <span className="sr-only">
+            {txt.kpiUnreadNotifs}: {data.unreadNotificationsCount}
+          </span>
+        </div>
+      </div>
+
+      {/* Available Work Cases Panel (.scenario-grid of .scenario-card) */}
+      <section className="panel content-card">
+        <div className="panel-head">
+          <div>
+            <h2 className="panel-title">
+              {lang === 'ar' ? 'حالات العمل المتاحة' : 'Available Work Cases'}
+            </h2>
+          </div>
           {data.canViewIntegrations && (
-            <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
+            <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
               {txt.openIntegsBtn}
             </Button>
           )}
-          {data.canViewPortal && (
-            <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-19')}>
-              {txt.openPortalBtn}
-            </Button>
+        </div>
+        <div className="scenario-grid">
+          {data.pendingApprovalStages.map((stage, idx) => (
+            <div key={`case-${stage.stageId}`} className="scenario-card">
+              <div className="row between">
+                <span className="chip ltr-code">{`CASE-0${idx + 1}`}</span>
+                <StatusBadge variant="warning">{stage.roleName}</StatusBadge>
+              </div>
+              <b>{`${stage.title} (${stage.stageName})`}</b>
+              <div className="item-sub">{stage.targetKind}</div>
+              <div className="row between scenario-foot">
+                <span className="chip">{stage.targetKind}</span>
+                <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
+                  {lang === 'ar' ? 'فتح الحالة' : 'Open Case'}
+                </Button>
+              </div>
+            </div>
+          ))}
+          {data.canViewDocuments && (
+            <div className="scenario-card">
+              <div className="row between">
+                <span className="chip">API</span>
+                <StatusBadge variant="info">{data.visibleDocumentsCount}</StatusBadge>
+              </div>
+              <b>{txt.kpiDocs}</b>
+              <div className="item-sub">{txt.subtitle}</div>
+              <div className="row between scenario-foot">
+                <span className="chip">DOCS</span>
+                <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-21')}>
+                  {txt.openDocsBtn}
+                </Button>
+              </div>
+            </div>
           )}
-          {data.canViewAudit && (
-            <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-16')}>
-              {txt.openAuditBtn}
-            </Button>
+          {data.canViewIntegrations && (
+            <div className="scenario-card">
+              <div className="row between">
+                <span className="chip">INT</span>
+                <StatusBadge variant="success">{data.visibleIntegrationsCount}</StatusBadge>
+              </div>
+              <b>{txt.kpiIntegs}</b>
+              <div className="item-sub">
+                {lang === 'ar'
+                  ? 'إدارة الإصدارات والملفات والمراجعات وطلبات التغيير'
+                  : 'Manage API versions, files, reviews, and change requests'}
+              </div>
+              <div className="row between scenario-foot">
+                <span className="chip">{data.publishedRevisionsCount} PUBLISHED</span>
+                <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
+                  {txt.openIntegsBtn}
+                </Button>
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="dashboard-kpi-grid">
-        {data.canViewDocuments && (
-          <div className="dashboard-kpi-card">
-            <span className="dashboard-kpi-label">{txt.kpiDocs}</span>
-            <strong className="dashboard-kpi-value">{data.visibleDocumentsCount}</strong>
+      {/* Two-Column Assigned Actions & Recent Activities (.grid-2) */}
+      <div className="grid-2">
+        <section className="panel content-card">
+          <div className="panel-head">
+            <h2 className="panel-title section-title">{txt.pendingTitle}</h2>
           </div>
-        )}
-        {data.canViewIntegrations && (
-          <div className="dashboard-kpi-card">
-            <span className="dashboard-kpi-label">{txt.kpiIntegs}</span>
-            <strong className="dashboard-kpi-value">{data.visibleIntegrationsCount}</strong>
-          </div>
-        )}
-        {data.canReviewWorkflows && (
-          <div className="dashboard-kpi-card">
-            <span className="dashboard-kpi-label">{txt.kpiPendingStages}</span>
-            <strong className="dashboard-kpi-value">{data.pendingMyApprovalStagesCount}</strong>
-          </div>
-        )}
-        {(data.canViewIntegrations || data.canReviewWorkflows) && (
-          <div className="dashboard-kpi-card">
-            <span className="dashboard-kpi-label">{txt.kpiOpenChanges}</span>
-            <strong className="dashboard-kpi-value">{data.openChangeRequestsCount}</strong>
-          </div>
-        )}
-        {(data.canViewPublications || data.canViewPortal || data.canViewIntegrations) && (
-          <div className="dashboard-kpi-card">
-            <span className="dashboard-kpi-label">{txt.kpiPublished}</span>
-            <strong className="dashboard-kpi-value">{data.publishedRevisionsCount}</strong>
-          </div>
-        )}
-        <div className="dashboard-kpi-card">
-          <span className="dashboard-kpi-label">{txt.kpiUnreadNotifs}</span>
-          <strong className="dashboard-kpi-value">{data.unreadNotificationsCount}</strong>
-        </div>
-      </div>
-
-      {data.canReviewWorkflows && (
-        <div className="content-card">
-          <h3 className="section-title">{txt.pendingTitle}</h3>
           {data.pendingApprovalStages.length === 0 ? (
-            <div className="empty-state-box" style={{ marginTop: 10 }}>
-              {txt.pendingEmpty}
+            <div className="empty-state-box empty">
+              <ReferenceIcon name="search" size={26} />
+              <div>{txt.pendingEmpty}</div>
             </div>
           ) : (
-            <div className="data-table-wrap" style={{ marginTop: 10 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{txt.colTarget}</th>
-                    <th>{txt.colStage}</th>
-                    <th>{txt.colType}</th>
-                    <th>{txt.colAction}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.pendingApprovalStages.map((stage) => (
-                    <tr key={stage.stageId}>
-                      <td>
-                        <strong>{stage.title}</strong>
-                        <div>
-                          <code className="ltr-code">{stage.referenceCode}</code>
-                        </div>
-                      </td>
-                      <td>
-                        <div>{stage.stageName}</div>
-                        <StatusBadge variant="warning">{stage.roleName}</StatusBadge>
-                      </td>
-                      <td>
-                        <StatusBadge variant="info">{stage.targetKind}</StatusBadge>
-                      </td>
-                      <td>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onNavigateToScreen('UI-22')}
-                        >
-                          {txt.goReviewBtn}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {data.pendingApprovalStages.map((stage) => (
+                <div key={stage.stageId} className="row between work-row">
+                  <div>
+                    <b>{stage.title}</b>
+                    <div className="item-sub">
+                      <code className="ltr-code">{stage.referenceCode}</code> — {stage.stageName} ({stage.roleName})
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
+                    {txt.goReviewBtn}
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
-        </div>
-      )}
+        </section>
 
-      {data.canViewAudit && data.recentAuditEvents.length > 0 && (
-        <div className="content-card">
-          <h3 className="section-title">{txt.recentAuditTitle}</h3>
-          <div className="data-table-wrap" style={{ marginTop: 10 }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{lang === 'ar' ? 'الوقت' : 'Time'}</th>
-                  <th>{lang === 'ar' ? 'المنفذ' : 'Actor'}</th>
-                  <th>{lang === 'ar' ? 'العملية' : 'Operation'}</th>
-                  <th>{lang === 'ar' ? 'النتيجة' : 'Result'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentAuditEvents.map((ev) => (
-                  <tr key={ev.id}>
-                    <td>
-                      <code className="ltr-code">{new Date(ev.recordedAt).toLocaleString()}</code>
-                    </td>
-                    <td>{ev.actorName ?? 'System'}</td>
-                    <td>
-                      <code className="ltr-code">{ev.operation}</code>
-                    </td>
-                    <td>
-                      <StatusBadge variant={ev.result === 'SUCCESS' ? 'success' : 'warning'}>
-                        {ev.result}
-                      </StatusBadge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <section className="panel content-card">
+          <div className="panel-head">
+            <h2 className="panel-title section-title">{txt.recentAuditTitle}</h2>
+            {data.canViewAudit && (
+              <Button variant="ghost" size="sm" onClick={() => onNavigateToScreen('UI-16')}>
+                {txt.openAuditBtn}
+              </Button>
+            )}
           </div>
-        </div>
-      )}
+          {data.recentAuditEvents.length === 0 ? (
+            <div className="empty-state-box empty">
+              <ReferenceIcon name="clock" size={24} />
+              <div>{lang === 'ar' ? 'لا توجد أنشطة مسجلة' : 'No recent activities'}</div>
+            </div>
+          ) : (
+            <div>
+              {data.recentAuditEvents.slice(0, 6).map((ev) => (
+                <div key={ev.id} className="work-row row between">
+                  <div>
+                    <b>
+                      <code className="ltr-code">{ev.operation}</code>
+                    </b>
+                    <div className="item-sub">
+                      {ev.actorName ?? 'System'} ·{' '}
+                      <code className="ltr-code">{new Date(ev.recordedAt).toLocaleString()}</code>
+                    </div>
+                  </div>
+                  <StatusBadge variant={ev.result === 'SUCCESS' ? 'success' : 'warning'}>
+                    {ev.result}
+                  </StatusBadge>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   NotificationItem,
 } from '../../api/changesAndNotificationsApi';
 import { AppLanguage } from '../../constants/uiBaseline';
-import { Button, StatusBadge } from '../ui';
+import { Button, ReferenceIcon, StatusBadge } from '../ui';
 
 interface NotificationBellControlProps {
   lang: AppLanguage;
@@ -55,7 +55,7 @@ export function NotificationBellControl({
     <div className="notification-bell-wrapper">
       <button
         type="button"
-        className="topbar-bell-btn"
+        className="topbar-bell-btn icon-btn"
         data-testid="topbar-notifications-bell"
         aria-label={lang === 'ar' ? 'مركز الإشعارات' : 'Notifications Center'}
         onClick={() => {
@@ -64,9 +64,9 @@ export function NotificationBellControl({
           if (next) void loadNotifications();
         }}
       >
-        <span aria-hidden="true">🔔</span>
+        <ReferenceIcon name="bell" size={17} />
         {unreadCount > 0 && (
-          <span className="topbar-bell-badge" data-testid="notifications-unread-badge">
+          <span className="topbar-bell-badge counter" data-testid="notifications-unread-badge">
             {unreadCount}
           </span>
         )}

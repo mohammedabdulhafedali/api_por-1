@@ -491,11 +491,11 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card">
-          <div className="button-row" style={{ marginBottom: 14, gap: 8 }}>
-            <Button
-              variant={tab === 'systems' ? 'primary' : 'outline'}
-              size="sm"
+        <section className="surface-card panel">
+          <div className="tabs">
+            <button
+              type="button"
+              className={`tab ${tab === 'systems' ? 'active' : ''}`}
               onClick={() => {
                 setTab('systems');
                 setPage(1);
@@ -503,10 +503,10 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
               }}
             >
               {copy.tabSystems}
-            </Button>
-            <Button
-              variant={tab === 'api-groups' ? 'primary' : 'outline'}
-              size="sm"
+            </button>
+            <button
+              type="button"
+              className={`tab ${tab === 'api-groups' ? 'active' : ''}`}
               onClick={() => {
                 setTab('api-groups');
                 setPage(1);
@@ -514,7 +514,7 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
               }}
             >
               {copy.tabGroups}
-            </Button>
+            </button>
           </div>
 
           {!canViewActiveTab ? (
