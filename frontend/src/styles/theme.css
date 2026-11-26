@@ -3869,3 +3869,41 @@ html[dir='ltr'] .nav-item-btn.active {
   align-items: center;
   gap: 4px;
 }
+/* Subject permissions: compact matrices, grouped actions, RTL-safe sticky names. */
+.permissions-editor { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.permissions-role-summary, .permissions-notice, .permissions-save-status { margin: 0; color: var(--text-muted); font-size: 13px; }
+.permissions-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
+.permissions-tabs button { background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 12px 2px; color: var(--text-muted); font: inherit; font-weight: 700; cursor: pointer; }
+.permissions-tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--primary-btn); }
+.permissions-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.permissions-groups button { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-card); color: var(--text-secondary); font: inherit; font-size: 13px; cursor: pointer; }
+.permissions-groups button[aria-pressed="true"] { color: var(--text-primary); border-color: var(--focus-ring); background: var(--bg-accent-soft); }
+.permissions-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.permissions-toolbar > input { flex: 1; max-width: 360px; min-width: 180px; }
+.permissions-toolbar .permissions-groups { margin: 0; }
+.permissions-table-scroll { overflow: auto; max-height: 65vh; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 12px; }
+.permissions-grid { min-width: 610px; width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.permissions-grid th, .permissions-grid td { text-align: center; vertical-align: middle; padding: 14px 10px; border-bottom: 1px solid var(--border-color); }
+.permissions-grid thead th { position: sticky; top: 0; z-index: 2; background: var(--bg-subtle); }
+.permissions-grid .permissions-sticky { position: sticky; inset-inline-start: 0; text-align: start; width: 32%; min-width: 200px; background: var(--bg-card); z-index: 1; }
+.permissions-grid thead .permissions-sticky { z-index: 3; background: var(--bg-subtle); }
+.permissions-column-label { display: block; margin-bottom: 8px; }
+.permissions-row-heading { display: flex; align-items: center; gap: 12px; }
+.permissions-row-heading > span { min-width: 0; overflow-wrap: anywhere; }
+.permissions-row-title { display: block; font-weight: 700; }
+.permissions-row-heading small, .permissions-cell small { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 4px; }
+.permissions-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 44px; justify-content: center; }
+.permissions-cell--explicit { background: var(--bg-subtle); border-radius: 6px; padding: 5px; }
+.permissions-reset { border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.permissions-na { color: var(--text-muted); }
+.permissions-empty { padding: 36px 12px; text-align: center; color: var(--text-muted); }
+.permissions-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 14px; }
+.permissions-change-dot { color: var(--primary-btn); }
+.permissions-editor button:disabled { cursor: default; opacity: .6; }
+.permissions-editor button:focus-visible, .permissions-grid input:focus-visible { outline: 2px solid var(--primary-btn); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .permissions-tabs { gap: 16px; }
+  .permissions-groups button { min-height: 42px; }
+  .permissions-toolbar > input { max-width: none; min-width: 0; width: 100%; }
+  .permissions-grid .permissions-sticky { width: 180px; }
+}

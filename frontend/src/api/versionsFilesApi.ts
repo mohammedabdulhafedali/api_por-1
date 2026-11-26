@@ -151,6 +151,8 @@ export interface SubmitRevisionResponse {
 }
 
 export interface IntegrationFilesWorkspaceResponse {
+  canRescanFiles?: boolean;
+  canGenerateWordDerivatives?: boolean;
   integrationId: string;
   documentId: string;
   referenceCode: string;

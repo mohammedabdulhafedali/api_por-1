@@ -177,7 +177,7 @@ public sealed class VersionsFilesService(
 
         var hasGeneralVersionCreate = await serverAuthorization.HasGeneralPermissionAsync(
             actorPrincipal, "versions.create", cancellationToken);
-        var hasDocVersionManage = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.VersionManage, out var vm) && vm.Allowed;
+        var hasDocVersionManage = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.VersionCreate, out var vm) && vm.Allowed;
 
         return new IntegrationVersionsResponse(
             integration.Id,
@@ -203,7 +203,7 @@ public sealed class VersionsFilesService(
         var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
             actorPrincipal,
             integrationId,
-            DocumentPermissionCatalog.VersionManage,
+            DocumentPermissionCatalog.VersionCreate,
             "API_VERSION_CREATE_DENIED",
             cancellationToken);
 
@@ -275,7 +275,7 @@ public sealed class VersionsFilesService(
         var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
             actorPrincipal,
             integrationId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesView,
             "FILES_WORKSPACE_READ_DENIED",
             cancellationToken);
 
@@ -325,8 +325,7 @@ public sealed class VersionsFilesService(
         var hasRevisionsCreate = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.create", cancellationToken);
         var hasRevisionsSubmit = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.submit", cancellationToken);
 
-        var hasDocFilesManage = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.FilesManage, out var fm) && fm.Allowed;
-        var hasDocEdit = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Edit, out var de) && de.Allowed;
+        bool DocAllows(string code) => access.EffectivePermissions.TryGetValue(code, out var decision) && decision.Allowed;
         var scannerInfo = fileScanner.GetRuntimeInfo();
         var notArchived = !string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase);
 
@@ -335,10 +334,10 @@ public sealed class VersionsFilesService(
             integration.DocumentId,
             integration.ReferenceCode,
             derivedTitle,
-            CanCreateDraftRevision: hasRevisionsCreate && hasDocEdit && isAssignedDev && notArchived,
-            CanUploadFiles: hasFilesUpload && hasDocFilesManage && isAssignedDev && notArchived,
-            CanDeleteFiles: hasFilesDelete && hasDocFilesManage && isAssignedDev && notArchived,
-            CanDownloadFiles: hasFilesDownload,
+            CanCreateDraftRevision: hasRevisionsCreate && DocAllows(DocumentPermissionCatalog.RevisionCreate) && isAssignedDev && notArchived,
+            CanUploadFiles: hasFilesUpload && DocAllows(DocumentPermissionCatalog.FilesUpload) && isAssignedDev && notArchived,
+            CanDeleteFiles: hasFilesDelete && DocAllows(DocumentPermissionCatalog.FilesDelete) && isAssignedDev && notArchived,
+            CanDownloadFiles: hasFilesDownload && DocAllows(DocumentPermissionCatalog.FilesDownload),
             IsCurrentUserAssignedDeveloper: isAssignedDev,
             ScannerConfigured: scannerInfo.IsConfigured,
             ScannerSummaryAr: scannerInfo.SummaryAr,
@@ -349,10 +348,12 @@ public sealed class VersionsFilesService(
             SelectedRevision: selectedRevision,
             Files: files,
             TraceId: traceId,
-            CanSubmitRevision: hasRevisionsSubmit && hasDocEdit && isAssignedDev && notArchived,
-            CanCreateWorkingCopy: hasRevisionsCreate && hasDocEdit && isAssignedDev && notArchived,
+            CanSubmitRevision: hasRevisionsSubmit && DocAllows(DocumentPermissionCatalog.RevisionSubmit) && isAssignedDev && notArchived,
+            CanCreateWorkingCopy: hasRevisionsCreate && DocAllows(DocumentPermissionCatalog.RevisionCreate) && isAssignedDev && notArchived,
             ApprovedChangeRequests: approvedChangeRequests,
-            WordDerivatives: wordDerivatives);
+            WordDerivatives: wordDerivatives,
+            CanRescanFiles: hasFilesUpload && DocAllows(DocumentPermissionCatalog.FilesRescan) && isAssignedDev && notArchived,
+            CanGenerateWordDerivatives: hasFilesUpload && DocAllows(DocumentPermissionCatalog.WordGenerate) && isAssignedDev && notArchived);
     }
 
     public async Task<IReadOnlyList<DocumentRevisionDto>> GetVersionRevisionsAsync(
@@ -401,7 +402,7 @@ public sealed class VersionsFilesService(
         var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
             actorPrincipal,
             version.IntegrationId,
-            DocumentPermissionCatalog.Edit,
+            DocumentPermissionCatalog.RevisionCreate,
             "REVISION_CREATE_DENIED",
             cancellationToken);
 
@@ -640,7 +641,7 @@ public sealed class VersionsFilesService(
         var (access, integration, version, _) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesView,
             "REVISION_DETAILS_DENIED",
             requireAssignedDeveloper: false,
             cancellationToken: cancellationToken);
@@ -661,8 +662,7 @@ public sealed class VersionsFilesService(
         var hasRevisionsCreate = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.create", cancellationToken);
         var hasRevisionsSubmit = await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "revisions.submit", cancellationToken);
 
-        var hasDocFilesManage = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.FilesManage, out var fm) && fm.Allowed;
-        var hasDocEdit = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Edit, out var de) && de.Allowed;
+        bool DocAllows(string code) => access.EffectivePermissions.TryGetValue(code, out var decision) && decision.Allowed;
 
         return new RevisionDetailsResponse(
             Revision: revDto,
@@ -670,11 +670,11 @@ public sealed class VersionsFilesService(
             DocumentId: integration.DocumentId,
             ReferenceCode: integration.ReferenceCode,
             DerivedTitle: derivedTitle,
-            CanSubmit: hasRevisionsSubmit && hasDocEdit && isAssignedDev && notArchived && !revDto.IsProtected,
-            CanCreateWorkingCopy: hasRevisionsCreate && hasDocEdit && isAssignedDev && notArchived,
-            CanUploadFiles: hasFilesUpload && hasDocFilesManage && isAssignedDev && notArchived && !revDto.IsProtected,
-            CanDeleteFiles: hasFilesDelete && hasDocFilesManage && isAssignedDev && notArchived && !revDto.IsProtected,
-            CanDownloadFiles: hasFilesDownload,
+            CanSubmit: hasRevisionsSubmit && DocAllows(DocumentPermissionCatalog.RevisionSubmit) && isAssignedDev && notArchived && !revDto.IsProtected,
+            CanCreateWorkingCopy: hasRevisionsCreate && DocAllows(DocumentPermissionCatalog.RevisionCreate) && isAssignedDev && notArchived,
+            CanUploadFiles: hasFilesUpload && DocAllows(DocumentPermissionCatalog.FilesUpload) && isAssignedDev && notArchived && !revDto.IsProtected,
+            CanDeleteFiles: hasFilesDelete && DocAllows(DocumentPermissionCatalog.FilesDelete) && isAssignedDev && notArchived && !revDto.IsProtected,
+            CanDownloadFiles: hasFilesDownload && DocAllows(DocumentPermissionCatalog.FilesDownload),
             Files: files,
             WordDerivatives: wordDerivatives,
             TraceId: traceId);
@@ -689,7 +689,7 @@ public sealed class VersionsFilesService(
         var (access, integration, version, revision) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.Edit,
+            DocumentPermissionCatalog.RevisionSubmit,
             "REVISION_SUBMIT_DENIED",
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
@@ -816,7 +816,7 @@ public sealed class VersionsFilesService(
         await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesView,
             "REVISION_FILES_READ_DENIED",
             requireAssignedDeveloper: false,
             cancellationToken: cancellationToken);
@@ -835,7 +835,7 @@ public sealed class VersionsFilesService(
         var (access, integration, _, revision) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.FilesManage,
+            DocumentPermissionCatalog.FilesUpload,
             "REVISION_FILE_UPLOAD_DENIED",
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
@@ -1162,7 +1162,7 @@ public sealed class VersionsFilesService(
         var (access, integration, _, revision) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.FilesManage,
+            DocumentPermissionCatalog.FilesRescan,
             "REVISION_FILE_RESCAN_DENIED",
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
@@ -1289,7 +1289,7 @@ public sealed class VersionsFilesService(
         var (access, integration, _, revision) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.FilesManage,
+            DocumentPermissionCatalog.FilesDelete,
             "REVISION_FILE_DELETE_DENIED",
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
@@ -1354,7 +1354,7 @@ public sealed class VersionsFilesService(
         await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revFile.RevisionId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesView,
             "FILE_SCAN_STATUS_DENIED",
             requireAssignedDeveloper: false,
             cancellationToken: cancellationToken);
@@ -1396,7 +1396,7 @@ public sealed class VersionsFilesService(
         var (access, integration, _, _) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesDownload,
             "FILE_DOWNLOAD_DENIED",
             requireAssignedDeveloper: false,
             cancellationToken: cancellationToken);
@@ -1480,7 +1480,7 @@ public sealed class VersionsFilesService(
         var (access, integration, version, revision) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.FilesManage,
+            DocumentPermissionCatalog.WordGenerate,
             "WORD_DERIVATIVE_GENERATE_DENIED",
             requireAssignedDeveloper: true,
             cancellationToken: cancellationToken);
@@ -1704,7 +1704,7 @@ public sealed class VersionsFilesService(
         await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesView,
             "WORD_DERIVATIVE_READ_DENIED",
             requireAssignedDeveloper: false,
             cancellationToken: cancellationToken);
@@ -1731,7 +1731,7 @@ public sealed class VersionsFilesService(
         var (access, integration, _, _) = await ResolveAuthorizedRevisionAsync(
             actorPrincipal,
             revisionId,
-            DocumentPermissionCatalog.View,
+            DocumentPermissionCatalog.FilesDownload,
             "WORD_DERIVATIVE_DOWNLOAD_DENIED",
             requireAssignedDeveloper: false,
             cancellationToken: cancellationToken);

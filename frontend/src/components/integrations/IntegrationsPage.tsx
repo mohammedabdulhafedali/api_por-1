@@ -878,6 +878,7 @@ export function IntegrationsPage({
   const [decisionStage, setDecisionStage] = useState<WorkflowRunStageItem | null>(null);
   const [decisionTitleContext, setDecisionTitleContext] = useState('');
   const [decisionKind, setDecisionKind] = useState<WorkflowDecisionKind>('APPROVE');
+  const [allowedDecisions, setAllowedDecisions] = useState<WorkflowDecisionKind[]>(['APPROVE', 'RETURN', 'REJECT']);
   const [decisionNotes, setDecisionNotes] = useState('');
   const [decisionReturnTarget, setDecisionReturnTarget] = useState<'details' | 'workflow-inbox'>('details');
   // S11 W05-W07 Change Requests & Notifications state
@@ -1545,7 +1546,7 @@ export function IntegrationsPage({
     void loadWorkflowInbox();
   };
 
-  const openDecideStage = (
+  const openDecideStage = async (
     runId: string,
     stage: WorkflowRunStageItem,
     titleContext: string,
@@ -1555,7 +1556,16 @@ export function IntegrationsPage({
     setDecisionRunId(runId);
     setDecisionStage(stage);
     setDecisionTitleContext(titleContext);
-    setDecisionKind('APPROVE');
+    setSubmitting(true);
+    try {
+      const run = await getWorkflowRunDetails(runId, lang);
+      const allowed = run.allowedDecisions ?? ['APPROVE', 'RETURN', 'REJECT'];
+      setAllowedDecisions(allowed);
+      setDecisionKind(allowed[0] ?? 'APPROVE');
+    } catch (error) {
+      handleApiError(error, c.workflowDecisionTitle);
+      return;
+    } finally { setSubmitting(false); }
     setDecisionNotes('');
     setDecisionReturnTarget(returnTarget);
     setMode('decide-stage');
@@ -2229,7 +2239,7 @@ export function IntegrationsPage({
                   { value: 'APPROVE', label: c.decisionApproveOpt },
                   { value: 'RETURN', label: c.decisionReturnOpt },
                   { value: 'REJECT', label: c.decisionRejectOpt },
-                ]}
+                ].filter(option => allowedDecisions.includes(option.value as WorkflowDecisionKind))}
               />
             </FormField>
 
@@ -3101,7 +3111,7 @@ export function IntegrationsPage({
                                             </div>
                                           </div>
                                           <div className="button-row">
-                                            {f.scanStatus === 'PENDING_SCAN' && filesWorkspace.canUploadFiles && (
+                                            {f.scanStatus === 'PENDING_SCAN' && (filesWorkspace.canRescanFiles ?? filesWorkspace.canUploadFiles) && (
                                               <Button
                                                 variant="secondary"
                                                 size="sm"
@@ -3125,7 +3135,7 @@ export function IntegrationsPage({
                                             )}
                                             {f.isAvailableForUse &&
                                               isDocx &&
-                                              filesWorkspace.canUploadFiles && (
+                                              (filesWorkspace.canGenerateWordDerivatives ?? filesWorkspace.canUploadFiles) && (
                                                 <Button
                                                   variant="secondary"
                                                   size="sm"

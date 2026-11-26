@@ -264,6 +264,7 @@ public sealed record DocumentUserPermissionRuleInput(
 
 public sealed record ReplaceDocumentAccessRequest : IValidatableObject
 {
+    public bool UseAtomicPermissions { get; init; }
     public IReadOnlyList<DocumentRolePermissionRuleInput> RolePermissions { get; init; } = [];
     public IReadOnlyList<DocumentUserPermissionRuleInput> UserPermissions { get; init; } = [];
 

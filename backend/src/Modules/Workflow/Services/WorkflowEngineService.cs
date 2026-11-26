@@ -293,7 +293,8 @@ public sealed class WorkflowEngineService(
                 continue;
             }
 
-            var canReviewDoc = permsMap.TryGetValue(DocumentPermissionCatalog.Review, out var rRes) && rRes.Allowed;
+            var canReviewDoc = new[] { DocumentPermissionCatalog.ReviewApprove, DocumentPermissionCatalog.ReviewReturn, DocumentPermissionCatalog.ReviewReject }
+                .Any(code => permsMap.TryGetValue(code, out var resolution) && resolution.Allowed);
             var derivedTitle = titleLookup.GetValueOrDefault(targetInfo.DocumentId, targetInfo.ReferenceCode);
 
             items.Add(new WorkflowInboxItemDto(
@@ -435,7 +436,12 @@ public sealed class WorkflowEngineService(
         var context = await ResolveAuthorizedWorkflowRunAsync(
             actorPrincipal,
             runId,
-            DocumentPermissionCatalog.Review,
+            normalizedDecision switch
+            {
+                WorkflowDecisionValues.Return => DocumentPermissionCatalog.ReviewReturn,
+                WorkflowDecisionValues.Reject => DocumentPermissionCatalog.ReviewReject,
+                _ => DocumentPermissionCatalog.ReviewApprove
+            },
             "WORKFLOW_DECISION_DENIED",
             cancellationToken);
 
@@ -919,6 +925,7 @@ public sealed class WorkflowEngineService(
 
         var activeStage = stageDtos.FirstOrDefault(s => s.Status == WorkflowStageStatusValues.Active);
         var canDecideActive = false;
+        var allowedDecisions = new List<string>();
 
         if (activeStage is not null &&
             run.Status == WorkflowRunStatusValues.InProgress)
@@ -930,8 +937,8 @@ public sealed class WorkflowEngineService(
                 var docPerms = await documentAuthorization.EvaluateDocumentPermissionsBatchAsync(
                     actorUserId, [document.Id], cancellationToken);
                 var hasDocReview = docPerms.TryGetValue(document.Id, out var map) &&
-                                   map.TryGetValue(DocumentPermissionCatalog.Review, out var res) &&
-                                   res.Allowed;
+                    new[] { DocumentPermissionCatalog.ReviewApprove, DocumentPermissionCatalog.ReviewReturn, DocumentPermissionCatalog.ReviewReject }
+                        .Any(code => map.TryGetValue(code, out var res) && res.Allowed);
                 if (hasDocReview)
                 {
                     canDecideActive = await (
@@ -942,6 +949,16 @@ public sealed class WorkflowEngineService(
                               r.IsActive
                         select r.Id)
                         .AnyAsync(cancellationToken);
+                    if (canDecideActive && map is not null)
+                    {
+                        foreach (var (decision, code) in new[]
+                        {
+                            (WorkflowDecisionValues.Approve, DocumentPermissionCatalog.ReviewApprove),
+                            (WorkflowDecisionValues.Return, DocumentPermissionCatalog.ReviewReturn),
+                            (WorkflowDecisionValues.Reject, DocumentPermissionCatalog.ReviewReject)
+                        })
+                            if (map.TryGetValue(code, out var resolution) && resolution.Allowed) allowedDecisions.Add(decision);
+                    }
                 }
             }
         }
@@ -973,7 +990,8 @@ public sealed class WorkflowEngineService(
             ActiveStageRoleName: activeStage?.ResponsibleRoleName,
             CanCurrentUserDecideActiveStage: canDecideActive,
             Stages: stageDtos,
-            TraceId: traceId);
+            TraceId: traceId,
+            AllowedDecisions: allowedDecisions);
     }
 
     private async Task<Dictionary<Guid, string>> BuildDocumentTitleLookupAsync(

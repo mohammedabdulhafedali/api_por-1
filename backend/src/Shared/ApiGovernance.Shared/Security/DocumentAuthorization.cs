@@ -32,6 +32,39 @@ public static class DocumentPermissionCatalog
     public const string Review = "doc.review";
     public const string Publish = "doc.publish";
 
+    public const string FilesView = "doc.files.view";
+    public const string FilesDownload = "doc.files.download";
+    public const string FilesUpload = "doc.files.upload";
+    public const string FilesDelete = "doc.files.delete";
+    public const string FilesRescan = "doc.files.rescan";
+    public const string WordGenerate = "doc.files.word_generate";
+    public const string VersionCreate = "doc.versions.create";
+    public const string VersionUsage = "doc.versions.usage";
+    public const string RevisionCreate = "doc.revisions.create";
+    public const string RevisionSubmit = "doc.revisions.submit";
+    public const string ReviewApprove = "doc.review.approve";
+    public const string ReviewReturn = "doc.review.return";
+    public const string ReviewReject = "doc.review.reject";
+    public const string PublicationCreate = "doc.publications.create";
+    public const string PublicationWithdraw = "doc.publications.withdraw";
+    public const string ChangeCreate = "doc.changes.create";
+    public const string ChangeEdit = "doc.changes.edit";
+    public const string ChangeSubmit = "doc.changes.submit";
+
+    // Used only for the one-time data conversion and compatibility of old full-ACL
+    // requests. The authorization engine itself resolves each action independently.
+    public static readonly IReadOnlyDictionary<string, string> LegacyParents = new Dictionary<string, string>
+    {
+        [FilesView] = View, [FilesDownload] = View,
+        [FilesUpload] = FilesManage, [FilesDelete] = FilesManage,
+        [FilesRescan] = FilesManage, [WordGenerate] = FilesManage,
+        [VersionCreate] = VersionManage, [VersionUsage] = Publish,
+        [RevisionCreate] = Edit, [RevisionSubmit] = Edit,
+        [ReviewApprove] = Review, [ReviewReturn] = Review, [ReviewReject] = Review,
+        [PublicationCreate] = Publish, [PublicationWithdraw] = Publish,
+        [ChangeCreate] = Change, [ChangeEdit] = Change, [ChangeSubmit] = Change
+    };
+
     public static readonly IReadOnlyList<DocumentPermissionMetadata> All =
     [
         new(View, "view", "عرض الوثيقة والتكامل", "View Document & Integration"),
@@ -44,7 +77,25 @@ public static class DocumentPermissionCatalog
         new(FilesManage, "files_manage", "إدارة ملفات المراجعات", "Manage Revision Files"),
         new(Change, "change", "طلبات التغيير", "Change Requests"),
         new(Review, "review", "مراجعة واعتماد", "Review & Decide"),
-        new(Publish, "publish", "نشر وإيقاف نشر", "Publish & Withdraw")
+        new(Publish, "publish", "نشر وإيقاف نشر (سابق)", "Publish & Withdraw (legacy)"),
+        new(FilesView, "files.view", "عرض الملفات", "View files"),
+        new(FilesDownload, "files.download", "تنزيل الملفات", "Download files"),
+        new(FilesUpload, "files.upload", "رفع الملفات", "Upload files"),
+        new(FilesDelete, "files.delete", "إزالة الملفات", "Remove files"),
+        new(FilesRescan, "files.rescan", "إعادة الفحص", "Rescan files"),
+        new(WordGenerate, "files.word_generate", "إنشاء مشتق Word", "Generate Word derivative"),
+        new(VersionCreate, "versions.create", "إنشاء إصدار", "Create version"),
+        new(VersionUsage, "versions.usage", "تعيين الإصدار المستخدم", "Set consumer version"),
+        new(RevisionCreate, "revisions.create", "إنشاء مراجعة", "Create revision"),
+        new(RevisionSubmit, "revisions.submit", "تقديم للمراجعة", "Submit revision"),
+        new(ReviewApprove, "review.approve", "اعتماد", "Approve"),
+        new(ReviewReturn, "review.return", "إعادة للتعديل", "Return for changes"),
+        new(ReviewReject, "review.reject", "رفض", "Reject"),
+        new(PublicationCreate, "publications.create", "نشر الملفات", "Publish files"),
+        new(PublicationWithdraw, "publications.withdraw", "إيقاف النشر", "Withdraw publication"),
+        new(ChangeCreate, "changes.create", "إنشاء طلب تغيير", "Create change request"),
+        new(ChangeEdit, "changes.edit", "تعديل طلب تغيير", "Edit change request"),
+        new(ChangeSubmit, "changes.submit", "تقديم طلب تغيير", "Submit change request")
     ];
 
     private static readonly Dictionary<string, DocumentPermissionMetadata> ByCode =

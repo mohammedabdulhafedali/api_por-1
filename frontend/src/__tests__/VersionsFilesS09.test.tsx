@@ -332,10 +332,10 @@ describe('Sprint S09 Revisions (UI-11 / V05-V06), Verified Download (V07) & Word
       />
     );
 
-    const detailsBtn = await screen.findByRole('button', { name: 'التفاصيل والتبويبات (UI-09)' });
+    const detailsBtn = await screen.findByRole('button', { name: 'التفاصيل' });
     fireEvent.click(detailsBtn);
 
-    const filesTabBtn = await screen.findByRole('button', { name: 'الملفات (UI-10)' });
+    const filesTabBtn = await screen.findByRole('button', { name: 'الملفات' });
     fireEvent.click(filesTabBtn);
 
     // Checklist shows 1/1-2 (مكتمل) & V07 verified download click
@@ -346,7 +346,7 @@ describe('Sprint S09 Revisions (UI-11 / V05-V06), Verified Download (V07) & Word
     expect(await screen.findByText(/تم التحقق من الصلاحية وبصمة SHA-256 وتدقيق تنزيل/)).toBeInTheDocument();
 
     // V08 Word PoC click on clean .docx -> VERIFIED + downloadable derivative + untouched original SHA
-    const wordBtn = await screen.findByRole('button', { name: 'تحديث حقول Word (V08)' });
+    const wordBtn = await screen.findByRole('button', { name: 'تحديث حقول Word' });
     fireEvent.click(wordBtn);
     const confirmWordModalBtn = await screen.findByRole('button', { name: 'إغلاق نافذة الرسالة' });
     fireEvent.click(confirmWordModalBtn);
@@ -355,7 +355,7 @@ describe('Sprint S09 Revisions (UI-11 / V05-V06), Verified Download (V07) & Word
     expect(screen.getByRole('button', { name: 'تنزيل المشتق المتحقق' })).toBeInTheDocument();
 
     // V05 Submit Revision
-    const submitBtn = screen.getByRole('button', { name: 'تقديم المراجعة للاعتماد (V05)' });
+    const submitBtn = screen.getByRole('button', { name: 'تقديم المراجعة للاعتماد' });
     fireEvent.click(submitBtn);
     const confirmSubmitBtn = await screen.findByRole('button', { name: 'إغلاق نافذة الرسالة' });
     fireEvent.click(confirmSubmitBtn);
@@ -363,14 +363,14 @@ describe('Sprint S09 Revisions (UI-11 / V05-V06), Verified Download (V07) & Word
     // After submit, close success dialog -> protected revision banner appears (V06)
     const okSubmittedBtn = await screen.findByRole('button', { name: 'إغلاق نافذة الرسالة' });
     fireEvent.click(okSubmittedBtn);
-    expect(await screen.findByText(/ومحمية بالكامل من رفع أو حذف أو تعديل الملفات \(V06\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/ومحمية بالكامل من رفع أو حذف أو تعديل الملفات/)).toBeInTheDocument();
 
     // Simulate backend workflow approving revision #1, switch to Revisions tab (UI-11), and open Working Copy (V06)
     revisionStatus = 'APPROVED';
     currentRevisions[0] = { ...currentRevisions[0], status: 'APPROVED', isProtected: true };
-    fireEvent.click(screen.getByRole('button', { name: 'المراجعات (UI-11)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'المراجعات' }));
 
-    const createWcBtns = await screen.findAllByRole('button', { name: 'إنشاء نسخة عمل جديدة (V06)' });
+    const createWcBtns = await screen.findAllByRole('button', { name: 'إنشاء نسخة عمل جديدة' });
     fireEvent.click(createWcBtns[0]);
 
     expect(await screen.findByText(/إنشاء نسخة عمل جديدة من مراجعة معتمدة/)).toBeInTheDocument();

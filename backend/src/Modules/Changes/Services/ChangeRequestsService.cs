@@ -68,12 +68,12 @@ public sealed class ChangeRequestsService(
 
         var isAssignedDev = await documentAuthorization.IsUserAssignedDeveloperAsync(
             access.Actor.Id, integration.DocumentId, integration.Id, cancellationToken);
-        var hasDocChange = access.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Change, out var chRes) && chRes.Allowed;
-        var canActOnChanges = isAssignedDev && hasDocChange && !string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase);
+        bool DocAllows(string code) => access.EffectivePermissions.TryGetValue(code, out var result) && result.Allowed;
+        var canActOnChanges = isAssignedDev && !string.Equals(access.Document.State, "ARCHIVED", StringComparison.OrdinalIgnoreCase);
 
-        var canCreate = canActOnChanges && await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "changes.create", cancellationToken);
-        var canEdit = canActOnChanges && await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "changes.edit", cancellationToken);
-        var canSubmit = canActOnChanges && await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "changes.submit", cancellationToken);
+        var canCreate = canActOnChanges && DocAllows(DocumentPermissionCatalog.ChangeCreate) && await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "changes.create", cancellationToken);
+        var canEdit = canActOnChanges && DocAllows(DocumentPermissionCatalog.ChangeEdit) && await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "changes.edit", cancellationToken);
+        var canSubmit = canActOnChanges && DocAllows(DocumentPermissionCatalog.ChangeSubmit) && await serverAuthorization.HasGeneralPermissionAsync(actorPrincipal, "changes.submit", cancellationToken);
 
         var allowedChangeTypes = await (
             from cpt in dbContext.ChangePolicyTypes.AsNoTracking()
@@ -152,7 +152,7 @@ public sealed class ChangeRequestsService(
         var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
             actorPrincipal,
             integrationId,
-            DocumentPermissionCatalog.Change,
+            DocumentPermissionCatalog.ChangeCreate,
             "CHANGE_REQUEST_CREATE_DENIED",
             cancellationToken);
 
@@ -279,7 +279,7 @@ public sealed class ChangeRequestsService(
         var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
             actorPrincipal,
             cr.IntegrationId,
-            DocumentPermissionCatalog.Change,
+            DocumentPermissionCatalog.ChangeEdit,
             "CHANGE_REQUEST_EDIT_DENIED",
             cancellationToken);
 
@@ -353,7 +353,7 @@ public sealed class ChangeRequestsService(
         var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
             actorPrincipal,
             cr.IntegrationId,
-            DocumentPermissionCatalog.Change,
+            DocumentPermissionCatalog.ChangeSubmit,
             "CHANGE_REQUEST_SUBMIT_DENIED",
             cancellationToken);
 

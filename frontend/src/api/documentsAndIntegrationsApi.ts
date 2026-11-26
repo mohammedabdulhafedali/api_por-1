@@ -340,7 +340,7 @@ export const replaceDocumentAccessMatrix = (
   sendCsrfJson<DocumentAccessMatrixResponse>(
     'PUT',
     `/api/v1/api-documents/${documentId}/access`,
-    payload,
+    { ...payload, useAtomicPermissions: true },
     lang
   );
 

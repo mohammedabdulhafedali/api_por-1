@@ -1,3 +1,4 @@
+import { DOCUMENT_GROUPS } from '../../utils/documentPermissionGroups';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiProblemError } from '../../api/authApi';
 import {
@@ -114,7 +115,9 @@ export function DocumentAccessMatrixPage({
   const c = COPY[lang];
   const commonStrings = UI_STRINGS[lang];
 
+  const [actionGroup, setActionGroup] = useState('document');
   const [matrix, setMatrix] = useState<DocumentAccessMatrixResponse | null>(null);
+  const visiblePermissions = matrix?.permissions.filter(p => DOCUMENT_GROUPS.find(g => g.id === actionGroup)?.codes.includes(p.code)) ?? [];
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -195,22 +198,8 @@ export function DocumentAccessMatrixPage({
     return { allowed: false, label: c.srcDefaultDeny };
   };
 
-  const isUserRoleInheritedOnDoc = (userId: string, permCode: string) => {
-    const rIds = roleIdsByUserId[userId] ?? [];
-    const roleDecisions = rIds
-      .map((rid) => roleDraft[rid]?.[permCode] ?? null)
-      .filter((d): d is DocumentAclDecision => d !== null);
-    if (roleDecisions.includes('REVOKE')) return false;
-    return roleDecisions.includes('GRANT');
-  };
-
   const toggleUserDocCheckbox = (userId: string, code: string, checked: boolean) => {
-    const viaRole = isUserRoleInheritedOnDoc(userId, code);
-    if (checked) {
-      setUserCell(userId, code, viaRole ? null : 'GRANT');
-    } else {
-      setUserCell(userId, code, viaRole ? 'REVOKE' : null);
-    }
+    setUserCell(userId, code, checked ? 'GRANT' : 'REVOKE');
   };
 
   const setRoleCell = (roleId: string, code: string, decision: DocumentAclDecision | null) => {
@@ -230,19 +219,19 @@ export function DocumentAccessMatrixPage({
   const setAllUserRow = (userId: string, decision: DocumentAclDecision | null) => {
     if (!matrix) return;
     const rowMap: Record<string, DocumentAclDecision | null> = {};
-    for (const col of matrix.permissions) {
+    for (const col of visiblePermissions) {
       rowMap[col.code] = decision;
     }
-    setUserDraft((prev) => ({ ...prev, [userId]: rowMap }));
+    setUserDraft((prev) => ({ ...prev, [userId]: { ...prev[userId], ...rowMap } }));
   };
 
   const setAllRoleRow = (roleId: string, decision: DocumentAclDecision | null) => {
     if (!matrix) return;
     const rowMap: Record<string, DocumentAclDecision | null> = {};
-    for (const col of matrix.permissions) {
+    for (const col of visiblePermissions) {
       rowMap[col.code] = decision;
     }
-    setRoleDraft((prev) => ({ ...prev, [roleId]: rowMap }));
+    setRoleDraft((prev) => ({ ...prev, [roleId]: { ...prev[roleId], ...rowMap } }));
   };
 
   const performSave = async () => {
@@ -351,6 +340,10 @@ export function DocumentAccessMatrixPage({
           </div>
         </div>
 
+        <div className="permissions-groups" aria-label={lang === 'ar' ? 'مجموعات الصلاحيات' : 'Permission groups'}>
+          {DOCUMENT_GROUPS.map(group => <button type="button" key={group.id} aria-pressed={actionGroup === group.id}
+            onClick={() => setActionGroup(group.id)}>{lang === 'ar' ? group.ar : group.en}</button>)}
+        </div>
         {/* 1. Roles Document ACL Matrix */}
         <h3 className="card-title heading-font" style={{ marginTop: 18, marginBottom: 10 }}>
           {c.rolesSectionTitle}
@@ -360,7 +353,7 @@ export function DocumentAccessMatrixPage({
             <thead>
               <tr>
                 <th className="matrix-sticky-col">{c.roleCol}</th>
-                {matrix.permissions.map((col) => (
+                {visiblePermissions.map((col) => (
                   <th key={`rh-${col.code}`}>
                     <div>{lang === 'ar' ? col.labelAr : col.labelEn}</div>
                   </th>
@@ -393,7 +386,7 @@ export function DocumentAccessMatrixPage({
                       )}
                     </div>
                   </td>
-                  {matrix.permissions.map((col) => {
+                  {visiblePermissions.map((col) => {
                     const current = roleDraft[role.roleId]?.[col.code] ?? null;
                     const isChecked = current === 'GRANT';
                     return (
@@ -405,7 +398,7 @@ export function DocumentAccessMatrixPage({
                           disabled={!canManageAcl}
                           checked={isChecked}
                           onChange={(e) =>
-                            setRoleCell(role.roleId, col.code, e.target.checked ? 'GRANT' : null)
+                            setRoleCell(role.roleId, col.code, e.target.checked ? 'GRANT' : 'REVOKE')
                           }
                         />
                       </td>
@@ -426,7 +419,7 @@ export function DocumentAccessMatrixPage({
             <thead>
               <tr>
                 <th className="matrix-sticky-col">{c.userCol}</th>
-                {matrix.permissions.map((col) => (
+                {visiblePermissions.map((col) => (
                   <th key={`uh-${col.code}`}>
                     <div>{lang === 'ar' ? col.labelAr : col.labelEn}</div>
                   </th>
@@ -468,7 +461,7 @@ export function DocumentAccessMatrixPage({
                       )}
                     </div>
                   </td>
-                  {matrix.permissions.map((col) => {
+                  {visiblePermissions.map((col) => {
                     const explicitVal = userDraft[user.userId]?.[col.code] ?? null;
                     const preview = evaluatePreviewCell(user.userId, col.code);
                     const isOverridden = explicitVal === 'GRANT' || explicitVal === 'REVOKE';

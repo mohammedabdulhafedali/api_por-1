@@ -404,6 +404,126 @@ public sealed class DocumentsAclAndIntegrationsS06IntegrationTests
             var (delDoc1Blocked, _) = await SendAsync(adminClient, adminCsrf, HttpMethod.Delete, $"/api/v1/api-documents/{doc1Id}");
             Assert.Equal(HttpStatusCode.UnprocessableEntity, delDoc1Blocked);
 
+            // Subject-oriented editor: paginated document rows, independent file
+            // actions, role inheritance, explicit user overrides and safe patches.
+            var subjectRoleUrl = $"/api/v1/document-permissions/roles/{reviewerRoleId}/";
+            var subjectUserUrl = $"/api/v1/document-permissions/users/{devUserId}/";
+
+            // Exercise the data migration against an actual pre-split ACL: a
+            // missing atomic grant is copied once; an explicit denial survives.
+            await using (var legacyScope = factory.Services.CreateAsyncScope())
+            {
+                var legacyDb = legacyScope.ServiceProvider.GetRequiredService<ApiGovernanceDbContext>();
+                var permissionIds = await legacyDb.Permissions.ToDictionaryAsync(p => p.Code, p => p.Id);
+                await legacyDb.DocumentUserPermissions.Where(x => x.DocumentId == doc1Id && x.UserId == adminId
+                    && x.PermissionId == permissionIds[DocumentPermissionCatalog.FilesUpload]).ExecuteDeleteAsync();
+                await legacyDb.DocumentUserPermissions.Where(x => x.DocumentId == doc1Id && x.UserId == adminId
+                    && x.PermissionId == permissionIds[DocumentPermissionCatalog.FilesDelete])
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Decision, "REVOKE"));
+            }
+            var migrationOptions = new DbContextOptionsBuilder<ApiGovernanceDbContext>()
+                .UseNpgsql(BackendContractIntegrationTests.GetIsolatedTestMigrationsConnectionString(),
+                    n => n.MigrationsAssembly(typeof(ApiGovernanceDbContext).Assembly.FullName)).Options;
+            await using (var migrationDb = new ApiGovernanceDbContext(migrationOptions))
+            {
+                var migrator = migrationDb.GetService<IMigrator>();
+                await migrator.MigrateAsync("20261125184650_AddUsernameToUsers");
+                await migrator.MigrateAsync();
+            }
+            await using (var convertedScope = factory.Services.CreateAsyncScope())
+            {
+                var auth = convertedScope.ServiceProvider.GetRequiredService<IDocumentAuthorizationService>();
+                var converted = (await auth.EvaluateDocumentPermissionsBatchAsync(adminId, [doc1Id]))[doc1Id];
+                Assert.True(converted[DocumentPermissionCatalog.FilesUpload].Allowed);
+                Assert.False(converted[DocumentPermissionCatalog.FilesDelete].Allowed);
+            }
+            var (subjectReadStatus, subjectPage) = await SendAsync(adminClient, adminCsrf, HttpMethod.Get, subjectRoleUrl);
+            Assert.Equal(HttpStatusCode.OK, subjectReadStatus);
+            Assert.Equal(2, subjectPage!.RootElement.GetProperty("totalCount").GetInt32());
+            var atomicCodes = subjectPage.RootElement.GetProperty("permissions").EnumerateArray()
+                .Select(x => x.GetProperty("code").GetString()).ToArray();
+            Assert.Contains(DocumentPermissionCatalog.FilesUpload, atomicCodes);
+            Assert.Contains(DocumentPermissionCatalog.FilesDelete, atomicCodes);
+            Assert.DoesNotContain(DocumentPermissionCatalog.FilesManage, atomicCodes);
+
+            // A new view grant must not silently grant file viewing/downloading.
+            Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(adminClient, adminCsrf, HttpMethod.Patch, subjectRoleUrl,
+                new { changes = new[] { new { documentId = doc2Id, permissionCode = DocumentPermissionCatalog.View,
+                    expectedDecision = (string?)null, decision = "GRANT" } } })).Status);
+            var (_, independentPage) = await SendAsync(adminClient, adminCsrf, HttpMethod.Get, subjectUserUrl);
+            var independentCells = independentPage!.RootElement.GetProperty("items").EnumerateArray()
+                .Single(x => x.GetProperty("documentId").GetGuid() == doc2Id).GetProperty("cells");
+            Assert.True(independentCells.GetProperty(DocumentPermissionCatalog.View).GetProperty("allowed").GetBoolean());
+            Assert.False(independentCells.GetProperty(DocumentPermissionCatalog.FilesView).GetProperty("allowed").GetBoolean());
+            Assert.False(independentCells.GetProperty(DocumentPermissionCatalog.FilesDownload).GetProperty("allowed").GetBoolean());
+
+            var roleChanges = new { changes = new[]
+            {
+                new { documentId = doc1Id, permissionCode = DocumentPermissionCatalog.FilesUpload, expectedDecision = (string?)null, decision = "GRANT" },
+                new { documentId = doc1Id, permissionCode = DocumentPermissionCatalog.FilesDelete, expectedDecision = (string?)null, decision = "REVOKE" }
+            } };
+            Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(adminClient, adminCsrf, HttpMethod.Patch, subjectRoleUrl, roleChanges)).Status);
+            var (_, inheritedPage) = await SendAsync(adminClient, adminCsrf, HttpMethod.Get, subjectUserUrl);
+            var inheritedCells = inheritedPage!.RootElement.GetProperty("items").EnumerateArray()
+                .Single(x => x.GetProperty("documentId").GetGuid() == doc1Id).GetProperty("cells");
+            Assert.True(inheritedCells.GetProperty(DocumentPermissionCatalog.FilesUpload).GetProperty("allowed").GetBoolean());
+            Assert.False(inheritedCells.GetProperty(DocumentPermissionCatalog.FilesDelete).GetProperty("allowed").GetBoolean());
+
+            var userChange = new { changes = new[]
+            {
+                new { documentId = doc1Id, permissionCode = DocumentPermissionCatalog.FilesUpload, expectedDecision = (string?)null, decision = "REVOKE" }
+            } };
+            Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(adminClient, adminCsrf, HttpMethod.Patch, subjectUserUrl, userChange)).Status);
+            // Repeating a stale patch must not overwrite a newer decision.
+            Assert.Equal(HttpStatusCode.Conflict, (await SendAsync(adminClient, adminCsrf, HttpMethod.Patch, subjectUserUrl, userChange)).Status);
+            var (_, updatedPage) = await SendAsync(adminClient, adminCsrf, HttpMethod.Get, subjectUserUrl);
+            var updatedCells = updatedPage!.RootElement.GetProperty("items").EnumerateArray()
+                .Single(x => x.GetProperty("documentId").GetGuid() == doc1Id).GetProperty("cells");
+            Assert.False(updatedCells.GetProperty(DocumentPermissionCatalog.FilesUpload).GetProperty("allowed").GetBoolean());
+            Assert.Equal("USER_REVOKE", updatedCells.GetProperty(DocumentPermissionCatalog.FilesUpload).GetProperty("source").GetString());
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var auth = scope.ServiceProvider.GetRequiredService<IDocumentAuthorizationService>();
+                var evaluated = await auth.EvaluateDocumentPermissionsBatchAsync(devUserId, [doc1Id, doc2Id]);
+                Assert.False(evaluated[doc1Id][DocumentPermissionCatalog.FilesUpload].Allowed);
+                Assert.False(evaluated[doc1Id][DocumentPermissionCatalog.FilesDelete].Allowed);
+                Assert.True(evaluated[doc1Id][DocumentPermissionCatalog.View].Allowed);
+                Assert.False(evaluated[doc2Id][DocumentPermissionCatalog.FilesUpload].Allowed);
+            }
+
+            // Bulk patch is atomic across documents: a conflict on document 2
+            // rolls back the valid change on document 1 as well.
+            var atomicPatch = new { changes = new[]
+            {
+                new { documentId = doc1Id, permissionCode = DocumentPermissionCatalog.FilesUpload, expectedDecision = "REVOKE", decision = "GRANT" },
+                new { documentId = doc2Id, permissionCode = DocumentPermissionCatalog.FilesUpload, expectedDecision = "REVOKE", decision = "GRANT" }
+            } };
+            Assert.Equal(HttpStatusCode.Conflict, (await SendAsync(adminClient, adminCsrf, HttpMethod.Patch, subjectUserUrl, atomicPatch)).Status);
+            await using (var rollbackScope = factory.Services.CreateAsyncScope())
+            {
+                var auth = rollbackScope.ServiceProvider.GetRequiredService<IDocumentAuthorizationService>();
+                Assert.False((await auth.EvaluateDocumentPermissionsBatchAsync(devUserId, [doc1Id]))[doc1Id][DocumentPermissionCatalog.FilesUpload].Allowed);
+            }
+
+            // Last access manager cannot revoke their own final administrative grant.
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await SendAsync(adminClient, adminCsrf, HttpMethod.Patch,
+                $"/api/v1/document-permissions/users/{adminId}/", new { changes = new[]
+                {
+                    new { documentId = doc1Id, permissionCode = DocumentPermissionCatalog.AccessManage, expectedDecision = "GRANT", decision = "REVOKE" }
+                } })).Status);
+
+            // General ACL permission never confers scope over arbitrary documents.
+            var generalIds = new[] { "api_documents.view", "api_documents.edit", "integrations.view", "integrations.create",
+                "documents.permissions.view", "documents.permissions.manage" }.Select(code => permMap[code]).ToArray();
+            Assert.Equal(HttpStatusCode.OK, (await SendAsync(adminClient, adminCsrf, HttpMethod.Put,
+                $"/api/v1/roles/{reviewerRoleId}/permissions", new { permissionIds = generalIds })).Status);
+            var (hiddenStatus, hiddenPage) = await SendAsync(devClient, devCsrf, HttpMethod.Get, subjectUserUrl);
+            Assert.Equal(HttpStatusCode.OK, hiddenStatus);
+            Assert.Equal(0, hiddenPage!.RootElement.GetProperty("totalCount").GetInt32());
+            Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(devClient, devCsrf, HttpMethod.Patch, subjectUserUrl, userChange)).Status);
+            using (var noCsrf = await adminClient.PatchAsJsonAsync(subjectUserUrl, userChange))
+                Assert.Equal(HttpStatusCode.Forbidden, noCsrf.StatusCode);
+
             // Deleting unlinked doc2 succeeds -> 204
             var (delDoc2Ok, _) = await SendAsync(adminClient, adminCsrf, HttpMethod.Delete, $"/api/v1/api-documents/{doc2Id}");
             Assert.Equal(HttpStatusCode.NoContent, delDoc2Ok);

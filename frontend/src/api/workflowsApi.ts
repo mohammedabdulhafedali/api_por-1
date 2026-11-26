@@ -46,6 +46,7 @@ export interface WorkflowRunDetails {
   activeStageName?: string | null;
   activeStageRoleName?: string | null;
   canCurrentUserDecideActiveStage: boolean;
+  allowedDecisions?: WorkflowDecisionKind[];
   stages: WorkflowRunStageItem[];
   traceId?: string;
 }

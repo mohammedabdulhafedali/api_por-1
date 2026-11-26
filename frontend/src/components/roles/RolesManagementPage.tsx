@@ -1,11 +1,6 @@
+import { PermissionsEditorPage } from '../permissions/PermissionsEditorPage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiProblemError } from '../../api/authApi';
-import {
-  PermissionsCatalogResult,
-  getPermissionsCatalog,
-  getRolePermissions,
-  replaceRolePermissions,
-} from '../../api/permissionsApi';
 import {
   RoleDetails,
   createRole,
@@ -15,45 +10,19 @@ import {
 } from '../../api/rolesApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
-  toggleMatrixAllSelection,
-  toggleMatrixCellSelection,
-  toggleMatrixColumnSelection,
-  toggleMatrixGroupSelection,
-  toggleMatrixRowSelection,
-} from '../../utils/matrixSelection';
-import { resolveBulkColumnLabel, resolvePermissionChipLabel } from '../../utils/permissionLabels';
-import {
-  Button,
   CentralModalDialog,
   DataTable,
   DataTableColumn,
   ErrorState,
   FormField,
-  MatrixColumnDef,
-  MatrixRowDef,
   PaginationBar,
-  PermissionBoardScreen,
-  PermissionsCardsBoard,
   ReferenceIcon,
   RowActionButton,
   SearchFilterBar,
   StandaloneFormPage,
   StatusBadge,
   TextInput,
-  makeMatrixCellKey,
 } from '../ui';
-
-const REMOVED_SCREEN_IDS = new Set(['UI-18', 'UI-19', 'LEGACY_COMPOUND']);
-const REMOVED_PERM_CODES = new Set([
-  'search.view',
-  'portal.view',
-  'consumers.manage',
-  'api_groups.manage',
-  'file_types.manage',
-  'requirements.manage',
-  'routes.manage',
-  'changes.config.manage',
-]);
 
 type PageMode = 'list' | 'create' | 'edit' | 'matrix';
 
@@ -95,7 +64,7 @@ const COPY = {
     inactiveBadge: 'معطّل',
     pinnedBadge: 'مثبّت',
     standardBadge: 'اعتيادي',
-    matrixBtn: 'مصفوفة الصلاحيات',
+    matrixBtn: 'تعديل الصلاحيات',
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
@@ -172,7 +141,7 @@ const COPY = {
     inactiveBadge: 'Inactive',
     pinnedBadge: 'Pinned',
     standardBadge: 'Standard',
-    matrixBtn: 'Permissions Matrix',
+    matrixBtn: 'Edit permissions',
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
@@ -242,7 +211,6 @@ export function RolesManagementPage({
   const canEdit = permissions.some((p) => p.toLowerCase() === 'roles.edit');
   const canDelete = permissions.some((p) => p.toLowerCase() === 'roles.delete');
   const canViewMatrix = permissions.some((p) => p.toLowerCase() === 'permissions.view');
-  const canManageMatrix = permissions.some((p) => p.toLowerCase() === 'permissions.manage');
 
   const [mode, setMode] = useState<PageMode>('list');
   const [editingRole, setEditingRole] = useState<RoleDetails | null>(null);
@@ -263,9 +231,6 @@ export function RolesManagementPage({
   const [modal, setModal] = useState<ModalState | null>(null);
 
   // Task I04: Role Permissions Matrix state (UI-25)
-  const [matrixLoading, setMatrixLoading] = useState(false);
-  const [matrixCatalog, setMatrixCatalog] = useState<PermissionsCatalogResult | null>(null);
-  const [selectedCells, setSelectedCells] = useState<Set<string>>(() => new Set());
 
   const nameRef = useRef<HTMLInputElement | null>(null);
 
@@ -333,155 +298,9 @@ export function RolesManagementPage({
     }
   };
 
-  const openRoleMatrixPage = async (role: RoleDetails) => {
+  const openRoleMatrixPage = (role: RoleDetails) => {
     setEditingRole(role);
     setMode('matrix');
-    setMatrixLoading(true);
-    try {
-      const [catalog, rolePerms] = await Promise.all([
-        getPermissionsCatalog(lang),
-        getRolePermissions(role.id, lang),
-      ]);
-      setMatrixCatalog(catalog);
-      const grantedSet = new Set(rolePerms.permissionIds);
-      const nextSelected = new Set<string>();
-      for (const perm of catalog.permissions) {
-        if (grantedSet.has(perm.id)) {
-          nextSelected.add(makeMatrixCellKey(perm.screenId, perm.columnId));
-        }
-      }
-      setSelectedCells(nextSelected);
-    } catch (err) {
-      setMode('list');
-      handleApiError(err);
-    } finally {
-      setMatrixLoading(false);
-    }
-  };
-
-  const matrixColumns: MatrixColumnDef[] = useMemo(() => {
-    if (!matrixCatalog) return [];
-    return matrixCatalog.columns.map((c) => ({
-      id: c.id,
-      label: resolveBulkColumnLabel(c.id, lang === 'ar' ? c.labelAr : c.labelEn, lang),
-    }));
-  }, [matrixCatalog, lang]);
-
-  const activeCatalogScreens = useMemo(() => {
-    if (!matrixCatalog) return [];
-    return matrixCatalog.screens.filter((s) => !REMOVED_SCREEN_IDS.has(s.id));
-  }, [matrixCatalog]);
-
-  const activeCatalogPermissions = useMemo(() => {
-    if (!matrixCatalog) return [];
-    return matrixCatalog.permissions.filter(
-      (p) =>
-        !REMOVED_SCREEN_IDS.has(p.screenId) &&
-        !REMOVED_PERM_CODES.has(p.code.toLowerCase())
-    );
-  }, [matrixCatalog]);
-
-  const matrixRows: MatrixRowDef[] = useMemo(() => {
-    return activeCatalogScreens.map((s) => ({
-      id: s.id,
-      groupId: s.groupId,
-      groupLabel: lang === 'ar' ? s.groupLabelAr : s.groupLabelEn,
-      title: lang === 'ar' ? s.titleAr : s.titleEn,
-      technicalPath: s.technicalPath,
-      applicableColumnIds: s.applicableColumnIds,
-    }));
-  }, [activeCatalogScreens, lang]);
-
-  const permissionByCell = useMemo(() => {
-    const map = new Map<string, { id: string; code: string }>();
-    for (const perm of activeCatalogPermissions) {
-      // Preserve first/canonical permission mapping per (screenId, columnId)
-      const key = makeMatrixCellKey(perm.screenId, perm.columnId);
-      if (!map.has(key)) {
-        map.set(key, { id: perm.id, code: perm.code });
-      }
-    }
-    return map;
-  }, [activeCatalogPermissions]);
-
-  const permissionIdByCell = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const [k, v] of permissionByCell.entries()) {
-      map.set(k, v.id);
-    }
-    return map;
-  }, [permissionByCell]);
-
-  const colLabelById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of matrixColumns) {
-      map.set(c.id, c.label);
-    }
-    return map;
-  }, [matrixColumns]);
-
-  const boardScreens: PermissionBoardScreen[] = useMemo(() => {
-    return activeCatalogScreens
-      .map((scr) => {
-        const items = scr.applicableColumnIds
-          .filter((colId) => permissionByCell.has(makeMatrixCellKey(scr.id, colId)))
-          .map((colId) => {
-            const cellKey = makeMatrixCellKey(scr.id, colId);
-            const permMeta = permissionByCell.get(cellKey);
-            return {
-              id: cellKey,
-              columnId: colId,
-              label: resolvePermissionChipLabel(
-                permMeta?.code,
-                colId,
-                colLabelById.get(colId) ?? colId,
-                lang
-              ),
-              checked: selectedCells.has(cellKey),
-              mode: 'standard' as const,
-            };
-          });
-
-        return {
-          id: scr.id,
-          groupId: scr.groupId,
-          groupLabel: lang === 'ar' ? scr.groupLabelAr : scr.groupLabelEn,
-          title: lang === 'ar' ? scr.titleAr : scr.titleEn,
-          items,
-        };
-      })
-      .filter((s) => s.items.length > 0);
-  }, [activeCatalogScreens, permissionIdByCell, colLabelById, selectedCells, lang]);
-
-  const boardActionColumns = useMemo(() => {
-    const usedColIds = new Set(activeCatalogPermissions.map((p) => p.columnId));
-    return matrixColumns.filter((c) => usedColIds.has(c.id));
-  }, [matrixColumns, activeCatalogPermissions]);
-
-  const selectedPermissionIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const cellKey of selectedCells) {
-      const permId = permissionIdByCell.get(cellKey);
-      if (permId) ids.push(permId);
-    }
-    return ids;
-  }, [selectedCells, permissionIdByCell]);
-
-  const handleSaveMatrix = async () => {
-    if (!editingRole) return;
-    try {
-      await replaceRolePermissions(editingRole.id, selectedPermissionIds, lang);
-      setMode('list');
-      setModal({
-        variant: 'success',
-        title: copy.matrixSuccessTitle,
-        message: copy.matrixSuccessMsg,
-      });
-      await loadDirectory();
-      onPermissionsChanged?.();
-    } catch (err) {
-      handleApiError(err);
-    }
   };
 
   const columns: DataTableColumn<RoleDetails>[] = useMemo(
@@ -678,100 +497,9 @@ export function RolesManagementPage({
           )}
         </section>
       ) : mode === 'matrix' && editingRole ? (
-        <StandaloneFormPage
-          modeBadgeLabel={copy.matrixBadge}
-          formTitle={`${copy.matrixTitle}: ${editingRole.name}`}
-          formSubtitle={copy.matrixSubtitle}
-          backButtonLabel={copy.backBtn}
-          submitButtonLabel={canManageMatrix ? copy.saveMatrixBtn : copy.backBtn}
-          cancelButtonLabel={copy.cancelBtn}
-          onBack={() => setMode('list')}
-          onCancel={() => setMode('list')}
-          onSubmit={() => {
-            if (!canManageMatrix) {
-              setMode('list');
-              return;
-            }
-            setModal({
-              variant: 'confirm',
-              title: copy.matrixConfirmTitle,
-              message: copy.matrixConfirmMsg,
-              onConfirmAction: handleSaveMatrix,
-            });
-          }}
-        >
-          {matrixLoading ? (
-            <p>{copy.matrixLoadingText}</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <strong>{editingRole.name}</strong>
-                  <StatusBadge variant={editingRole.isActive ? 'success' : 'danger'}>
-                    {editingRole.isActive ? copy.activeBadge : copy.inactiveBadge}
-                  </StatusBadge>
-                  {editingRole.isPinned && (
-                    <StatusBadge variant="info">{copy.pinnedBadge}</StatusBadge>
-                  )}
-                </div>
-                <StatusBadge variant="info">
-                  {copy.matrixSelectedBadge} {selectedPermissionIds.length} /{' '}
-                  {activeCatalogPermissions.length}
-                </StatusBadge>
-              </div>
-
-              {!canManageMatrix && (
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-                  {copy.matrixReadOnlyHint}
-                </p>
-              )}
-
-              <PermissionsCardsBoard
-                lang={lang}
-                disabled={!canManageMatrix}
-                screens={boardScreens}
-                actionColumns={boardActionColumns}
-                onToggleItem={(cellKey) => {
-                  if (!canManageMatrix) return;
-                  const [rowId, colId] = cellKey.split('::');
-                  if (rowId && colId) {
-                    setSelectedCells((prev) => toggleMatrixCellSelection(prev, rowId, colId));
-                  }
-                }}
-                onToggleScreen={(rowId, checked) => {
-                  if (!canManageMatrix) return;
-                  setSelectedCells((prev) =>
-                    toggleMatrixRowSelection(prev, matrixRows, matrixColumns, rowId, checked)
-                  );
-                }}
-                onToggleColumn={(colId, checked) => {
-                  if (!canManageMatrix) return;
-                  setSelectedCells((prev) =>
-                    toggleMatrixColumnSelection(prev, matrixRows, colId, checked)
-                  );
-                }}
-                onToggleGroup={(groupId, checked) => {
-                  if (!canManageMatrix) return;
-                  setSelectedCells((prev) =>
-                    toggleMatrixGroupSelection(prev, matrixRows, matrixColumns, groupId, checked)
-                  );
-                }}
-                onToggleAll={(checked) => {
-                  if (!canManageMatrix) return;
-                  setSelectedCells(toggleMatrixAllSelection(matrixRows, matrixColumns, checked));
-                }}
-              />
-            </div>
-          )}
-        </StandaloneFormPage>
+        <PermissionsEditorPage kind="roles" subjectId={editingRole.id} subjectName={editingRole.name}
+          lang={lang} actorPermissions={permissions} onBack={() => { setMode('list'); void loadDirectory(); }}
+          onSessionExpired={onSessionExpired} onPermissionsChanged={onPermissionsChanged} />
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={mode === 'create' ? copy.createBadge : copy.editBadge}

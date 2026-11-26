@@ -73,7 +73,7 @@ const COPY = {
     noRolesLabel: 'بلا أدوار مسندة',
     editBtn: 'تعديل',
     assignRolesBtn: 'الأدوار',
-    permissionsBtn: 'الصلاحيات',
+    permissionsBtn: 'تعديل الصلاحيات',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
     deleteBtn: 'حذف',
@@ -167,7 +167,7 @@ const COPY = {
     noRolesLabel: 'No roles assigned',
     editBtn: 'Edit',
     assignRolesBtn: 'Roles',
-    permissionsBtn: 'Permissions',
+    permissionsBtn: 'Edit permissions',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
     deleteBtn: 'Delete',
@@ -809,6 +809,7 @@ export function UsersManagementPage({
           userId={editingUser.id}
           lang={lang}
           canManage={canManagePermissions}
+          actorPermissions={permissions}
           onBack={() => setMode('list')}
           onSessionExpired={onSessionExpired}
           onPermissionsChanged={onPermissionsChanged}

@@ -85,6 +85,7 @@ describe('Sprint S10 Sequential Approval Workflow Engine UI (UI-11 / W01-W04)', 
       activeStageName: stage1Status === 'ACTIVE' ? 'المراجعة الأمنية' : 'الاعتماد المعماري',
       activeStageRoleName: stage1Status === 'ACTIVE' ? 'SecurityReviewer' : 'ArchitectReviewer',
       canCurrentUserDecideActiveStage: stage1Status === 'ACTIVE',
+      allowedDecisions: ['APPROVE', 'RETURN'],
       stages: [
         {
           id: 'st-1',
@@ -300,13 +301,14 @@ describe('Sprint S10 Sequential Approval Workflow Engine UI (UI-11 / W01-W04)', 
     );
 
     // 1. Open Pending Approvals Inbox (W01-W04)
-    const inboxBtn = await screen.findByRole('button', { name: 'صندوق المراجعات بانتظار قراري (W01–W04)' });
+    const inboxBtn = await screen.findByRole('button', { name: 'صندوق المراجعات' });
     fireEvent.click(inboxBtn);
     expect(await screen.findByText('CorePay ← مصرف S10')).toBeInTheDocument();
 
     // 2. Click Decide Stage -> StandaloneFormPage validates mandatory notes for RETURN
-    fireEvent.click(screen.getByRole('button', { name: 'اتخاذ قرار المرحلة (W02)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'اتخاذ قرار المرحلة' }));
     const selectChoice = await screen.findByLabelText(/القرار المطلوب/);
+    expect(screen.queryByRole('option', { name: /رفض نهائي/ })).not.toBeInTheDocument();
     fireEvent.change(selectChoice, { target: { value: 'RETURN' } });
     fireEvent.click(screen.getByRole('button', { name: 'تأكيد وتسجيل القرار' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/الملاحظات إلزامية/);
@@ -322,10 +324,10 @@ describe('Sprint S10 Sequential Approval Workflow Engine UI (UI-11 / W01-W04)', 
 
     // 4. Open Integration -> UI-11 Revisions tab shows frozen run stages + history entry
     fireEvent.click(screen.getByRole('button', { name: 'العودة إلى قائمة التكاملات' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'التفاصيل والتبويبات (UI-09)' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'المراجعات (UI-11)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'التفاصيل' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'المراجعات' }));
 
-    expect(await screen.findByText('مسار الاعتماد التنفيذي المجمد (W01–W04)')).toBeInTheDocument();
+    expect(await screen.findByText('مسار الاعتماد التنفيذي')).toBeInTheDocument();
     expect(await screen.findByText('موافقة المرحلة الأمنية')).toBeInTheDocument();
     expect(screen.getByText('المرحلة النشطة حاليًا')).toBeInTheDocument();
   });

@@ -74,7 +74,8 @@ public sealed record WorkflowRunDetailsDto(
     string? ActiveStageRoleName,
     bool CanCurrentUserDecideActiveStage,
     IReadOnlyList<WorkflowRunStageDto> Stages,
-    string TraceId);
+    string TraceId,
+    IReadOnlyList<string>? AllowedDecisions = null);
 
 public sealed record WorkflowInboxItemDto(
     Guid RunId,

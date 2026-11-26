@@ -64,6 +64,7 @@ export interface StandaloneFormPageProps {
   submitButtonLabel: string;
   cancelButtonLabel: string;
   isSubmitting?: boolean;
+  submitDisabled?: boolean;
   onBack: () => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -79,6 +80,7 @@ export function StandaloneFormPage({
   submitButtonLabel,
   cancelButtonLabel,
   isSubmitting = false,
+  submitDisabled = false,
   onBack,
   onCancel,
   onSubmit,
@@ -107,7 +109,7 @@ export function StandaloneFormPage({
           <Button type="button" variant="outline" onClick={onCancel}>
             {cancelButtonLabel}
           </Button>
-          <Button type="submit" variant="primary" isLoading={isSubmitting}>
+          <Button type="submit" variant="primary" isLoading={isSubmitting} disabled={submitDisabled}>
             {submitButtonLabel}
           </Button>
         </div>

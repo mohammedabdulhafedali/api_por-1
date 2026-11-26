@@ -118,6 +118,8 @@ public sealed class IdentityAuthenticationIntegrationTests
             FullName = $"I01 User {userId:N}"[..24],
             Email = email,
             NormalizedEmail = email.ToUpperInvariant(),
+              Username = email.Split('@')[0],
+              NormalizedUsername = email.Split('@')[0].ToUpperInvariant(),
             SecurityStamp = Guid.NewGuid().ToString("N"),
             ConcurrencyStamp = Guid.NewGuid().ToString("N"),
             LockoutEnabled = true,

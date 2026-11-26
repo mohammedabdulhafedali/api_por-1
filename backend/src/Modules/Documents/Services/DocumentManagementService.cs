@@ -581,6 +581,24 @@ public sealed class DocumentManagementService(
 
         var permDict = await documentAuthorization.EnsureDocumentPermissionDictionaryAsync(cancellationToken);
 
+        if (!request.UseAtomicPermissions)
+        {
+            // Preserve the semantics of clients using the original compound ACL
+            // contract. The new editor explicitly opts into independent actions.
+            var roleRules = request.RolePermissions.ToList();
+            var userRules = request.UserPermissions.ToList();
+            foreach (var (child, parent) in DocumentPermissionCatalog.LegacyParents)
+            {
+                foreach (var rule in request.RolePermissions.Where(r => string.Equals(r.PermissionCode, parent, StringComparison.OrdinalIgnoreCase)))
+                    if (!roleRules.Any(r => r.RoleId == rule.RoleId && string.Equals(r.PermissionCode, child, StringComparison.OrdinalIgnoreCase)))
+                        roleRules.Add(new(rule.RoleId, child, rule.Decision));
+                foreach (var rule in request.UserPermissions.Where(r => string.Equals(r.PermissionCode, parent, StringComparison.OrdinalIgnoreCase)))
+                    if (!userRules.Any(r => r.UserId == rule.UserId && string.Equals(r.PermissionCode, child, StringComparison.OrdinalIgnoreCase)))
+                        userRules.Add(new(rule.UserId, child, rule.Decision));
+            }
+            request = request with { RolePermissions = roleRules, UserPermissions = userRules };
+        }
+
         var distinctRoleIds = request.RolePermissions.Select(r => r.RoleId).Distinct().ToList();
         var validRoleIds = distinctRoleIds.Count == 0
             ? new HashSet<Guid>()
@@ -675,6 +693,8 @@ public sealed class DocumentManagementService(
 
         await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM api_documents WHERE id = {documentId} FOR UPDATE", cancellationToken);
         var existingRoleAcl = await dbContext.DocumentRolePermissions
             .Where(r => r.DocumentId == documentId)
             .ToListAsync(cancellationToken);
@@ -711,7 +731,7 @@ public sealed class DocumentManagementService(
     // ========================================================================
     // Validation, Anti-Lockout & Projection Helpers
     // ========================================================================
-    private async Task EnsureAtLeastOneDocumentAccessManagerRemainsAsync(
+    internal async Task EnsureAtLeastOneDocumentAccessManagerRemainsAsync(
         Guid documentId,
         Guid accessManagePermId,
         IReadOnlyList<DocumentRolePermissionEntity> proposedRoleAcl,
@@ -1151,10 +1171,10 @@ public sealed class DocumentManagementService(
                 var roleDecisionsForCell = new List<string>();
                 foreach (var ar in activeRoles)
                 {
-                    if (roleAclLookup.TryGetValue(ar.RoleId, out var rMap) &&
-                        rMap.TryGetValue(col.Code, out var rDec))
+                    if (roleAclLookup.TryGetValue(ar.RoleId, out var rMap))
                     {
-                        roleDecisionsForCell.Add(rDec);
+                        var decision = rMap.GetValueOrDefault(col.Code);
+                        if (decision is not null) roleDecisionsForCell.Add(decision);
                     }
                 }
 

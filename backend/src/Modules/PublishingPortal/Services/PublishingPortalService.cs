@@ -90,14 +90,13 @@ public sealed class PublishingPortalService(
             "PUBLICATIONS_LIST_DENIED",
             cancellationToken);
 
-        var canPublishDoc = docAccess.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Publish, out var pubRes)
-            && pubRes.Allowed;
+        bool DocAllows(string code) => docAccess.EffectivePermissions.TryGetValue(code, out var decision) && decision.Allowed;
 
-        var canCreatePub = canPublishDoc && await serverAuthorization.HasGeneralPermissionAsync(
+        var canCreatePub = DocAllows(DocumentPermissionCatalog.PublicationCreate) && await serverAuthorization.HasGeneralPermissionAsync(
             actorPrincipal, PublishingPermissionCodes.PublicationsCreate, cancellationToken);
-        var canWithdrawPub = canPublishDoc && await serverAuthorization.HasGeneralPermissionAsync(
+        var canWithdrawPub = DocAllows(DocumentPermissionCatalog.PublicationWithdraw) && await serverAuthorization.HasGeneralPermissionAsync(
             actorPrincipal, PublishingPermissionCodes.PublicationsWithdraw, cancellationToken);
-        var canManageUsage = canPublishDoc && await serverAuthorization.HasGeneralPermissionAsync(
+        var canManageUsage = DocAllows(DocumentPermissionCatalog.VersionUsage) && await serverAuthorization.HasGeneralPermissionAsync(
             actorPrincipal, PublishingPermissionCodes.VersionsUsageManage, cancellationToken);
 
         var (providerName, consumerName, apiGroupName) = await ResolveDocumentNamesAsync(document, cancellationToken);
@@ -151,7 +150,7 @@ public sealed class PublishingPortalService(
         await documentAuthorization.RequireDocumentPermissionAsync(
             actorPrincipal,
             document.Id,
-            DocumentPermissionCatalog.Publish,
+            DocumentPermissionCatalog.PublicationCreate,
             "REVISION_PUBLISH_DENIED",
             cancellationToken);
 
@@ -292,7 +291,7 @@ public sealed class PublishingPortalService(
         await documentAuthorization.RequireDocumentPermissionAsync(
             actorPrincipal,
             document.Id,
-            DocumentPermissionCatalog.Publish,
+            DocumentPermissionCatalog.PublicationWithdraw,
             "PUBLICATION_WITHDRAW_DENIED",
             cancellationToken);
 
@@ -350,7 +349,7 @@ public sealed class PublishingPortalService(
             cancellationToken);
 
         var canManage =
-            (docAccess.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.Publish, out var pubRes) && pubRes.Allowed) &&
+            (docAccess.EffectivePermissions.TryGetValue(DocumentPermissionCatalog.VersionUsage, out var pubRes) && pubRes.Allowed) &&
             await serverAuthorization.HasGeneralPermissionAsync(
                 actorPrincipal, PublishingPermissionCodes.VersionsUsageManage, cancellationToken);
 
@@ -385,7 +384,7 @@ public sealed class PublishingPortalService(
         await documentAuthorization.RequireDocumentPermissionAsync(
             actorPrincipal,
             document.Id,
-            DocumentPermissionCatalog.Publish,
+            DocumentPermissionCatalog.VersionUsage,
             "CONSUMER_VERSION_UPDATE_DENIED",
             cancellationToken);
 

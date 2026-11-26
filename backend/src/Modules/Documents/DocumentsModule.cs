@@ -27,10 +27,25 @@ public sealed class DocumentsModule : IBackendModule
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IDocumentManagementService, DocumentManagementService>();
+        services.AddScoped<SubjectDocumentPermissionsService>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
+        var subjects = endpoints.MapGroup("/document-permissions/{kind}/{subjectId:guid}")
+            .WithTags("Document permissions").RequireAuthorization();
+        subjects.MapGet("/", async (string kind, Guid subjectId, int? page, string? search,
+                HttpContext context, SubjectDocumentPermissionsService service, CancellationToken ct) =>
+            Results.Ok(await service.ReadAsync(context.User, kind, subjectId, page, search, ct)))
+            .RequireGeneralPermission("documents.permissions.view", "SUBJECT_DOCUMENT_ACL_READ_DENIED", "API_DOCUMENT");
+        subjects.MapPatch("/", async (string kind, Guid subjectId, SubjectDocumentPatch request,
+            HttpContext context, SubjectDocumentPermissionsService service, CancellationToken ct) =>
+            {
+                await service.PatchAsync(context.User, kind, subjectId, request, ct);
+                return Results.NoContent();
+            }).WithCsrfValidation()
+            .RequireGeneralPermission("documents.permissions.manage", "SUBJECT_DOCUMENT_ACL_WRITE_DENIED", "API_DOCUMENT");
+
         var docs = endpoints.MapGroup("/api-documents")
             .WithTags("API Documents & Access Control (S06)")
             .RequireAuthorization();

@@ -244,4 +244,6 @@ public sealed record IntegrationFilesWorkspaceResponse(
     bool CanSubmitRevision,
     bool CanCreateWorkingCopy,
     IReadOnlyList<ApprovedChangeRequestSummaryDto> ApprovedChangeRequests,
-    IReadOnlyList<WordDerivativeRecordDto> WordDerivatives);
+    IReadOnlyList<WordDerivativeRecordDto> WordDerivatives,
+    bool CanRescanFiles = false,
+    bool CanGenerateWordDerivatives = false);
