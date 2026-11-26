@@ -5,6 +5,7 @@ import {
   ApprovalRouteRoleOption,
   ApprovalRouteStageInput,
   createApprovalRoute,
+  deleteApprovalRoute,
   listApprovalRouteRoles,
   listApprovalRoutes,
   replaceApprovalRouteStages,
@@ -14,10 +15,13 @@ import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
   CentralModalDialog,
+  DataTable,
+  DataTableColumn,
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   SelectInput,
   StandaloneFormPage,
   StatusBadge,
@@ -47,7 +51,7 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    pageTitle: 'مسارات الاعتماد ومراحلها (UI-05)',
+    pageTitle: 'مسارات الاعتماد',
     pageDesc:
       'تعريف مسارات الاعتماد بمراحل متسلسلة تحدد اسم المرحلة وترتيبها والدور المسؤول فقط (دون نوع مرحلة أو تعيين مستخدم).',
     noViewTitle: 'صلاحية عرض مسارات الاعتماد غير متوفرة',
@@ -68,20 +72,25 @@ const COPY = {
     inactiveBadge: 'معطّل',
     noStagesWarning: 'لا توجد مراحل (مسار غير صالح)',
     editRouteBtn: 'تعديل المسار',
-    manageStagesBtn: 'إدارة المراحل (UI-05A)',
+    manageStagesBtn: 'إدارة المراحل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createBadge: 'إضافة مسار اعتماد · UI-05 / M06',
-    editBadge: 'تعديل مسار اعتماد · UI-05 / M06',
-    stagesBadge: 'إدارة مراحل المسار · UI-05A / M06',
-    createTitle: 'إضافة مسار اعتماد جديد ومراحله',
-    editTitle: 'تعديل اسم مسار الاعتماد',
-    stagesTitle: 'ترتيب وتحرير مراحل المسار',
-    formSub: 'تحتوي كل مرحلة على الاسم والترتيب والدور المسؤول فقط؛ ويكفي اعتماد عضو نشط واحد من الدور لإكمال المرحلة.',
-    backBtn: 'العودة إلى القائمة',
-    saveCreateBtn: 'حفظ وإنشاء المسار',
+    deleteBtn: 'حذف',
+    deleteTitle: 'تأكيد حذف مسار الاعتماد',
+    deleteConfirmMsg: 'هل أنت متأكد من حذف مسار الاعتماد؟ سيُمنع الحذف إذا كان مرتبطًا بأنواع تغيير أو وثائق أو معاملات.',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف مسار الاعتماد.',
+    createBadge: 'إضافة مسار اعتماد',
+    editBadge: 'تعديل مسار اعتماد',
+    stagesBadge: 'إدارة مراحل المسار',
+    createTitle: 'إضافة مسار اعتماد',
+    editTitle: 'تعديل مسار الاعتماد',
+    stagesTitle: 'مراحل مسار الاعتماد',
+    formSub: '',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
-    saveStagesBtn: 'حفظ ترتيب المراحل',
+    saveStagesBtn: 'حفظ المراحل',
     cancelBtn: 'إلغاء',
     routeNameLabel: 'اسم مسار الاعتماد',
     stagesSectionTitle: 'المراحل المرتبة للمسار',
@@ -93,7 +102,7 @@ const COPY = {
     stageNameLabel: 'اسم المرحلة',
     responsibleRoleLabel: 'الدور المسؤول',
     selectRole: '-- اختر الدور المسؤول --',
-    noRolesNotice: 'لا توجد أدوار نشطة؛ عرّف الأدوار من UI-25 أولًا.',
+    noRolesNotice: 'لا توجد أدوار نشطة؛ يرجى تعريف الأدوار أولًا.',
     validationRouteName: 'اسم مسار الاعتماد مطلوب (حرفان على الأقل).',
     validationStages: 'يجب إضافة مرحلة واحدة على الأقل باسم صحيح ودور مسؤول نشط دون تكرار اسم المرحلة.',
     createdTitle: 'تم إنشاء مسار الاعتماد',
@@ -108,7 +117,7 @@ const COPY = {
     ofWord: 'من',
   },
   en: {
-    pageTitle: 'Approval Routes & Stages (UI-05)',
+    pageTitle: 'Approval Routes',
     pageDesc:
       'Configure multi-stage approval routes with stage name, order, and responsible role ONLY (no stage type or assigned user).',
     noViewTitle: 'Missing approval routes permission',
@@ -129,20 +138,25 @@ const COPY = {
     inactiveBadge: 'Inactive',
     noStagesWarning: '0 stages (invalid route)',
     editRouteBtn: 'Edit Route',
-    manageStagesBtn: 'Manage Stages (UI-05A)',
+    manageStagesBtn: 'Manage Stages',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createBadge: 'Create Approval Route · UI-05 / M06',
-    editBadge: 'Edit Approval Route · UI-05 / M06',
-    stagesBadge: 'Manage Route Stages · UI-05A / M06',
-    createTitle: 'Create Approval Route & Stages',
-    editTitle: 'Edit Approval Route Name',
-    stagesTitle: 'Order & Edit Route Stages',
-    formSub: 'Each stage defines only Name, Order, and Responsible Role; one qualified member decision completes a stage.',
-    backBtn: 'Back to List',
-    saveCreateBtn: 'Save & Create Route',
+    deleteBtn: 'Delete',
+    deleteTitle: 'Confirm Route Deletion',
+    deleteConfirmMsg: 'Are you sure you want to delete this approval route? Blocked if referenced by change types, documents, or runs.',
+    deleteSuccessTitle: 'Deleted Successfully',
+    deleteSuccessMsg: 'Approval route has been deleted.',
+    createBadge: 'Create Approval Route',
+    editBadge: 'Edit Approval Route',
+    stagesBadge: 'Manage Route Stages',
+    createTitle: 'Add Approval Route',
+    editTitle: 'Edit Approval Route',
+    stagesTitle: 'Route Stages',
+    formSub: '',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
-    saveStagesBtn: 'Save Ordered Stages',
+    saveStagesBtn: 'Save Stages',
     cancelBtn: 'Cancel',
     routeNameLabel: 'Route Name',
     stagesSectionTitle: 'Ordered Approval Stages',
@@ -154,7 +168,7 @@ const COPY = {
     stageNameLabel: 'Stage Name',
     responsibleRoleLabel: 'Responsible Role',
     selectRole: '-- Select Responsible Role --',
-    noRolesNotice: 'No active roles available; create roles in UI-25 first.',
+    noRolesNotice: 'No active roles available; please create roles first.',
     validationRouteName: 'Route name is required (at least 2 characters).',
     validationStages: 'Add at least one unique stage with valid name and active responsible role.',
     createdTitle: 'Approval Route Created',
@@ -177,9 +191,11 @@ export function ApprovalRoutesPage({
 }: ApprovalRoutesPageProps) {
   const c = COPY[lang];
   const commonStrings = UI_STRINGS[lang];
-  const permSet = useMemo(() => new Set(permissions), [permissions]);
+  const permSet = useMemo(() => new Set(permissions.map((p) => p.toLowerCase())), [permissions]);
   const canView = permSet.has('routes.view');
-  const canManage = permSet.has('routes.manage');
+  const canCreate = permSet.has('routes.create');
+  const canEdit = permSet.has('routes.edit');
+  const canDelete = permSet.has('routes.delete');
 
   const [mode, setMode] = useState<PageMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -438,6 +454,99 @@ export function ApprovalRoutesPage({
     }
   };
 
+  const handleDeleteRoute = (route: ApprovalRouteItem) => {
+    setModal({
+      variant: 'confirm',
+      title: c.deleteTitle,
+      message: c.deleteConfirmMsg,
+      onConfirmAction: async () => {
+        setSubmitting(true);
+        try {
+          await deleteApprovalRoute(route.id, lang);
+          setModal({ variant: 'success', title: c.deleteSuccessTitle, message: c.deleteSuccessMsg });
+          await loadRoutes();
+        } catch (err) {
+          handleApiError(err, c.deleteTitle);
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
+
+  const columns: DataTableColumn<ApprovalRouteItem>[] = [
+    {
+      key: 'name',
+      header: c.colName,
+      render: (row) => <strong>{row.name}</strong>,
+    },
+    {
+      key: 'stages',
+      header: c.colStages,
+      render: (row) =>
+        row.stages.length === 0 ? (
+          <StatusBadge variant="danger">{c.noStagesWarning}</StatusBadge>
+        ) : (
+          <div className="workflow">
+            {row.stages.map((s, idx) => (
+              <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                <span className="step">
+                  {`${s.position}. ${s.stageName} (${s.responsibleRoleName})`}
+                </span>
+                {idx < row.stages.length - 1 && <span className="arrow">‹</span>}
+              </span>
+            ))}
+          </div>
+        ),
+    },
+    {
+      key: 'status',
+      header: c.colStatus,
+      render: (row) => (
+        <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+          {row.isActive ? c.activeBadge : c.inactiveBadge}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: c.colActions,
+      render: (row) =>
+        canEdit || canDelete ? (
+          <div className="row-actions">
+            {canEdit && (
+              <>
+                <RowActionButton
+                  icon="edit"
+                  label={c.editRouteBtn}
+                  onClick={() => openEditRouteName(row)}
+                />
+                <RowActionButton
+                  icon="layers"
+                  label={c.manageStagesBtn}
+                  onClick={() => openManageStages(row)}
+                />
+                <RowActionButton
+                  icon="power"
+                  label={row.isActive ? c.deactivateBtn : c.activateBtn}
+                  variant={row.isActive ? 'warning' : 'success'}
+                  onClick={() => handleToggleStatus(row)}
+                />
+              </>
+            )}
+            {canDelete && (
+              <RowActionButton
+                icon="trash"
+                label={c.deleteBtn}
+                variant="danger"
+                onClick={() => handleDeleteRoute(row)}
+              />
+            )}
+          </div>
+        ) : null,
+    },
+  ];
+
   if (!canView) {
     return (
       <section className="surface-card">
@@ -483,27 +592,29 @@ export function ApprovalRoutesPage({
           )}
 
           {(mode === 'create' || mode === 'edit') && (
-            <FormField
-              id="approval-route-name"
-              label={c.routeNameLabel}
-              required
-              error={routeNameError}
-            >
-              <TextInput
+            <div style={{ maxWidth: 540 }}>
+              <FormField
                 id="approval-route-name"
-                value={routeName}
-                hasError={Boolean(routeNameError)}
-                onChange={(e) => setRouteName(e.target.value)}
-              />
-            </FormField>
+                label={c.routeNameLabel}
+                required
+                error={routeNameError}
+              >
+                <TextInput
+                  id="approval-route-name"
+                  value={routeName}
+                  hasError={Boolean(routeNameError)}
+                  onChange={(e) => setRouteName(e.target.value)}
+                />
+              </FormField>
+            </div>
           )}
 
           {(mode === 'create' || mode === 'stages') && (
-            <div style={{ marginTop: 16 }}>
-              <div className="card-header-row" style={{ marginBottom: 10 }}>
-                <h3 className="card-title heading-font">{c.stagesSectionTitle}</h3>
+            <div className="compact-builder-section" style={{ marginTop: 14 }}>
+              <div className="compact-builder-head">
+                <h3 className="card-title heading-font" style={{ fontSize: 14 }}>{c.stagesSectionTitle}</h3>
                 <Button variant="outline" size="sm" onClick={addStageRow}>
-                  {c.addStageBtn}
+                  + {c.addStageBtn}
                 </Button>
               </div>
 
@@ -513,124 +624,98 @@ export function ApprovalRoutesPage({
                 </p>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {stageRows.map((row, idx) => (
-                  <div key={row.key} className="surface-card" style={{ padding: 14 }}>
-                    <div className="card-header-row" style={{ marginBottom: 10 }}>
-                      <StatusBadge variant="info">{`${c.stageOrderLabel} #${idx + 1}`}</StatusBadge>
-                      <div className="button-row">
-                        <Button
-                          variant="outline"
-                          size="sm"
+              <div className="compact-table-scroll">
+                <div className="compact-stage-grid">
+                  <div className="compact-stage-head">
+                    <div>{c.stageOrderLabel}</div>
+                    <div>{c.stageNameLabel}</div>
+                    <div>{c.responsibleRoleLabel}</div>
+                    <div>{c.colActions}</div>
+                  </div>
+
+                  {stageRows.map((row, idx) => (
+                    <div key={row.key} className="compact-stage-item">
+                      <span className="compact-order-badge">#{idx + 1}</span>
+
+                      <TextInput
+                        id={`stage-name-${idx}`}
+                        value={row.stageName}
+                        placeholder={c.stageNameLabel}
+                        aria-label={c.stageNameLabel}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStageRows((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key ? { ...item, stageName: value } : item
+                            )
+                          );
+                        }}
+                      />
+
+                      <SelectInput
+                        id={`stage-role-${idx}`}
+                        value={row.responsibleRoleId}
+                        aria-label={c.responsibleRoleLabel}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStageRows((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key ? { ...item, responsibleRoleId: value } : item
+                            )
+                          );
+                        }}
+                        options={[
+                          { value: '', label: c.selectRole },
+                          ...roleOptions.map((r) => ({ value: r.id, label: r.name })),
+                        ]}
+                      />
+
+                      <div className="compact-stage-actions">
+                        <RowActionButton
+                          icon="up"
+                          label={c.moveUpBtn}
                           disabled={idx === 0}
                           onClick={() => moveStageRow(idx, -1)}
-                        >
-                          {c.moveUpBtn}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
+                        />
+                        <RowActionButton
+                          icon="down"
+                          label={c.moveDownBtn}
                           disabled={idx === stageRows.length - 1}
                           onClick={() => moveStageRow(idx, 1)}
-                        >
-                          {c.moveDownBtn}
-                        </Button>
-                        {stageRows.length > 1 && (
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() =>
-                              setStageRows((prev) => prev.filter((r) => r.key !== row.key))
-                            }
-                          >
-                            {c.removeStageBtn}
-                          </Button>
-                        )}
+                        />
+                        <RowActionButton
+                          icon="trash"
+                          label={c.removeStageBtn}
+                          variant="danger"
+                          disabled={stageRows.length <= 1}
+                          onClick={() =>
+                            setStageRows((prev) => prev.filter((r) => r.key !== row.key))
+                          }
+                        />
                       </div>
                     </div>
-
-                    <div className="form-grid-2">
-                      <FormField id={`stage-name-${idx}`} label={c.stageNameLabel} required>
-                        <TextInput
-                          id={`stage-name-${idx}`}
-                          value={row.stageName}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setStageRows((prev) =>
-                              prev.map((item) =>
-                                item.key === row.key ? { ...item, stageName: value } : item
-                              )
-                            );
-                          }}
-                        />
-                      </FormField>
-
-                      <FormField
-                        id={`stage-role-${idx}`}
-                        label={c.responsibleRoleLabel}
-                        required
-                      >
-                        <SelectInput
-                          id={`stage-role-${idx}`}
-                          value={row.responsibleRoleId}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setStageRows((prev) =>
-                              prev.map((item) =>
-                                item.key === row.key ? { ...item, responsibleRoleId: value } : item
-                              )
-                            );
-                          }}
-                          options={[
-                            { value: '', label: c.selectRole },
-                            ...roleOptions.map((r) => ({ value: r.id, label: r.name })),
-                          ]}
-                        />
-                      </FormField>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </StandaloneFormPage>
       ) : (
-        <>
-          {canManage && (
-            <div className="page-actions">
-              <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                {c.addBtn}
-              </Button>
+        <section className="surface-card panel clean-table-panel">
+          {canCreate && (
+            <div className="compact-panel-top-actions">
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={c.addBtn}
+                aria-label={c.addBtn}
+                disabled={submitting}
+                onClick={openCreate}
+              >
+                <ReferenceIcon name="plus" size={18} />
+              </button>
             </div>
           )}
-          <section className="surface-card panel">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title heading-font">{c.pageTitle}</h2>
-                <p className="panel-desc">{c.pageDesc}</p>
-              </div>
-            </div>
-
-          <SearchFilterBar
-            searchValue={searchQuery}
-            searchPlaceholder={c.searchPlaceholder}
-            searchAriaLabel={c.searchAria}
-            onSearchChange={(val) => {
-              setSearchQuery(val);
-              setPage(1);
-            }}
-            filterValue={statusFilter}
-            filterAriaLabel={c.filterAria}
-            filterPlaceholder={c.filterAll}
-            filterOptions={[
-              { value: 'active', label: c.filterActive },
-              { value: 'inactive', label: c.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setStatusFilter(val);
-              setPage(1);
-            }}
-          />
 
           {errorMsg ? (
             <ErrorState
@@ -639,76 +724,17 @@ export function ApprovalRoutesPage({
               retryLabel={commonStrings.tableRetryBtn}
               onRetry={() => void loadRoutes()}
             />
-          ) : loading ? (
-            <div className="state-box" role="status" aria-live="polite">
-              <div className="state-box-title">{c.loadingText}</div>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="empty-state-box empty" role="status">
-              <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
-              <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
-            </div>
           ) : (
             <>
-              <div className="grid-2" style={{ marginTop: 14 }}>
-                {items.map((row) => (
-                  <div key={row.id} className="panel">
-                    <div className="panel-head">
-                      <div>
-                        <div className="row wrap">
-                          <div className="panel-title">
-                            <strong>{row.name}</strong>
-                          </div>
-                          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-                            {row.isActive ? c.activeBadge : c.inactiveBadge}
-                          </StatusBadge>
-                        </div>
-                        <div className="panel-desc">
-                          {c.linksSummary(row.changeTypesCount, row.documentsCount)}
-                        </div>
-                      </div>
-                      <div className="button-row">
-                        {canManage && (
-                          <>
-                            <Button variant="outline" size="sm" onClick={() => openEditRouteName(row)}>
-                              {c.editRouteBtn}
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              aria-label={c.manageStagesBtn}
-                              onClick={() => openManageStages(row)}
-                            >
-                              {c.manageStagesBtn.replace(/\s*\(UI-\d+[A-Z]?\)/g, '')}
-                            </Button>
-                            <Button
-                              variant={row.isActive ? 'danger' : 'secondary'}
-                              size="sm"
-                              onClick={() => handleToggleStatus(row)}
-                            >
-                              {row.isActive ? c.deactivateBtn : c.activateBtn}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {row.stages.length === 0 ? (
-                      <StatusBadge variant="danger">{c.noStagesWarning}</StatusBadge>
-                    ) : (
-                      <div className="workflow">
-                        {row.stages.map((s, idx) => (
-                          <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center' }}>
-                            <span className="step">
-                              {`${s.position}. ${s.stageName} (${s.responsibleRoleName})`}
-                            </span>
-                            {idx < row.stages.length - 1 && <span className="arrow">‹</span>}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <DataTable<ApprovalRouteItem>
+                columns={columns}
+                rows={items}
+                getRowKey={(row) => row.id}
+                isLoading={loading}
+                loadingTitle={c.loadingText}
+                emptyTitle={commonStrings.tableEmptyTitle}
+                emptyDescription={commonStrings.tableEmptyDesc}
+              />
 
               {totalCount > 0 && (
                 <PaginationBar
@@ -723,8 +749,7 @@ export function ApprovalRoutesPage({
               )}
             </>
           )}
-          </section>
-        </>
+        </section>
       )}
 
       <CentralModalDialog

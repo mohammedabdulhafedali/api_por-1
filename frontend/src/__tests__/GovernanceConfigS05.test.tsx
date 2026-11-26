@@ -12,11 +12,17 @@ const S05_ADMIN: AuthenticatedUser = {
   roles: [{ id: '20000000-0000-0000-0000-000000000005', name: 'ConfigAdmin' }],
   permissions: [
     'requirements.view',
-    'requirements.manage',
+    'requirements.create',
+    'requirements.edit',
+    'requirements.delete',
     'routes.view',
-    'routes.manage',
+    'routes.create',
+    'routes.edit',
+    'routes.delete',
     'changes.config.view',
-    'changes.config.manage',
+    'changes.config.create',
+    'changes.config.edit',
+    'changes.config.delete',
   ],
 };
 

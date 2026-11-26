@@ -6,6 +6,8 @@ import {
   ChangeTypeItem,
   createChangePolicy,
   createChangeType,
+  deleteChangePolicy,
+  deleteChangeType,
   listAssignableRoutesForChangeTypes,
   listChangePolicies,
   listChangeTypes,
@@ -21,7 +23,8 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   SelectInput,
   StandaloneFormPage,
   StatusBadge,
@@ -31,6 +34,7 @@ import {
 interface ChangeTypesAndPoliciesPageProps {
   lang: AppLanguage;
   permissions: string[];
+  section?: 'types' | 'policies';
   onSessionExpired: () => void;
 }
 
@@ -46,8 +50,8 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    tabTypes: 'أنواع طلبات التغيير (UI-06)',
-    tabPolicies: 'سياسات التغيير (M07)',
+    tabTypes: 'أنواع طلبات التغيير',
+    tabPolicies: 'سياسات التغيير',
     typesTitle: 'أنواع طلبات التغيير وربطها بمسارات الاعتماد',
     typesDesc: 'تحديد كل نوع طلب تغيير وربطه بمسار اعتماد فعّال يمتلك مرحلة واحدة على الأقل.',
     policiesTitle: 'سياسات التغيير المسموحة لوثائق API',
@@ -74,18 +78,23 @@ const COPY = {
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createTypeBadge: 'إضافة نوع تغيير · UI-06 / M07',
-    editTypeBadge: 'تعديل نوع تغيير · UI-06 / M07',
-    createPolicyBadge: 'إضافة سياسة تغيير · UI-06 / M07',
-    editPolicyBadge: 'تعديل سياسة تغيير · UI-06 / M07',
-    createTypeTitle: 'إضافة نوع طلب تغيير جديد',
-    editTypeTitle: 'تعديل نوع طلب التغيير',
-    createPolicyTitle: 'إضافة سياسة تغيير جديدة',
+    deleteBtn: 'حذف',
+    deleteTitle: 'تأكيد الحذف',
+    deleteConfirmMsg: 'هل أنت متأكد من حذف هذا السجل؟ سيُمنع الحذف إذا كان مرتبطًا بسياسات أو وثائق قائمة.',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف السجل.',
+    createTypeBadge: 'إضافة نوع تغيير',
+    editTypeBadge: 'تعديل نوع تغيير',
+    createPolicyBadge: 'إضافة سياسة تغيير',
+    editPolicyBadge: 'تعديل سياسة تغيير',
+    createTypeTitle: 'إضافة نوع تغيير',
+    editTypeTitle: 'تعديل نوع التغيير',
+    createPolicyTitle: 'إضافة سياسة تغيير',
     editPolicyTitle: 'تعديل سياسة التغيير',
-    typeFormSub: 'يجب ربط نوع التغيير بمسار اعتماد نشط يحتوي على مرحلة واحدة على الأقل.',
-    policyFormSub: 'اختر نوع تغيير واحدًا على الأقل لتضمينه في هذه السياسة.',
-    backBtn: 'العودة إلى القائمة',
-    saveCreateBtn: 'حفظ وإنشاء',
+    typeFormSub: '',
+    policyFormSub: '',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
     cancelBtn: 'إلغاء',
     typeNameLabel: 'اسم نوع التغيير',
@@ -93,7 +102,7 @@ const COPY = {
     selectRoute: '-- اختر مسار الاعتماد --',
     policyNameLabel: 'اسم سياسة التغيير',
     policyTypesLabel: 'أنواع طلبات التغيير المشمولة',
-    noRoutesNotice: 'لا توجد مسارات اعتماد نشطة بمراحل؛ أنشئ مسار اعتماد أولًا من UI-05.',
+    noRoutesNotice: 'لا توجد مسارات اعتماد نشطة بمراحل؛ يرجى إنشاء مسار اعتماد أولًا.',
     noTypesNotice: 'لا توجد أنواع تغيير نشطة بعد؛ أضف نوع تغيير أولًا.',
     validationName: 'الاسم مطلوب ويجب ألا يقل عن حرفين.',
     validationRoute: 'يجب اختيار مسار اعتماد صالح.',
@@ -110,8 +119,8 @@ const COPY = {
     ofWord: 'من',
   },
   en: {
-    tabTypes: 'Change Request Types (UI-06)',
-    tabPolicies: 'Change Policies (M07)',
+    tabTypes: 'Change Request Types',
+    tabPolicies: 'Change Policies',
     typesTitle: 'Change Request Types & Linked Approval Routes',
     typesDesc: 'Define change request types and bind each type to an active approval route with stages.',
     policiesTitle: 'Change Policies for API Documents',
@@ -138,18 +147,23 @@ const COPY = {
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createTypeBadge: 'Create Change Type · UI-06 / M07',
-    editTypeBadge: 'Edit Change Type · UI-06 / M07',
-    createPolicyBadge: 'Create Change Policy · UI-06 / M07',
-    editPolicyBadge: 'Edit Change Policy · UI-06 / M07',
-    createTypeTitle: 'Create Change Request Type',
-    editTypeTitle: 'Edit Change Request Type',
-    createPolicyTitle: 'Create Change Policy',
+    deleteBtn: 'Delete',
+    deleteTitle: 'Confirm Deletion',
+    deleteConfirmMsg: 'Are you sure you want to delete this record? Blocked if referenced by policies or documents.',
+    deleteSuccessTitle: 'Deleted Successfully',
+    deleteSuccessMsg: 'Record has been deleted.',
+    createTypeBadge: 'Create Change Type',
+    editTypeBadge: 'Edit Change Type',
+    createPolicyBadge: 'Create Change Policy',
+    editPolicyBadge: 'Edit Change Policy',
+    createTypeTitle: 'Add Change Type',
+    editTypeTitle: 'Edit Change Type',
+    createPolicyTitle: 'Add Change Policy',
     editPolicyTitle: 'Edit Change Policy',
-    typeFormSub: 'Each change type must be bound to an active non-empty approval route.',
-    policyFormSub: 'Select at least one active change type for this policy.',
-    backBtn: 'Back to List',
-    saveCreateBtn: 'Save & Create',
+    typeFormSub: '',
+    policyFormSub: '',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
     cancelBtn: 'Cancel',
     typeNameLabel: 'Change Type Name',
@@ -157,7 +171,7 @@ const COPY = {
     selectRoute: '-- Select Approval Route --',
     policyNameLabel: 'Change Policy Name',
     policyTypesLabel: 'Included Change Request Types',
-    noRoutesNotice: 'No active approval routes with stages found; create one in UI-05 first.',
+    noRoutesNotice: 'No active approval routes with stages found; please create one first.',
     noTypesNotice: 'No active change types available yet; create a change type first.',
     validationName: 'Name is required (at least 2 characters).',
     validationRoute: 'Please select a valid approval route.',
@@ -178,15 +192,18 @@ const COPY = {
 export function ChangeTypesAndPoliciesPage({
   lang,
   permissions,
+  section = 'types',
   onSessionExpired,
 }: ChangeTypesAndPoliciesPageProps) {
   const c = COPY[lang];
   const commonStrings = UI_STRINGS[lang];
-  const permSet = useMemo(() => new Set(permissions), [permissions]);
+  const permSet = useMemo(() => new Set(permissions.map((p) => p.toLowerCase())), [permissions]);
   const canView = permSet.has('changes.config.view');
-  const canManage = permSet.has('changes.config.manage');
+  const canCreate = permSet.has('changes.config.create');
+  const canEdit = permSet.has('changes.config.edit');
+  const canDelete = permSet.has('changes.config.delete');
 
-  const [tab, setTab] = useState<ActiveTab>('types');
+  const tab: ActiveTab = section;
   const [mode, setMode] = useState<PageMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -433,6 +450,46 @@ export function ChangeTypesAndPoliciesPage({
     }
   };
 
+  const handleDeleteType = (item: ChangeTypeItem) => {
+    setModal({
+      variant: 'confirm',
+      title: c.deleteTitle,
+      message: c.deleteConfirmMsg,
+      onConfirmAction: async () => {
+        setSubmitting(true);
+        try {
+          await deleteChangeType(item.id, lang);
+          setModal({ variant: 'success', title: c.deleteSuccessTitle, message: c.deleteSuccessMsg });
+          await Promise.all([loadData(), loadLookups()]);
+        } catch (err) {
+          handleApiError(err, c.deleteTitle);
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
+
+  const handleDeletePolicy = (item: ChangePolicyItem) => {
+    setModal({
+      variant: 'confirm',
+      title: c.deleteTitle,
+      message: c.deleteConfirmMsg,
+      onConfirmAction: async () => {
+        setSubmitting(true);
+        try {
+          await deleteChangePolicy(item.id, lang);
+          setModal({ variant: 'success', title: c.deleteSuccessTitle, message: c.deleteSuccessMsg });
+          await loadData();
+        } catch (err) {
+          handleApiError(err, c.deleteTitle);
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
+
   if (!canView) {
     return (
       <section className="surface-card">
@@ -455,11 +512,6 @@ export function ChangeTypesAndPoliciesPage({
       ),
     },
     {
-      key: 'policies',
-      header: c.colPoliciesCount,
-      render: (row) => <span className="ltr-code">{row.policiesCount}</span>,
-    },
-    {
       key: 'status',
       header: c.colStatus,
       render: (row) => (
@@ -472,20 +524,29 @@ export function ChangeTypesAndPoliciesPage({
       key: 'actions',
       header: c.colActions,
       render: (row) => (
-        <div className="button-row">
-          {canManage && (
+        <div className="row-actions">
+          {canEdit && (
             <>
-              <Button variant="outline" size="sm" onClick={() => openEditType(row)}>
-                {c.editBtn}
-              </Button>
-              <Button
-                variant={row.isActive ? 'danger' : 'secondary'}
-                size="sm"
+              <RowActionButton
+                icon="edit"
+                label={c.editBtn}
+                onClick={() => openEditType(row)}
+              />
+              <RowActionButton
+                icon="power"
+                label={row.isActive ? c.deactivateBtn : c.activateBtn}
+                variant={row.isActive ? 'warning' : 'success'}
                 onClick={() => handleToggleTypeStatus(row)}
-              >
-                {row.isActive ? c.deactivateBtn : c.activateBtn}
-              </Button>
+              />
             </>
+          )}
+          {canDelete && (
+            <RowActionButton
+              icon="trash"
+              label={c.deleteBtn}
+              variant="danger"
+              onClick={() => handleDeleteType(row)}
+            />
           )}
         </div>
       ),
@@ -511,11 +572,6 @@ export function ChangeTypesAndPoliciesPage({
       ),
     },
     {
-      key: 'docs',
-      header: c.colDocsCount,
-      render: (row) => <span className="ltr-code">{row.documentsCount}</span>,
-    },
-    {
       key: 'status',
       header: c.colStatus,
       render: (row) => (
@@ -528,20 +584,29 @@ export function ChangeTypesAndPoliciesPage({
       key: 'actions',
       header: c.colActions,
       render: (row) => (
-        <div className="button-row">
-          {canManage && (
+        <div className="row-actions">
+          {canEdit && (
             <>
-              <Button variant="outline" size="sm" onClick={() => openEditPolicy(row)}>
-                {c.editBtn}
-              </Button>
-              <Button
-                variant={row.isActive ? 'danger' : 'secondary'}
-                size="sm"
+              <RowActionButton
+                icon="edit"
+                label={c.editBtn}
+                onClick={() => openEditPolicy(row)}
+              />
+              <RowActionButton
+                icon="power"
+                label={row.isActive ? c.deactivateBtn : c.activateBtn}
+                variant={row.isActive ? 'warning' : 'success'}
                 onClick={() => handleTogglePolicyStatus(row)}
-              >
-                {row.isActive ? c.deactivateBtn : c.activateBtn}
-              </Button>
+              />
             </>
+          )}
+          {canDelete && (
+            <RowActionButton
+              icon="trash"
+              label={c.deleteBtn}
+              variant="danger"
+              onClick={() => handleDeletePolicy(row)}
+            />
           )}
         </div>
       ),
@@ -551,68 +616,21 @@ export function ChangeTypesAndPoliciesPage({
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card panel">
-          <div className="tabs">
-            <button
-              type="button"
-              className={`tab ${tab === 'types' ? 'active' : ''}`}
-              onClick={() => {
-                setTab('types');
-                setPage(1);
-                setSearchQuery('');
-              }}
-            >
-              {c.tabTypes}
-            </button>
-            <button
-              type="button"
-              className={`tab ${tab === 'policies' ? 'active' : ''}`}
-              onClick={() => {
-                setTab('policies');
-                setPage(1);
-                setSearchQuery('');
-              }}
-            >
-              {c.tabPolicies}
-            </button>
-          </div>
-
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">
-                {tab === 'types' ? c.typesTitle : c.policiesTitle}
-              </h2>
-              <p className="card-subtitle">
-                {tab === 'types' ? c.typesDesc : c.policiesDesc}
-              </p>
+        <section className="surface-card panel clean-table-panel">
+          {canCreate && (
+            <div className="compact-panel-top-actions">
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={tab === 'types' ? c.addTypeBtn : c.addPolicyBtn}
+                aria-label={tab === 'types' ? c.addTypeBtn : c.addPolicyBtn}
+                disabled={submitting}
+                onClick={openCreate}
+              >
+                <ReferenceIcon name="plus" size={18} />
+              </button>
             </div>
-            {canManage && (
-              <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                {tab === 'types' ? c.addTypeBtn : c.addPolicyBtn}
-              </Button>
-            )}
-          </div>
-
-          <SearchFilterBar
-            searchValue={searchQuery}
-            searchPlaceholder={c.searchPlaceholder}
-            searchAriaLabel={c.searchAria}
-            onSearchChange={(val) => {
-              setSearchQuery(val);
-              setPage(1);
-            }}
-            filterValue={statusFilter}
-            filterAriaLabel={c.filterAria}
-            filterPlaceholder={c.filterAll}
-            filterOptions={[
-              { value: 'active', label: c.filterActive },
-              { value: 'inactive', label: c.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setStatusFilter(val);
-              setPage(1);
-            }}
-          />
+          )}
 
           {errorMsg ? (
             <ErrorState

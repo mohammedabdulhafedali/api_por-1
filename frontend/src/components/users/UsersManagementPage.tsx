@@ -4,6 +4,7 @@ import { RoleDetails, listRoles, replaceUserRoles } from '../../api/rolesApi';
 import {
   UserSummary,
   createUserAccount,
+  deleteUserAccount,
   listUsers,
   triggerUserActivationOrReset,
   updateUserAccount,
@@ -18,6 +19,8 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
+  ReferenceIcon,
+  RowActionButton,
   SearchFilterBar,
   StandaloneFormPage,
   StatusBadge,
@@ -43,7 +46,7 @@ export interface UsersManagementPageProps {
 
 const COPY = {
   ar: {
-    sectionTitle: 'إدارة حسابات المستخدمين وحالات التفعيل (UI-15)',
+    sectionTitle: 'إدارة المستخدمين',
     sectionDesc:
       'إنشاء حسابات المستخدمين وتحديث بياناتها والتحكم بالتفعيل والتعطيل وإصدار رموز التفعيل دون تخزين كلمات مرور مؤقتة مكشوفة.',
     noViewPermissionTitle: 'صلاحية العرض غير متوفرة',
@@ -56,6 +59,7 @@ const COPY = {
     filterActive: 'الحسابات المفعّلة (Active)',
     filterInactive: 'الحسابات المعطلة (Inactive)',
     colName: 'الاسم الكامل',
+    colUsername: 'اسم المستخدم',
     colEmail: 'البريد الإلكتروني',
     colStatus: 'حالة الحساب',
     colActivation: 'تفعيل كلمة المرور',
@@ -68,32 +72,36 @@ const COPY = {
     pendingActivationBadge: 'بانتظار التفعيل الأول',
     noRolesLabel: 'بلا أدوار مسندة',
     editBtn: 'تعديل',
-    assignRolesBtn: 'إسناد الأدوار',
+    assignRolesBtn: 'الأدوار',
     permissionsBtn: 'الصلاحيات',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    sendResetBtn: 'رمز تفعيل/استعادة',
-    createBadge: 'صفحة إضافة مستقلة · I02',
+    deleteBtn: 'حذف',
+    deleteConfirmTitle: 'تأكيد حذف المستخدم',
+    deleteConfirmMsg: 'هل أنت متأكد من حذف حساب المستخدم؟ سيُمنع الحذف إذا كان مرتبطًا بوثائق أو معاملات قائمة.',
+    deleteSuccessTitle: 'تم حذف المستخدم',
+    deleteSuccessMsg: 'تم حذف حساب المستخدم بنجاح.',
+    sendResetBtn: 'استعادة',
+    createBadge: 'إضافة مستخدم',
     createTitle: 'إضافة مستخدم جديد',
-    createSubtitle:
-      'ينشأ الحساب بدون كلمة مرور مسبقة؛ يفعّل المستخدم حسابه برمز أحادي الاستخدام عبر القناة المؤسسية المعتمدة.',
-    editBadge: 'صفحة تعديل مستقلة · I02',
+    createSubtitle: '',
+    editBadge: 'تعديل مستخدم',
     editTitle: 'تعديل بيانات المستخدم',
-    editSubtitle: 'تحديث الاسم الكامل أو حالة التفعيل أو ربط الجهة المستهلكة.',
-    assignRolesBadge: 'إسناد أدوار متعدد · I03',
+    editSubtitle: '',
+    assignRolesBadge: 'إسناد الأدوار',
     assignRolesTitle: 'إسناد الأدوار للمستخدم',
-    assignRolesSubtitle:
-      'تحديد أو استبدال مجموعة الأدوار النشطة للمستخدم ذريًا؛ تُحسب الصلاحيات الفعلية بجمع صلاحيات الأدوار النشطة المسندة.',
-    backBtn: 'العودة إلى قائمة المستخدمين',
-    saveCreateBtn: 'إنشاء الحساب',
+    assignRolesSubtitle: '',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
-    saveRolesBtn: 'حفظ الأدوار المسندة',
+    saveRolesBtn: 'حفظ الأدوار',
     cancelBtn: 'إلغاء',
     fullNameLabel: 'الاسم الكامل',
+    usernameLabel: 'اسم المستخدم',
     emailLabel: 'البريد الإلكتروني',
-    consumerIdLabel: 'معرّف الجهة المستهلكة (UUID — اختياري للمستخدم الخارجي)',
-    consumerIdHint: 'اتركه فارغًا للمستخدم الداخلي؛ أو أدخل UUID جهة مستهلكة فعّالة.',
-    triggerActivationLabel: 'إصدار رمز تفعيل أحادي الاستخدام فور إنشاء الحساب',
+    consumerIdLabel: 'الجهة المستهلكة (اختياري)',
+    consumerIdHint: '',
+    triggerActivationLabel: 'إصدار رمز تفعيل عند إنشاء الحساب',
     activeStatusLabel: 'الحساب فعّال (مسموح له بتسجيل الدخول)',
     selectRolesLabel: 'الأدوار النشطة المسندة (إسناد متعدد)',
     targetUserAccountLabel: 'حساب المستخدم المستهدف',
@@ -103,6 +111,7 @@ const COPY = {
     assignRolesSuccessTitle: 'تم تحديث الأدوار المسندة',
     assignRolesSuccessMsg: 'تم استبدال الأدوار المسندة للمستخدم ذريًا وتسجيل التغيير في سجل التدقيق.',
     requiredNameError: 'يرجى إدخال الاسم الكامل (حرفان على الأقل).',
+    requiredUsernameError: 'يرجى إدخال اسم المستخدم (حرفان على الأقل).',
     requiredEmailError: 'يرجى إدخال البريد الإلكتروني.',
     validationTitle: 'تعذر حفظ بيانات المستخدم',
     validationMessage: 'يرجى مراجعة الحقول المطلوبة ثم إعادة المحاولة.',
@@ -131,7 +140,7 @@ const COPY = {
     nextBtn: 'التالي',
   },
   en: {
-    sectionTitle: 'Users & Activation Lifecycle (UI-15)',
+    sectionTitle: 'Users',
     sectionDesc:
       'Create local accounts, edit profile & consumer scope, activate/deactivate accounts, and initiate single-use activation tokens securely.',
     noViewPermissionTitle: 'View Permission Unavailable',
@@ -144,6 +153,7 @@ const COPY = {
     filterActive: 'Active Accounts',
     filterInactive: 'Inactive Accounts',
     colName: 'Full Name',
+    colUsername: 'Username',
     colEmail: 'Email',
     colStatus: 'Status',
     colActivation: 'Activation',
@@ -156,31 +166,35 @@ const COPY = {
     pendingActivationBadge: 'Pending Initial Activation',
     noRolesLabel: 'No roles assigned',
     editBtn: 'Edit',
-    assignRolesBtn: 'Assign Roles',
+    assignRolesBtn: 'Roles',
     permissionsBtn: 'Permissions',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    sendResetBtn: 'Activation / Reset',
-    createBadge: 'Standalone Create Page · I02',
-    createTitle: 'Create New User Account',
-    createSubtitle:
-      'New accounts start without a password and must be activated by the owner via a single-use token.',
-    editBadge: 'Standalone Edit Page · I02',
+    deleteBtn: 'Delete',
+    deleteConfirmTitle: 'Confirm User Deletion',
+    deleteConfirmMsg: 'Are you sure you want to delete this user account? Blocked if referenced by existing documents or records.',
+    deleteSuccessTitle: 'User Deleted',
+    deleteSuccessMsg: 'User account has been deleted.',
+    sendResetBtn: 'Reset',
+    createBadge: 'Create User',
+    createTitle: 'Add New User',
+    createSubtitle: '',
+    editBadge: 'Edit User',
     editTitle: 'Edit User Account',
-    editSubtitle: 'Update user full name, active state, or consumer entity scope.',
-    assignRolesBadge: 'Multi-Role Assignment · I03',
+    editSubtitle: '',
+    assignRolesBadge: 'Assign Roles',
     assignRolesTitle: 'Assign User Roles',
-    assignRolesSubtitle:
-      'Assign or replace multiple active roles atomically for this account (effective permissions combine across active roles).',
-    backBtn: 'Back to Users Directory',
-    saveCreateBtn: 'Create User',
+    assignRolesSubtitle: '',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
-    saveRolesBtn: 'Save Assigned Roles',
+    saveRolesBtn: 'Save Roles',
     cancelBtn: 'Cancel',
     fullNameLabel: 'Full Name',
+    usernameLabel: 'Username',
     emailLabel: 'Email Address',
-    consumerIdLabel: 'Consumer Entity ID (Optional UUID for external users)',
-    consumerIdHint: 'Leave empty for internal employees; enter active ConsumerEntity UUID for external consumers.',
+    consumerIdLabel: 'Consumer Entity ID (Optional)',
+    consumerIdHint: '',
     triggerActivationLabel: 'Issue single-use activation token immediately via delivery channel',
     activeStatusLabel: 'Account is Active (permitted to sign in)',
     selectRolesLabel: 'Assigned Active Roles (Multi-select)',
@@ -191,6 +205,7 @@ const COPY = {
     assignRolesSuccessTitle: 'User Roles Updated',
     assignRolesSuccessMsg: 'Assigned user roles were updated atomically and recorded in the audit trail.',
     requiredNameError: 'Full name is required (at least 2 characters).',
+    requiredUsernameError: 'Username is required (at least 2 characters).',
     requiredEmailError: 'Email address is required.',
     validationTitle: 'Unable to Save User',
     validationMessage: 'Please review the highlighted fields and try again.',
@@ -233,6 +248,7 @@ export function UsersManagementPage({
   const canView = permissions.some((p) => p.toLowerCase() === 'users.view');
   const canCreate = permissions.some((p) => p.toLowerCase() === 'users.create');
   const canEdit = permissions.some((p) => p.toLowerCase() === 'users.edit');
+  const canDelete = permissions.some((p) => p.toLowerCase() === 'users.delete');
   const canReset = permissions.some((p) => p.toLowerCase() === 'users.password.reset');
   const canAssignRoles = permissions.some((p) => p.toLowerCase() === 'users.assign_roles');
   const canViewPermissions = permissions.some((p) => p.toLowerCase() === 'permissions.view');
@@ -252,6 +268,7 @@ export function UsersManagementPage({
 
   // Standalone create / edit / multi-role assignment form state
   const [formFullName, setFormFullName] = useState('');
+  const [formUsername, setFormUsername] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formConsumerEntityId, setFormConsumerEntityId] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
@@ -264,6 +281,7 @@ export function UsersManagementPage({
   const [modal, setModal] = useState<ModalState | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const emailInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadAvailableRoles = useCallback(async () => {
@@ -327,6 +345,7 @@ export function UsersManagementPage({
   const openCreatePage = () => {
     setEditingUser(null);
     setFormFullName('');
+    setFormUsername('');
     setFormEmail('');
     setFormConsumerEntityId('');
     setFormIsActive(true);
@@ -343,6 +362,7 @@ export function UsersManagementPage({
   const openEditPage = (user: UserSummary) => {
     setEditingUser(user);
     setFormFullName(user.fullName);
+    setFormUsername(user.username ?? '');
     setFormEmail(user.email);
     setFormConsumerEntityId(user.consumerEntityId ?? '');
     setFormIsActive(user.isActive);
@@ -368,6 +388,7 @@ export function UsersManagementPage({
   const handleSaveCreate = async () => {
     const errs: Record<string, string> = {};
     if (formFullName.trim().length < 2) errs.fullName = copy.requiredNameError;
+    if (formUsername.trim().length < 2) errs.username = copy.requiredUsernameError;
     if (!formEmail.trim()) errs.email = copy.requiredEmailError;
 
     if (Object.keys(errs).length > 0) {
@@ -384,6 +405,7 @@ export function UsersManagementPage({
       await createUserAccount(
         {
           fullName: formFullName,
+          username: formUsername.trim(),
           email: formEmail,
           consumerEntityId: formConsumerEntityId.trim() || null,
           triggerActivationToken: formTriggerActivation && canReset,
@@ -443,6 +465,9 @@ export function UsersManagementPage({
     if (!editingUser) return;
     const errs: Record<string, string> = {};
     if (formFullName.trim().length < 2) errs.fullName = copy.requiredNameError;
+    if (formUsername.trim() && formUsername.trim().length < 2) {
+      errs.username = copy.requiredUsernameError;
+    }
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
@@ -459,6 +484,7 @@ export function UsersManagementPage({
         editingUser.id,
         {
           fullName: formFullName.trim(),
+          username: formUsername.trim() || undefined,
           isActive: formIsActive,
           consumerEntityId: formConsumerEntityId.trim() || null,
           clearConsumerEntity: !formConsumerEntityId.trim() && Boolean(editingUser.consumerEntityId),
@@ -547,6 +573,36 @@ export function UsersManagementPage({
     });
   };
 
+  const handleDeleteUser = (user: UserSummary) => {
+    setModal({
+      variant: 'confirm',
+      title: copy.deleteConfirmTitle,
+      message: copy.deleteConfirmMsg,
+      onConfirmAction: async () => {
+        try {
+          await deleteUserAccount(user.id, lang);
+          setModal({
+            variant: 'success',
+            title: copy.deleteSuccessTitle,
+            message: copy.deleteSuccessMsg,
+          });
+          await loadDirectory();
+        } catch (err) {
+          if (err instanceof ApiProblemError && err.status === 401) {
+            onSessionExpired();
+            return;
+          }
+          const apiErr = err instanceof ApiProblemError ? err : null;
+          setModal({
+            variant: 'error',
+            title: apiErr?.title ?? copy.validationTitle,
+            message: apiErr?.message ?? copy.validationMessage,
+          });
+        }
+      },
+    });
+  };
+
   const columns: DataTableColumn<UserSummary>[] = useMemo(
     () => [
       {
@@ -555,30 +611,14 @@ export function UsersManagementPage({
         render: (row) => <strong>{row.fullName}</strong>,
       },
       {
+        key: 'username',
+        header: copy.colUsername,
+        render: (row) => <code className="ltr-code">{row.username || '—'}</code>,
+      },
+      {
         key: 'email',
         header: copy.colEmail,
         render: (row) => <code className="ltr-code">{row.email}</code>,
-      },
-      {
-        key: 'status',
-        header: copy.colStatus,
-        render: (row) => (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-              {row.isActive ? copy.activeBadge : copy.inactiveBadge}
-            </StatusBadge>
-            {row.isLockedOut && <StatusBadge variant="warning">{copy.lockedBadge}</StatusBadge>}
-          </div>
-        ),
-      },
-      {
-        key: 'activation',
-        header: copy.colActivation,
-        render: (row) => (
-          <StatusBadge variant={row.isActivated ? 'info' : 'warning'}>
-            {row.isActivated ? copy.activatedBadge : copy.pendingActivationBadge}
-          </StatusBadge>
-        ),
       },
       {
         key: 'roles',
@@ -597,53 +637,69 @@ export function UsersManagementPage({
           ),
       },
       {
+        key: 'status',
+        header: copy.colStatus,
+        render: (row) => (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+              {row.isActive ? copy.activeBadge : copy.inactiveBadge}
+            </StatusBadge>
+            {row.isLockedOut && <StatusBadge variant="warning">{copy.lockedBadge}</StatusBadge>}
+          </div>
+        ),
+      },
+      {
         key: 'actions',
         header: copy.colActions,
         render: (row) => (
-          <div className="button-row" style={{ gap: 6 }}>
+          <div className="row-actions">
             {canEdit && (
               <>
-                <Button variant="outline" size="sm" onClick={() => openEditPage(row)}>
-                  {copy.editBtn}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <RowActionButton
+                  icon="edit"
+                  label={copy.editBtn}
+                  onClick={() => openEditPage(row)}
+                />
+                <RowActionButton
+                  icon="power"
+                  label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                  variant={row.isActive ? 'warning' : 'success'}
                   disabled={row.id === currentUserId && row.isActive}
                   onClick={() => handleToggleActive(row)}
-                >
-                  {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-                </Button>
+                />
               </>
             )}
             {canAssignRoles && (
-              <Button variant="outline" size="sm" onClick={() => openAssignRolesPage(row)}>
-                {copy.assignRolesBtn}
-              </Button>
+              <RowActionButton
+                icon="users"
+                label={copy.assignRolesBtn}
+                onClick={() => openAssignRolesPage(row)}
+              />
             )}
             {canViewPermissions && (
-              <Button
-                variant="secondary"
-                size="sm"
+              <RowActionButton
+                icon="shield"
+                label={copy.permissionsBtn}
                 onClick={() => {
                   setEditingUser(row);
                   setMode('permissions');
                 }}
-              >
-                {copy.permissionsBtn}
-              </Button>
+              />
             )}
-            {canReset && row.isActive && (
-              <Button variant="secondary" size="sm" onClick={() => handleTriggerReset(row)}>
-                {copy.sendResetBtn}
-              </Button>
+            {canDelete && row.id !== currentUserId && (
+              <RowActionButton
+                icon="trash"
+                label={copy.deleteBtn}
+                variant="danger"
+                onClick={() => handleDeleteUser(row)}
+              />
             )}
           </div>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canEdit, canAssignRoles, canViewPermissions, canReset, currentUserId]
+    [copy, canEdit, canDelete, canAssignRoles, canViewPermissions, canReset, currentUserId]
   );
 
   const handleCloseOrConfirmModal = () => {
@@ -657,6 +713,7 @@ export function UsersManagementPage({
     setModal(null);
     if (active.variant === 'error') {
       if (fieldErrors.fullName) nameInputRef.current?.focus();
+      else if (fieldErrors.username) usernameInputRef.current?.focus();
       else if (fieldErrors.email) emailInputRef.current?.focus();
     }
   };
@@ -675,44 +732,42 @@ export function UsersManagementPage({
   return (
     <>
       {mode === 'list' ? (
-        <>
-          {canCreate && (
-            <div className="page-actions">
-              <Button variant="primary" onClick={openCreatePage}>
-                {copy.addUserBtn}
-              </Button>
+        <section className="surface-card panel clean-table-panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <SearchFilterBar
+                searchValue={search}
+                searchPlaceholder={copy.searchPlaceholder}
+                searchAriaLabel={copy.searchAria}
+                onSearchChange={(val) => {
+                  setSearch(val);
+                  setPage(1);
+                }}
+                filterValue={activeFilter}
+                filterAriaLabel={copy.filterAria}
+                filterPlaceholder={copy.filterAll}
+                filterOptions={[
+                  { value: 'true', label: copy.filterActive },
+                  { value: 'false', label: copy.filterInactive },
+                ]}
+                onFilterChange={(val) => {
+                  setActiveFilter((val as '' | 'true' | 'false') || '');
+                  setPage(1);
+                }}
+              />
             </div>
-          )}
-          <section className="surface-card panel" aria-labelledby="ui15-users-heading">
-            <div className="panel-head">
-              <div>
-                <h2 id="ui15-users-heading" className="panel-title heading-font">
-                  {copy.sectionTitle}
-                </h2>
-                <p className="panel-desc">{copy.sectionDesc}</p>
-              </div>
-            </div>
-
-          <SearchFilterBar
-            searchValue={search}
-            searchPlaceholder={copy.searchPlaceholder}
-            searchAriaLabel={copy.searchAria}
-            onSearchChange={(val) => {
-              setSearch(val);
-              setPage(1);
-            }}
-            filterValue={activeFilter}
-            filterAriaLabel={copy.filterAria}
-            filterPlaceholder={copy.filterAll}
-            filterOptions={[
-              { value: 'true', label: copy.filterActive },
-              { value: 'false', label: copy.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setActiveFilter((val as '' | 'true' | 'false') || '');
-              setPage(1);
-            }}
-          />
+            {canCreate && (
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={copy.addUserBtn}
+                aria-label={copy.addUserBtn}
+                onClick={openCreatePage}
+              >
+                <ReferenceIcon name="plus" size={18} />
+              </button>
+            )}
+          </div>
 
           {loadError ? (
             <ErrorState
@@ -748,8 +803,7 @@ export function UsersManagementPage({
               )}
             </>
           )}
-          </section>
-        </>
+        </section>
       ) : mode === 'permissions' && editingUser ? (
         <UserPermissionsMatrixPage
           userId={editingUser.id}
@@ -889,6 +943,25 @@ export function UsersManagementPage({
                 </FormField>
 
                 <FormField
+                  id="user-username-input"
+                  label={copy.usernameLabel}
+                  required={mode === 'create'}
+                  error={fieldErrors.username}
+                >
+                  <TextInput
+                    ref={usernameInputRef}
+                    id="user-username-input"
+                    ltrCode
+                    value={formUsername}
+                    hasError={Boolean(fieldErrors.username)}
+                    onChange={(e) => {
+                      setFormUsername(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, username: '' }));
+                    }}
+                  />
+                </FormField>
+
+                <FormField
                   id="user-email-input"
                   label={copy.emailLabel}
                   required={mode === 'create'}
@@ -912,7 +985,6 @@ export function UsersManagementPage({
                 <FormField
                   id="user-consumer-input"
                   label={copy.consumerIdLabel}
-                  hint={copy.consumerIdHint}
                 >
                   <TextInput
                     id="user-consumer-input"

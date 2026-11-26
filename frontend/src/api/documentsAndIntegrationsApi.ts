@@ -388,3 +388,7 @@ export const createIntegration = (
   payload: { documentId: string; referenceCode?: string | null; developerUserIds?: string[] },
   lang: AppLanguage
 ) => sendCsrfJson<IntegrationItem>('POST', '/api/v1/integrations', payload, lang);
+
+export const deleteIntegration = (integrationId: string, lang: AppLanguage) =>
+  sendCsrfJson<void>('DELETE', `/api/v1/integrations/${integrationId}`, null, lang);
+

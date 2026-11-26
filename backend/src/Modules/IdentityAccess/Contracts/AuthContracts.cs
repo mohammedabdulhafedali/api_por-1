@@ -33,12 +33,14 @@ public sealed record AuthenticatedUserResponse(
     string AuthProvider,
     IReadOnlyList<RoleSummaryDto> Roles,
     IReadOnlyList<string> Permissions,
-    string TraceId);
+    string TraceId,
+    string Username = "");
 
 public sealed record LoginRequest : IValidatableObject
 {
-    [Required(ErrorMessage = "البريد الإلكتروني مطلوب / Email is required.")]
-    [EmailAddress(ErrorMessage = "صيغة البريد الإلكتروني غير صالحة / Invalid email format.")]
+    [MaxLength(100)]
+    public string Username { get; init; } = string.Empty;
+
     [MaxLength(320)]
     public string Email { get; init; } = string.Empty;
 
@@ -47,13 +49,16 @@ public sealed record LoginRequest : IValidatableObject
     [MaxLength(256)]
     public string Password { get; init; } = string.Empty;
 
+    public string GetEffectiveLoginIdentifier() =>
+        !string.IsNullOrWhiteSpace(Username) ? Username.Trim() : Email.Trim();
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (string.IsNullOrWhiteSpace(Email))
+        if (string.IsNullOrWhiteSpace(Username) && string.IsNullOrWhiteSpace(Email))
         {
             yield return new ValidationResult(
-                "البريد الإلكتروني مطلوب / Email is required.",
-                [nameof(Email)]);
+                "اسم المستخدم مطلوب / Username is required.",
+                [nameof(Username)]);
         }
 
         if (string.IsNullOrEmpty(Password))

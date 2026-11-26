@@ -21,6 +21,7 @@ import {
   toggleMatrixGroupSelection,
   toggleMatrixRowSelection,
 } from '../../utils/matrixSelection';
+import { resolveBulkColumnLabel, resolvePermissionChipLabel } from '../../utils/permissionLabels';
 import {
   Button,
   CentralModalDialog,
@@ -31,13 +32,28 @@ import {
   MatrixColumnDef,
   MatrixRowDef,
   PaginationBar,
+  PermissionBoardScreen,
+  PermissionsCardsBoard,
+  ReferenceIcon,
+  RowActionButton,
   SearchFilterBar,
-  SelectionMatrix,
   StandaloneFormPage,
   StatusBadge,
   TextInput,
   makeMatrixCellKey,
 } from '../ui';
+
+const REMOVED_SCREEN_IDS = new Set(['UI-18', 'UI-19', 'LEGACY_COMPOUND']);
+const REMOVED_PERM_CODES = new Set([
+  'search.view',
+  'portal.view',
+  'consumers.manage',
+  'api_groups.manage',
+  'file_types.manage',
+  'requirements.manage',
+  'routes.manage',
+  'changes.config.manage',
+]);
 
 type PageMode = 'list' | 'create' | 'edit' | 'matrix';
 
@@ -57,7 +73,7 @@ export interface RolesManagementPageProps {
 
 const COPY = {
   ar: {
-    sectionTitle: 'إدارة الأدوار ومصفوفة الصلاحيات (UI-25 · I04)',
+    sectionTitle: 'إدارة الأدوار',
     sectionDesc:
       'إنشاء الأدوار وتعديلها وتثبيتها وتعطيلها، وضبط مصفوفة الصلاحيات الشاملة (كل الشاشات في صفوف وكل الإجراءات في أعمدة) دون منح أي امتيازات ثابتة باسم الدور.',
     noViewTitle: 'صلاحية عرض الأدوار غير متوفرة',
@@ -84,24 +100,22 @@ const COPY = {
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
     deleteBtn: 'حذف',
-    createBadge: 'صفحة إضافة دور · I03',
-    createTitle: 'إضافة دور تنظيمي جديد',
-    createSubtitle:
-      'يبدأ الدور الجديد بدون أي صلاحيات (0 صلاحية)، ولا يحمل اسم الدور أي امتياز ثابت تلقائيًا.',
-    editBadge: 'صفحة تعديل دور · I03',
+    createBadge: 'إضافة دور',
+    createTitle: 'إضافة دور جديد',
+    createSubtitle: '',
+    editBadge: 'تعديل دور',
     editTitle: 'تعديل بيانات الدور',
-    editSubtitle: 'تعديل الاسم أو حالة التثبيت أو التفعيل.',
-    matrixBadge: 'مصفوفة صلاحيات الدور · UI-25 / I04',
-    matrixTitle: 'مصفوفة الصلاحيات الكاملة للدور',
-    matrixSubtitle:
-      'تحديد أو إلغاء تحديد الخلايا والصفوف والأعمدة والأقسام أو الكل لحفظ منح الدور في قاعدة البيانات دون حذف أي صلاحية من قاموس النظام.',
-    backBtn: 'العودة إلى قائمة الأدوار',
-    saveCreateBtn: 'إنشاء الدور',
+    editSubtitle: '',
+    matrixBadge: 'مصفوفة صلاحيات الدور',
+    matrixTitle: 'مصفوفة صلاحيات الدور',
+    matrixSubtitle: '',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
-    saveMatrixBtn: 'حفظ مصفوفة الدور',
+    saveMatrixBtn: 'حفظ الصلاحيات',
     cancelBtn: 'إلغاء',
     roleNameLabel: 'اسم الدور',
-    pinnedLabel: 'دور مثبت (محمي من الحذف والتعطيل المباشر)',
+    pinnedLabel: 'دور مثبت',
     activeLabel: 'الدور فعّال (متاح للإسناد)',
     requiredNameError: 'يرجى إدخال اسم الدور (حرفان على الأقل).',
     validationTitle: 'تعذر حفظ الدور',
@@ -136,7 +150,7 @@ const COPY = {
     nextBtn: 'التالي',
   },
   en: {
-    sectionTitle: 'Roles & Permissions Matrix (UI-25 · I04)',
+    sectionTitle: 'Roles',
     sectionDesc:
       'Manage organizational roles and configure the full Screen × Action permission matrix without hardcoded role-name privileges.',
     noViewTitle: 'Role View Permission Unavailable',
@@ -163,24 +177,22 @@ const COPY = {
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
     deleteBtn: 'Delete',
-    createBadge: 'Standalone Create Role · I03',
-    createTitle: 'Create Organizational Role',
-    createSubtitle:
-      'New roles start with 0 permissions; role names never confer hardcoded privileges.',
-    editBadge: 'Standalone Edit Role · I03',
+    createBadge: 'Create Role',
+    createTitle: 'Add Role',
+    createSubtitle: '',
+    editBadge: 'Edit Role',
     editTitle: 'Edit Role',
-    editSubtitle: 'Update role name, pinned protection, or active state.',
-    matrixBadge: 'Role Permission Matrix · UI-25 / I04',
-    matrixTitle: 'Full Role Permission Matrix',
-    matrixSubtitle:
-      'Select or clear individual cells, rows, columns, groups, or all permissions without deleting any code from the system dictionary.',
-    backBtn: 'Back to Roles List',
-    saveCreateBtn: 'Create Role',
+    editSubtitle: '',
+    matrixBadge: 'Role Permissions Matrix',
+    matrixTitle: 'Role Permissions Matrix',
+    matrixSubtitle: '',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
-    saveMatrixBtn: 'Save Role Permissions',
+    saveMatrixBtn: 'Save Permissions',
     cancelBtn: 'Cancel',
     roleNameLabel: 'Role Name',
-    pinnedLabel: 'Pinned Role (protected against deletion and direct deactivation)',
+    pinnedLabel: 'Pinned Role',
     activeLabel: 'Role is Active (available for assignment)',
     requiredNameError: 'Role name is required (at least 2 characters).',
     validationTitle: 'Unable to Save Role',
@@ -351,13 +363,26 @@ export function RolesManagementPage({
     if (!matrixCatalog) return [];
     return matrixCatalog.columns.map((c) => ({
       id: c.id,
-      label: lang === 'ar' ? c.labelAr : c.labelEn,
+      label: resolveBulkColumnLabel(c.id, lang === 'ar' ? c.labelAr : c.labelEn, lang),
     }));
   }, [matrixCatalog, lang]);
 
-  const matrixRows: MatrixRowDef[] = useMemo(() => {
+  const activeCatalogScreens = useMemo(() => {
     if (!matrixCatalog) return [];
-    return matrixCatalog.screens.map((s) => ({
+    return matrixCatalog.screens.filter((s) => !REMOVED_SCREEN_IDS.has(s.id));
+  }, [matrixCatalog]);
+
+  const activeCatalogPermissions = useMemo(() => {
+    if (!matrixCatalog) return [];
+    return matrixCatalog.permissions.filter(
+      (p) =>
+        !REMOVED_SCREEN_IDS.has(p.screenId) &&
+        !REMOVED_PERM_CODES.has(p.code.toLowerCase())
+    );
+  }, [matrixCatalog]);
+
+  const matrixRows: MatrixRowDef[] = useMemo(() => {
+    return activeCatalogScreens.map((s) => ({
       id: s.id,
       groupId: s.groupId,
       groupLabel: lang === 'ar' ? s.groupLabelAr : s.groupLabelEn,
@@ -365,20 +390,73 @@ export function RolesManagementPage({
       technicalPath: s.technicalPath,
       applicableColumnIds: s.applicableColumnIds,
     }));
-  }, [matrixCatalog, lang]);
+  }, [activeCatalogScreens, lang]);
 
-  const permissionIdByCell = useMemo(() => {
-    const map = new Map<string, string>();
-    if (!matrixCatalog) return map;
-    for (const perm of matrixCatalog.permissions) {
+  const permissionByCell = useMemo(() => {
+    const map = new Map<string, { id: string; code: string }>();
+    for (const perm of activeCatalogPermissions) {
       // Preserve first/canonical permission mapping per (screenId, columnId)
       const key = makeMatrixCellKey(perm.screenId, perm.columnId);
       if (!map.has(key)) {
-        map.set(key, perm.id);
+        map.set(key, { id: perm.id, code: perm.code });
       }
     }
     return map;
-  }, [matrixCatalog]);
+  }, [activeCatalogPermissions]);
+
+  const permissionIdByCell = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [k, v] of permissionByCell.entries()) {
+      map.set(k, v.id);
+    }
+    return map;
+  }, [permissionByCell]);
+
+  const colLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of matrixColumns) {
+      map.set(c.id, c.label);
+    }
+    return map;
+  }, [matrixColumns]);
+
+  const boardScreens: PermissionBoardScreen[] = useMemo(() => {
+    return activeCatalogScreens
+      .map((scr) => {
+        const items = scr.applicableColumnIds
+          .filter((colId) => permissionByCell.has(makeMatrixCellKey(scr.id, colId)))
+          .map((colId) => {
+            const cellKey = makeMatrixCellKey(scr.id, colId);
+            const permMeta = permissionByCell.get(cellKey);
+            return {
+              id: cellKey,
+              columnId: colId,
+              label: resolvePermissionChipLabel(
+                permMeta?.code,
+                colId,
+                colLabelById.get(colId) ?? colId,
+                lang
+              ),
+              checked: selectedCells.has(cellKey),
+              mode: 'standard' as const,
+            };
+          });
+
+        return {
+          id: scr.id,
+          groupId: scr.groupId,
+          groupLabel: lang === 'ar' ? scr.groupLabelAr : scr.groupLabelEn,
+          title: lang === 'ar' ? scr.titleAr : scr.titleEn,
+          items,
+        };
+      })
+      .filter((s) => s.items.length > 0);
+  }, [activeCatalogScreens, permissionIdByCell, colLabelById, selectedCells, lang]);
+
+  const boardActionColumns = useMemo(() => {
+    const usedColIds = new Set(activeCatalogPermissions.map((p) => p.columnId));
+    return matrixColumns.filter((c) => usedColIds.has(c.id));
+  }, [matrixColumns, activeCatalogPermissions]);
 
   const selectedPermissionIds = useMemo(() => {
     const ids: string[] = [];
@@ -410,24 +488,6 @@ export function RolesManagementPage({
     () => [
       { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
       {
-        key: 'status',
-        header: copy.colStatus,
-        render: (row) => (
-          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-            {row.isActive ? copy.activeBadge : copy.inactiveBadge}
-          </StatusBadge>
-        ),
-      },
-      {
-        key: 'pinned',
-        header: copy.colPinned,
-        render: (row) => (
-          <StatusBadge variant={row.isPinned ? 'info' : 'neutral'}>
-            {row.isPinned ? copy.pinnedBadge : copy.standardBadge}
-          </StatusBadge>
-        ),
-      },
-      {
         key: 'users',
         header: copy.colUsersCount,
         render: (row) => <code className="ltr-code">{row.assignedUsersCount}</code>,
@@ -438,20 +498,31 @@ export function RolesManagementPage({
         render: (row) => <code className="ltr-code">{row.grantedPermissionsCount}</code>,
       },
       {
+        key: 'status',
+        header: copy.colStatus,
+        render: (row) => (
+          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+            {row.isActive ? copy.activeBadge : copy.inactiveBadge}
+          </StatusBadge>
+        ),
+      },
+      {
         key: 'actions',
         header: copy.colActions,
         render: (row) => (
-          <div className="button-row" style={{ gap: 6 }}>
+          <div className="row-actions">
             {canViewMatrix && (
-              <Button variant="primary" size="sm" onClick={() => void openRoleMatrixPage(row)}>
-                {copy.matrixBtn}
-              </Button>
+              <RowActionButton
+                icon="shield"
+                label={copy.matrixBtn}
+                onClick={() => void openRoleMatrixPage(row)}
+              />
             )}
             {canEdit && (
               <>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <RowActionButton
+                  icon="edit"
+                  label={copy.editBtn}
                   onClick={() => {
                     setEditingRole(row);
                     setFormName(row.name);
@@ -460,12 +531,11 @@ export function RolesManagementPage({
                     setNameError('');
                     setMode('edit');
                   }}
-                >
-                  {copy.editBtn}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
+                />
+                <RowActionButton
+                  icon="power"
+                  label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                  variant={row.isActive ? 'warning' : 'success'}
                   disabled={row.isPinned && row.isActive}
                   onClick={() =>
                     setModal({
@@ -483,15 +553,14 @@ export function RolesManagementPage({
                       },
                     })
                   }
-                >
-                  {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-                </Button>
+                />
               </>
             )}
-            {canDelete && !row.isPinned && row.assignedUsersCount === 0 && (
-              <Button
-                variant="secondary"
-                size="sm"
+            {canDelete && (
+              <RowActionButton
+                icon="trash"
+                label={copy.deleteBtn}
+                variant="danger"
                 onClick={() =>
                   setModal({
                     variant: 'confirm',
@@ -508,9 +577,7 @@ export function RolesManagementPage({
                     },
                   })
                 }
-              >
-                {copy.deleteBtn}
-              </Button>
+              />
             )}
           </div>
         ),
@@ -531,17 +598,36 @@ export function RolesManagementPage({
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card" aria-labelledby="ui25-roles-heading">
-          <div className="card-header-row">
-            <div>
-              <h2 id="ui25-roles-heading" className="card-title heading-font">
-                {copy.sectionTitle}
-              </h2>
-              <p className="card-subtitle">{copy.sectionDesc}</p>
+        <section className="surface-card panel clean-table-panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <SearchFilterBar
+                searchValue={search}
+                searchPlaceholder={copy.searchPlaceholder}
+                searchAriaLabel={copy.searchAria}
+                onSearchChange={(val) => {
+                  setSearch(val);
+                  setPage(1);
+                }}
+                filterValue={activeFilter}
+                filterAriaLabel={copy.filterAria}
+                filterPlaceholder={copy.filterAll}
+                filterOptions={[
+                  { value: 'true', label: copy.filterActive },
+                  { value: 'false', label: copy.filterInactive },
+                ]}
+                onFilterChange={(val) => {
+                  setActiveFilter((val as '' | 'true' | 'false') || '');
+                  setPage(1);
+                }}
+              />
             </div>
             {canCreate && (
-              <Button
-                variant="primary"
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={copy.addRoleBtn}
+                aria-label={copy.addRoleBtn}
                 onClick={() => {
                   setEditingRole(null);
                   setFormName('');
@@ -551,31 +637,10 @@ export function RolesManagementPage({
                   setMode('create');
                 }}
               >
-                {copy.addRoleBtn}
-              </Button>
+                <ReferenceIcon name="plus" size={18} />
+              </button>
             )}
           </div>
-
-          <SearchFilterBar
-            searchValue={search}
-            searchPlaceholder={copy.searchPlaceholder}
-            searchAriaLabel={copy.searchAria}
-            onSearchChange={(val) => {
-              setSearch(val);
-              setPage(1);
-            }}
-            filterValue={activeFilter}
-            filterAriaLabel={copy.filterAria}
-            filterPlaceholder={copy.filterAll}
-            filterOptions={[
-              { value: 'true', label: copy.filterActive },
-              { value: 'false', label: copy.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setActiveFilter((val as '' | 'true' | 'false') || '');
-              setPage(1);
-            }}
-          />
 
           {loadError ? (
             <ErrorState
@@ -659,7 +724,7 @@ export function RolesManagementPage({
                 </div>
                 <StatusBadge variant="info">
                   {copy.matrixSelectedBadge} {selectedPermissionIds.length} /{' '}
-                  {matrixCatalog?.permissions.length ?? 0}
+                  {activeCatalogPermissions.length}
                 </StatusBadge>
               </div>
 
@@ -669,20 +734,19 @@ export function RolesManagementPage({
                 </p>
               )}
 
-              <SelectionMatrix
-                rowHeaderLabel={t.matrixRowHeader}
-                selectAllLabel={t.matrixSelectAll}
-                selectGroupLabel={t.matrixSelectGroup}
-                selectRowAriaPrefix={t.matrixSelectRowPrefix}
-                selectColAriaPrefix={t.matrixSelectColPrefix}
-                columns={matrixColumns}
-                rows={matrixRows}
-                selectedCells={selectedCells}
-                onToggleCell={(rowId, colId) => {
+              <PermissionsCardsBoard
+                lang={lang}
+                disabled={!canManageMatrix}
+                screens={boardScreens}
+                actionColumns={boardActionColumns}
+                onToggleItem={(cellKey) => {
                   if (!canManageMatrix) return;
-                  setSelectedCells((prev) => toggleMatrixCellSelection(prev, rowId, colId));
+                  const [rowId, colId] = cellKey.split('::');
+                  if (rowId && colId) {
+                    setSelectedCells((prev) => toggleMatrixCellSelection(prev, rowId, colId));
+                  }
                 }}
-                onToggleRow={(rowId, checked) => {
+                onToggleScreen={(rowId, checked) => {
                   if (!canManageMatrix) return;
                   setSelectedCells((prev) =>
                     toggleMatrixRowSelection(prev, matrixRows, matrixColumns, rowId, checked)

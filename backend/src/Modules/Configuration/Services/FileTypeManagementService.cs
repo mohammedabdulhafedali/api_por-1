@@ -32,6 +32,11 @@ public interface IFileTypeManagementService
         UpdateFileTypeRequest request,
         string traceId,
         CancellationToken cancellationToken = default);
+
+    Task DeleteFileTypeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid fileTypeId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -319,6 +324,55 @@ public sealed class FileTypeManagementService(
             finalExtensions,
             ruleCount,
             traceId);
+    }
+
+    public async Task DeleteFileTypeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid fileTypeId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.FileTypes.FirstOrDefaultAsync(ft => ft.Id == fileTypeId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "نوع الملف المطلوب غير موجود.",
+                messageEn: "The requested file type was not found.");
+        }
+
+        var usedInRules = await dbContext.FileRequirementRules.AsNoTracking()
+            .AnyAsync(r => r.FileTypeId == fileTypeId, cancellationToken);
+        var usedInRevisionFiles = await dbContext.RevisionFiles.AsNoTracking()
+            .AnyAsync(rf => rf.FileTypeId == fileTypeId, cancellationToken);
+
+        if (usedInRules || usedInRevisionFiles)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف نوع ملف مستخدم في قوالب المتطلبات أو الملفات المرفوعة.",
+                messageEn: "Cannot delete a file type referenced by requirement templates or uploaded revision files.");
+        }
+
+        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var existingExts = await dbContext.FileTypeExtensions
+            .Where(e => e.FileTypeId == fileTypeId)
+            .ToListAsync(cancellationToken);
+        if (existingExts.Count > 0)
+        {
+            dbContext.FileTypeExtensions.RemoveRange(existingExts);
+        }
+
+        dbContext.FileTypes.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "FILE_TYPE_DELETED",
+            "FILE_TYPE",
+            entity.Id,
+            "SUCCESS",
+            new { entity.CatalogCode, entity.DisplayName },
+            cancellationToken);
     }
 
     private async Task ValidateWordTemplateReferenceAsync(

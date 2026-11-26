@@ -88,6 +88,21 @@ public sealed class MasterDataModule : IBackendModule
             .WithName("UpdateCompanySystem")
             .Produces<CompanySystemDto>(StatusCodes.Status200OK);
 
+        companySystems.MapDelete("/{systemId:guid}", async (
+                Guid systemId,
+                HttpContext httpContext,
+                IMasterDataService masterDataService,
+                CancellationToken cancellationToken) =>
+            {
+                await masterDataService.DeleteCompanySystemAsync(
+                    httpContext.User, systemId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("company_systems.delete", "COMPANY_SYSTEM_DELETE_DENIED", "COMPANY_SYSTEM")
+            .WithName("DeleteCompanySystem")
+            .Produces(StatusCodes.Status204NoContent);
+
         // ====================================================================
         // M02 • Internal & External Provider Systems
         // ====================================================================
@@ -145,6 +160,21 @@ public sealed class MasterDataModule : IBackendModule
             .WithName("UpdateInternalProvider")
             .Produces<InternalProviderDto>(StatusCodes.Status200OK);
 
+        internalProviders.MapDelete("/{providerId:guid}", async (
+                Guid providerId,
+                HttpContext httpContext,
+                IMasterDataService masterDataService,
+                CancellationToken cancellationToken) =>
+            {
+                await masterDataService.DeleteInternalProviderAsync(
+                    httpContext.User, providerId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("providers.delete", "INTERNAL_PROVIDER_DELETE_DENIED", "INTERNAL_PROVIDER")
+            .WithName("DeleteInternalProvider")
+            .Produces(StatusCodes.Status204NoContent);
+
         var externalProviders = endpoints.MapGroup("/external-providers")
             .WithTags("Master Data - External Providers (M02)")
             .RequireAuthorization();
@@ -199,6 +229,21 @@ public sealed class MasterDataModule : IBackendModule
             .WithName("UpdateExternalProvider")
             .Produces<ExternalProviderDto>(StatusCodes.Status200OK);
 
+        externalProviders.MapDelete("/{providerId:guid}", async (
+                Guid providerId,
+                HttpContext httpContext,
+                IMasterDataService masterDataService,
+                CancellationToken cancellationToken) =>
+            {
+                await masterDataService.DeleteExternalProviderAsync(
+                    httpContext.User, providerId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("providers.delete", "EXTERNAL_PROVIDER_DELETE_DENIED", "EXTERNAL_PROVIDER")
+            .WithName("DeleteExternalProvider")
+            .Produces(StatusCodes.Status204NoContent);
+
         // ====================================================================
         // M03 • Consumer Categories & Consumer Entities
         // ====================================================================
@@ -234,7 +279,7 @@ public sealed class MasterDataModule : IBackendModule
                 return Results.Created($"/api/v1/consumer-categories/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("consumers.manage", "CONSUMER_CATEGORY_CREATE_DENIED", "CONSUMER_CATEGORY")
+            .RequireGeneralPermission("consumers.create", "CONSUMER_CATEGORY_CREATE_DENIED", "CONSUMER_CATEGORY")
             .WithRequestValidation<CreateConsumerCategoryRequest>()
             .WithName("CreateConsumerCategory")
             .Produces<ConsumerCategoryDto>(StatusCodes.Status201Created);
@@ -251,10 +296,25 @@ public sealed class MasterDataModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("consumers.manage", "CONSUMER_CATEGORY_EDIT_DENIED", "CONSUMER_CATEGORY")
+            .RequireGeneralPermission("consumers.edit", "CONSUMER_CATEGORY_EDIT_DENIED", "CONSUMER_CATEGORY")
             .WithRequestValidation<UpdateConsumerCategoryRequest>()
             .WithName("UpdateConsumerCategory")
             .Produces<ConsumerCategoryDto>(StatusCodes.Status200OK);
+
+        consumerCategories.MapDelete("/{categoryId:guid}", async (
+                Guid categoryId,
+                HttpContext httpContext,
+                IMasterDataService masterDataService,
+                CancellationToken cancellationToken) =>
+            {
+                await masterDataService.DeleteConsumerCategoryAsync(
+                    httpContext.User, categoryId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("consumers.delete", "CONSUMER_CATEGORY_DELETE_DENIED", "CONSUMER_CATEGORY")
+            .WithName("DeleteConsumerCategory")
+            .Produces(StatusCodes.Status204NoContent);
 
         var consumers = endpoints.MapGroup("/consumers")
             .WithTags("Master Data - Consumer Entities (M03)")
@@ -289,7 +349,7 @@ public sealed class MasterDataModule : IBackendModule
                 return Results.Created($"/api/v1/consumers/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("consumers.manage", "CONSUMER_CREATE_DENIED", "CONSUMER_ENTITY")
+            .RequireGeneralPermission("consumers.create", "CONSUMER_CREATE_DENIED", "CONSUMER_ENTITY")
             .WithRequestValidation<CreateConsumerRequest>()
             .WithName("CreateConsumer")
             .Produces<ConsumerDto>(StatusCodes.Status201Created);
@@ -306,10 +366,25 @@ public sealed class MasterDataModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("consumers.manage", "CONSUMER_EDIT_DENIED", "CONSUMER_ENTITY")
+            .RequireGeneralPermission("consumers.edit", "CONSUMER_EDIT_DENIED", "CONSUMER_ENTITY")
             .WithRequestValidation<UpdateConsumerRequest>()
             .WithName("UpdateConsumer")
             .Produces<ConsumerDto>(StatusCodes.Status200OK);
+
+        consumers.MapDelete("/{consumerId:guid}", async (
+                Guid consumerId,
+                HttpContext httpContext,
+                IMasterDataService masterDataService,
+                CancellationToken cancellationToken) =>
+            {
+                await masterDataService.DeleteConsumerAsync(
+                    httpContext.User, consumerId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("consumers.delete", "CONSUMER_DELETE_DENIED", "CONSUMER_ENTITY")
+            .WithName("DeleteConsumer")
+            .Produces(StatusCodes.Status204NoContent);
 
         // ====================================================================
         // M04 • API Groups
@@ -346,7 +421,7 @@ public sealed class MasterDataModule : IBackendModule
                 return Results.Created($"/api/v1/api-groups/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("api_groups.manage", "API_GROUP_CREATE_DENIED", "API_GROUP")
+            .RequireGeneralPermission("api_groups.create", "API_GROUP_CREATE_DENIED", "API_GROUP")
             .WithRequestValidation<CreateApiGroupRequest>()
             .WithName("CreateApiGroup")
             .Produces<ApiGroupDto>(StatusCodes.Status201Created);
@@ -363,9 +438,24 @@ public sealed class MasterDataModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("api_groups.manage", "API_GROUP_EDIT_DENIED", "API_GROUP")
+            .RequireGeneralPermission("api_groups.edit", "API_GROUP_EDIT_DENIED", "API_GROUP")
             .WithRequestValidation<UpdateApiGroupRequest>()
             .WithName("UpdateApiGroup")
             .Produces<ApiGroupDto>(StatusCodes.Status200OK);
+
+        apiGroups.MapDelete("/{groupId:guid}", async (
+                Guid groupId,
+                HttpContext httpContext,
+                IMasterDataService masterDataService,
+                CancellationToken cancellationToken) =>
+            {
+                await masterDataService.DeleteApiGroupAsync(
+                    httpContext.User, groupId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("api_groups.delete", "API_GROUP_DELETE_DENIED", "API_GROUP")
+            .WithName("DeleteApiGroup")
+            .Produces(StatusCodes.Status204NoContent);
     }
 }

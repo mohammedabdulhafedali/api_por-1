@@ -6,6 +6,8 @@ import {
   CompanySystemUsageType,
   createApiGroup,
   createCompanySystem,
+  deleteApiGroup,
+  deleteCompanySystem,
   listApiGroups,
   listCompanySystems,
   updateApiGroup,
@@ -20,20 +22,23 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   StandaloneFormPage,
   StatusBadge,
   TextInput,
   TextareaInput,
 } from '../ui';
 
+export type MasterSystemSection = 'systems' | 'api-groups';
+
 interface CompanySystemsPageProps {
   lang: AppLanguage;
   permissions: string[];
+  section?: MasterSystemSection;
   onSessionExpired: () => void;
 }
 
-type ActiveTab = 'systems' | 'api-groups';
 type PageMode = 'list' | 'create' | 'edit';
 
 interface ModalState {
@@ -45,52 +50,42 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    tabSystems: 'أنظمة الشركة (M01)',
-    tabGroups: 'مجموعات API (M04)',
-    sysTitle: 'سجل أنظمة الشركة الداخلية (UI-01)',
-    sysDesc: 'تعريف أنظمة الشركة وتعديلها؛ يُشتق نوع الاستخدام (مزوّد / مستهلك / كلاهما) تلقائيًا من وثائق API ولا يُحرر يدويًا.',
-    grpTitle: 'مجموعات API التنظيمية (M04)',
-    grpDesc: 'تصنيف وتجميع واجهات ووثائق API ضمن مجموعات منظمة مرتبطة بالوثائق.',
     noViewSysTitle: 'صلاحية عرض أنظمة الشركة غير متوفرة',
-    noViewSysDesc: 'يتطلب عرض أنظمة الشركة توفر صلاحية company_systems.view.',
-    noViewGrpTitle: 'صلاحية عرض مجموعات API غير متوفرة',
-    noViewGrpDesc: 'يتطلب عرض مجموعات API توفر صلاحية api_groups.view.',
-    addSysBtn: 'إضافة نظام شركة',
-    addGrpBtn: 'إضافة مجموعة API',
-    searchPlaceholder: 'ابحث بالاسم أو الوصف...',
-    searchAria: 'البحث في القائمة',
-    filterAria: 'تصفية حسب الحالة',
-    filterAll: 'كل الحالات',
-    filterActive: 'الفعّالة فقط',
-    filterInactive: 'المعطلة فقط',
+    noViewSysDesc: 'يتطلب عرض أنظمة الشركة توفر صلاحية العرض على حسابك.',
+    noViewGrpTitle: 'صلاحية عرض مجموعة واجهات API غير متوفرة',
+    noViewGrpDesc: 'يتطلب عرض مجموعة واجهات API توفر صلاحية العرض على حسابك.',
+    addSysAria: 'إضافة نظام شركة',
+    addGrpAria: 'إضافة مجموعة واجهات API',
     colName: 'الاسم',
     colDesc: 'الوصف',
-    colUsage: 'نوع الاستخدام المحسوب',
-    colInternalProv: 'مزود داخلي؟',
+    colType: 'النوع',
     colDocsCount: 'الوثائق المرتبطة',
     colStatus: 'الحالة',
     colActions: 'الإجراءات',
-    usageNone: 'غير مستخدم بعد',
-    usageProvider: 'مزوّد',
-    usageConsumer: 'مستهلك',
-    usageBoth: 'مزوّد ومستهلك معًا',
-    yesLabel: 'مفعّل كمزود داخلي',
-    noLabel: 'غير مسجل كمزود',
+    typeProvider: 'مزوّد',
+    typeConsumer: 'مستهلك',
+    typeBoth: 'مزوّد ومستهلك',
+    typeNone: '—',
     activeBadge: 'فعّال',
     inactiveBadge: 'معطّل',
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createSysBadge: 'إضافة نظام شركة · UI-01 / M01',
-    editSysBadge: 'تعديل نظام شركة · UI-01 / M01',
-    createGrpBadge: 'إضافة مجموعة API · M04',
-    editGrpBadge: 'تعديل مجموعة API · M04',
+    deleteBtn: 'حذف',
+    deleteTitle: 'تأكيد الحذف',
+    deleteMsg: 'هل تؤكد حذف هذا السجل نهائيًا؟',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف السجل من النظام بنجاح.',
+    createSysBadge: 'إضافة نظام شركة',
+    editSysBadge: 'تعديل نظام شركة',
+    createGrpBadge: 'إضافة مجموعة واجهات API',
+    editGrpBadge: 'تعديل مجموعة واجهات API',
     createSysTitle: 'إضافة نظام شركة جديد',
     editSysTitle: 'تعديل بيانات نظام الشركة',
-    createGrpTitle: 'إضافة مجموعة API جديدة',
-    editGrpTitle: 'تعديل بيانات مجموعة API',
-    sysFormSub: 'الاستخدام الفعلي (مزوّد/مستهلك/كلاهما) يُشتق آليًا من وثائق API المعتمدة.',
-    grpFormSub: 'تُستخدم مجموعات API لتصنيف الوثائق والتكاملات.',
+    createGrpTitle: 'إضافة مجموعة واجهات API جديدة',
+    editGrpTitle: 'تعديل بيانات مجموعة واجهات API',
+    sysFormSub: '',
+    grpFormSub: '',
     backBtn: 'العودة إلى القائمة',
     saveCreateBtn: 'حفظ وإنشاء',
     saveEditBtn: 'حفظ التعديلات',
@@ -102,15 +97,15 @@ const COPY = {
     validationTitle: 'تعذر الحفظ',
     validationMsg: 'يرجى مراجعة الحقول المطلوبة.',
     createSuccessTitle: 'تمت الإضافة بنجاح',
-    createSuccessMsg: 'تم حفظ السجل في قاعدة البيانات وتسجيل العملية في سجل التدقيق.',
+    createSuccessMsg: 'تم حفظ السجل بنجاح.',
     editSuccessTitle: 'تم التحديث بنجاح',
-    editSuccessMsg: 'تم حفظ التعديلات وتحديث سجل التدقيق.',
+    editSuccessMsg: 'تم حفظ التعديلات بنجاح.',
     toggleTitle: 'تأكيد تغيير الحالة',
-    deactivateMsg: 'سيؤدي التعطيل إلى إيقاف استخدام هذا السجل في الإضافات الجديدة (مع حماية المراجع النشطة). هل تؤكد؟',
+    deactivateMsg: 'هل تؤكد تعطيل هذا السجل؟',
     activateMsg: 'هل تريد إعادة تفعيل هذا السجل؟',
     loadingText: 'جارٍ تحميل البيانات...',
-    emptyTitle: 'لا توجد سجلات مطابقة',
-    emptyDesc: 'عدّل معايير البحث أو أضف سجلًا جديدًا.',
+    emptyTitle: 'لا توجد سجلات',
+    emptyDesc: 'اضغط على زر (+) لإضافة سجل جديد.',
     errorTitle: 'تعذر تحميل البيانات',
     retryBtn: 'إعادة المحاولة',
     pagePrefix: 'الصفحة',
@@ -119,52 +114,42 @@ const COPY = {
     nextBtn: 'التالي',
   },
   en: {
-    tabSystems: 'Company Systems (M01)',
-    tabGroups: 'API Groups (M04)',
-    sysTitle: 'Company Systems Registry (UI-01)',
-    sysDesc: 'Manage internal company systems; usage type (Provider / Consumer / Both) is strictly derived from API documents.',
-    grpTitle: 'API Groups Registry (M04)',
-    grpDesc: 'Organize API documents and integrations into logical API groups.',
     noViewSysTitle: 'Company Systems View Unavailable',
-    noViewSysDesc: 'company_systems.view permission is required to view company systems.',
-    noViewGrpTitle: 'API Groups View Unavailable',
-    noViewGrpDesc: 'api_groups.view permission is required to view API groups.',
-    addSysBtn: 'Add Company System',
-    addGrpBtn: 'Add API Group',
-    searchPlaceholder: 'Search by name or description...',
-    searchAria: 'Search records',
-    filterAria: 'Filter by status',
-    filterAll: 'All Statuses',
-    filterActive: 'Active Only',
-    filterInactive: 'Inactive Only',
+    noViewSysDesc: 'View permission is required to view company systems.',
+    noViewGrpTitle: 'API Interface Groups View Unavailable',
+    noViewGrpDesc: 'View permission is required to view API interface groups.',
+    addSysAria: 'Add Company System',
+    addGrpAria: 'Add API Interface Group',
     colName: 'Name',
     colDesc: 'Description',
-    colUsage: 'Computed Usage Type',
-    colInternalProv: 'Internal Provider?',
+    colType: 'Type',
     colDocsCount: 'Linked Docs',
     colStatus: 'Status',
     colActions: 'Actions',
-    usageNone: 'Unused',
-    usageProvider: 'Provider',
-    usageConsumer: 'Consumer',
-    usageBoth: 'Both (Provider & Consumer)',
-    yesLabel: 'Registered Provider',
-    noLabel: 'Not Registered',
+    typeProvider: 'Provider',
+    typeConsumer: 'Consumer',
+    typeBoth: 'Provider & Consumer',
+    typeNone: '—',
     activeBadge: 'Active',
     inactiveBadge: 'Inactive',
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createSysBadge: 'Create Company System · UI-01 / M01',
-    editSysBadge: 'Edit Company System · UI-01 / M01',
-    createGrpBadge: 'Create API Group · M04',
-    editGrpBadge: 'Edit API Group · M04',
+    deleteBtn: 'Delete',
+    deleteTitle: 'Confirm Deletion',
+    deleteMsg: 'Are you sure you want to permanently delete this record?',
+    deleteSuccessTitle: 'Record Deleted',
+    deleteSuccessMsg: 'Record has been permanently deleted.',
+    createSysBadge: 'Create Company System',
+    editSysBadge: 'Edit Company System',
+    createGrpBadge: 'Create API Interface Group',
+    editGrpBadge: 'Edit API Interface Group',
     createSysTitle: 'Create Company System',
     editSysTitle: 'Edit Company System',
-    createGrpTitle: 'Create API Group',
-    editGrpTitle: 'Edit API Group',
-    sysFormSub: 'Usage classification (Provider / Consumer / Both) is computed automatically from documents.',
-    grpFormSub: 'API groups categorize API documents and integrations.',
+    createGrpTitle: 'Create API Interface Group',
+    editGrpTitle: 'Edit API Interface Group',
+    sysFormSub: '',
+    grpFormSub: '',
     backBtn: 'Back to List',
     saveCreateBtn: 'Create Record',
     saveEditBtn: 'Save Changes',
@@ -176,16 +161,16 @@ const COPY = {
     validationTitle: 'Unable to Save Record',
     validationMsg: 'Please review required fields and try again.',
     createSuccessTitle: 'Record Created',
-    createSuccessMsg: 'Record saved to database and logged in the audit trail.',
+    createSuccessMsg: 'Record saved successfully.',
     editSuccessTitle: 'Record Updated',
-    editSuccessMsg: 'Changes saved and logged in the audit trail.',
+    editSuccessMsg: 'Changes saved successfully.',
     toggleTitle: 'Confirm Status Change',
-    deactivateMsg: 'Deactivating prevents new links while protecting active references. Continue?',
-    activateMsg: 'Re-activate this record?',
+    deactivateMsg: 'Are you sure you want to deactivate this record?',
+    activateMsg: 'Re-enable this record?',
     loadingText: 'Loading records...',
-    emptyTitle: 'No matching records found',
-    emptyDesc: 'Adjust filters or create a new record.',
-    errorTitle: 'Failed to Load Records',
+    emptyTitle: 'No records found',
+    emptyDesc: 'Click the (+) button to add a new record.',
+    errorTitle: 'Unable to Load Records',
     retryBtn: 'Retry',
     pagePrefix: 'Page',
     ofWord: 'of',
@@ -194,17 +179,26 @@ const COPY = {
   },
 } as const;
 
-export function CompanySystemsPage({ lang, permissions, onSessionExpired }: CompanySystemsPageProps) {
+export function CompanySystemsPage({
+  lang,
+  permissions,
+  section = 'systems',
+  onSessionExpired,
+}: CompanySystemsPageProps) {
   const copy = COPY[lang];
   const t = UI_STRINGS[lang];
+  const hasPerm = (code: string) => permissions.some((p) => p.toLowerCase() === code.toLowerCase());
 
-  const canViewSys = permissions.some((p) => p.toLowerCase() === 'company_systems.view');
-  const canCreateSys = permissions.some((p) => p.toLowerCase() === 'company_systems.create');
-  const canEditSys = permissions.some((p) => p.toLowerCase() === 'company_systems.edit');
-  const canViewGrp = permissions.some((p) => p.toLowerCase() === 'api_groups.view');
-  const canManageGrp = permissions.some((p) => p.toLowerCase() === 'api_groups.manage');
+  const canViewSys = hasPerm('company_systems.view');
+  const canCreateSys = hasPerm('company_systems.create');
+  const canEditSys = hasPerm('company_systems.edit');
+  const canDeleteSys = hasPerm('company_systems.delete');
+  const canViewGrp = hasPerm('api_groups.view');
+  const canCreateGrp = hasPerm('api_groups.create');
+  const canEditGrp = hasPerm('api_groups.edit');
+  const canDeleteGrp = hasPerm('api_groups.delete');
 
-  const [tab, setTab] = useState<ActiveTab>('systems');
+  const tab = section;
   const [mode, setMode] = useState<PageMode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -213,8 +207,6 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'' | 'true' | 'false'>('');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<{ message: string; traceId?: string } | null>(null);
 
@@ -224,22 +216,29 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
   const [formActive, setFormActive] = useState(true);
   const [nameError, setNameError] = useState('');
   const [modal, setModal] = useState<ModalState | null>(null);
-
-  const nameRef = useRef<HTMLInputElement | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadData = useCallback(async () => {
-    const canViewTab = tab === 'systems' ? canViewSys : canViewGrp;
-    if (!canViewTab) return;
     setLoading(true);
     setLoadError(null);
     try {
       if (tab === 'systems') {
-        const res = await listCompanySystems({ page, pageSize: 10, search, isActive: activeFilter, lang });
+        if (!canViewSys) return;
+        const res = await listCompanySystems({
+          page,
+          pageSize: 10,
+          lang,
+        });
         setSystems(res.items);
         setTotalPages(res.totalPages);
         setTotalCount(res.totalCount);
       } else {
-        const res = await listApiGroups({ page, pageSize: 10, search, isActive: activeFilter, lang });
+        if (!canViewGrp) return;
+        const res = await listApiGroups({
+          page,
+          pageSize: 10,
+          lang,
+        });
         setGroups(res.items);
         setTotalPages(res.totalPages);
         setTotalCount(res.totalCount);
@@ -250,17 +249,36 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
         return;
       }
       const apiErr = err instanceof ApiProblemError ? err : null;
-      setLoadError({ message: apiErr?.message ?? copy.errorTitle, traceId: apiErr?.traceId });
+      setLoadError({
+        message: apiErr?.message ?? copy.errorTitle,
+        traceId: apiErr?.traceId,
+      });
     } finally {
       setLoading(false);
     }
-  }, [tab, canViewSys, canViewGrp, page, search, activeFilter, lang, onSessionExpired, copy.errorTitle]);
+  }, [tab, canViewSys, canViewGrp, page, lang, onSessionExpired, copy.errorTitle]);
 
   useEffect(() => {
     if (mode === 'list') {
       void loadData();
     }
   }, [mode, loadData]);
+
+  const renderSystemTypeBadge = (system: CompanySystemItem) => {
+    const isProv = system.isRegisteredInternalProvider || system.documentsAsProviderCount > 0;
+    const isCons = system.documentsAsConsumerCount > 0;
+
+    if (isProv && isCons) {
+      return <StatusBadge variant="success">{copy.typeBoth}</StatusBadge>;
+    }
+    if (isProv) {
+      return <StatusBadge variant="info">{copy.typeProvider}</StatusBadge>;
+    }
+    if (isCons) {
+      return <StatusBadge variant="warning">{copy.typeConsumer}</StatusBadge>;
+    }
+    return <span style={{ color: 'var(--text-muted)' }}>{copy.typeNone}</span>;
+  };
 
   const handleApiError = (err: unknown) => {
     if (err instanceof ApiProblemError && err.status === 401) {
@@ -275,63 +293,63 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
     });
   };
 
-  const renderUsageBadge = (usage: CompanySystemUsageType) => {
-    switch (usage) {
-      case 'PROVIDER':
-        return <StatusBadge variant="info">{copy.usageProvider}</StatusBadge>;
-      case 'CONSUMER':
-        return <StatusBadge variant="warning">{copy.usageConsumer}</StatusBadge>;
-      case 'BOTH':
-        return <StatusBadge variant="success">{copy.usageBoth}</StatusBadge>;
-      default:
-        return <StatusBadge variant="neutral">{copy.usageNone}</StatusBadge>;
-    }
-  };
-
-  const handleSave = async () => {
+  const handleSaveForm = async () => {
     if (formName.trim().length < 2) {
       setNameError(copy.requiredNameError);
-      setModal({ variant: 'error', title: copy.validationTitle, message: copy.validationMsg });
+      setModal({
+        variant: 'error',
+        title: copy.validationTitle,
+        message: copy.validationMsg,
+      });
       return;
     }
+
     try {
-      const clearDesc = !formDesc.trim() && hadInitialDesc;
       if (tab === 'systems') {
         if (mode === 'create') {
-          await createCompanySystem({ name: formName.trim(), description: formDesc.trim() || null }, lang);
-          setModal({ variant: 'success', title: copy.createSuccessTitle, message: copy.createSuccessMsg });
+          await createCompanySystem(
+            { name: formName.trim(), description: formDesc.trim() || null },
+            lang
+          );
         } else if (editingId) {
           await updateCompanySystem(
             editingId,
             {
               name: formName.trim(),
               description: formDesc.trim() || null,
-              clearDescription: clearDesc,
+              clearDescription: !formDesc.trim() && hadInitialDesc,
               isActive: formActive,
             },
             lang
           );
-          setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
         }
       } else {
         if (mode === 'create') {
-          await createApiGroup({ name: formName.trim(), description: formDesc.trim() || null }, lang);
-          setModal({ variant: 'success', title: copy.createSuccessTitle, message: copy.createSuccessMsg });
+          await createApiGroup(
+            { name: formName.trim(), description: formDesc.trim() || null },
+            lang
+          );
         } else if (editingId) {
           await updateApiGroup(
             editingId,
             {
               name: formName.trim(),
               description: formDesc.trim() || null,
-              clearDescription: clearDesc,
+              clearDescription: !formDesc.trim() && hadInitialDesc,
               isActive: formActive,
             },
             lang
           );
-          setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
         }
       }
+
+      const wasCreate = mode === 'create';
       setMode('list');
+      setModal({
+        variant: 'success',
+        title: wasCreate ? copy.createSuccessTitle : copy.editSuccessTitle,
+        message: wasCreate ? copy.createSuccessMsg : copy.editSuccessMsg,
+      });
       await loadData();
     } catch (err) {
       handleApiError(err);
@@ -341,19 +359,23 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
   const systemColumns: DataTableColumn<CompanySystemItem>[] = useMemo(
     () => [
       { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
-      { key: 'desc', header: copy.colDesc, render: (row) => <span>{row.description ?? '—'}</span> },
       {
-        key: 'usage',
-        header: copy.colUsage,
-        render: (row) => renderUsageBadge(row.computedUsageType),
+        key: 'description',
+        header: copy.colDesc,
+        render: (row) => row.description || <span style={{ color: 'var(--text-muted)' }}>—</span>,
       },
       {
-        key: 'prov',
-        header: copy.colInternalProv,
+        key: 'type',
+        header: copy.colType,
+        render: (row) => renderSystemTypeBadge(row),
+      },
+      {
+        key: 'docs',
+        header: copy.colDocsCount,
         render: (row) => (
-          <StatusBadge variant={row.isRegisteredInternalProvider ? 'info' : 'neutral'}>
-            {row.isRegisteredInternalProvider ? copy.yesLabel : copy.noLabel}
-          </StatusBadge>
+          <code className="ltr-code">
+            P:{row.documentsAsProviderCount} / C:{row.documentsAsConsumerCount}
+          </code>
         ),
       },
       {
@@ -369,57 +391,89 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
         key: 'actions',
         header: copy.colActions,
         render: (row) =>
-          canEditSys ? (
-            <div className="button-row" style={{ gap: 6 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingId(row.id);
-                  setFormName(row.name);
-                  setFormDesc(row.description ?? '');
-                  setHadInitialDesc(Boolean(row.description));
-                  setFormActive(row.isActive);
-                  setNameError('');
-                  setMode('edit');
-                }}
-              >
-                {copy.editBtn}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModal({
-                    variant: 'confirm',
-                    title: copy.toggleTitle,
-                    message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
-                    onConfirmAction: async () => {
-                      try {
-                        await updateCompanySystem(row.id, { isActive: !row.isActive }, lang);
-                        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                        await loadData();
-                      } catch (err) {
-                        handleApiError(err);
-                      }
-                    },
-                  })
-                }
-              >
-                {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-              </Button>
+          canEditSys || canDeleteSys ? (
+            <div className="row-actions">
+              {canEditSys && (
+                <>
+                  <RowActionButton
+                    icon="edit"
+                    label={copy.editBtn}
+                    onClick={() => {
+                      setEditingId(row.id);
+                      setFormName(row.name);
+                      setFormDesc(row.description ?? '');
+                      setHadInitialDesc(Boolean(row.description));
+                      setFormActive(row.isActive);
+                      setNameError('');
+                      setMode('edit');
+                    }}
+                  />
+                  <RowActionButton
+                    icon="power"
+                    label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                    variant={row.isActive ? 'warning' : 'success'}
+                    onClick={() =>
+                      setModal({
+                        variant: 'confirm',
+                        title: copy.toggleTitle,
+                        message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
+                        onConfirmAction: async () => {
+                          try {
+                            await updateCompanySystem(row.id, { isActive: !row.isActive }, lang);
+                            setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+                            await loadData();
+                          } catch (err) {
+                            handleApiError(err);
+                          }
+                        },
+                      })
+                    }
+                  />
+                </>
+              )}
+              {canDeleteSys && (
+                <RowActionButton
+                  icon="trash"
+                  label={copy.deleteBtn}
+                  variant="danger"
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.deleteTitle,
+                      message: copy.deleteMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await deleteCompanySystem(row.id, lang);
+                          setModal({
+                            variant: 'success',
+                            title: copy.deleteSuccessTitle,
+                            message: copy.deleteSuccessMsg,
+                          });
+                          await loadData();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
             </div>
           ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canEditSys, lang]
+    [copy, canEditSys, canDeleteSys, lang]
   );
 
   const groupColumns: DataTableColumn<ApiGroupItem>[] = useMemo(
     () => [
       { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
-      { key: 'desc', header: copy.colDesc, render: (row) => <span>{row.description ?? '—'}</span> },
+      {
+        key: 'description',
+        header: copy.colDesc,
+        render: (row) => row.description || <span style={{ color: 'var(--text-muted)' }}>—</span>,
+      },
       {
         key: 'docs',
         header: copy.colDocsCount,
@@ -438,191 +492,157 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
         key: 'actions',
         header: copy.colActions,
         render: (row) =>
-          canManageGrp ? (
-            <div className="button-row" style={{ gap: 6 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingId(row.id);
-                  setFormName(row.name);
-                  setFormDesc(row.description ?? '');
-                  setHadInitialDesc(Boolean(row.description));
-                  setFormActive(row.isActive);
-                  setNameError('');
-                  setMode('edit');
-                }}
-              >
-                {copy.editBtn}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModal({
-                    variant: 'confirm',
-                    title: copy.toggleTitle,
-                    message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
-                    onConfirmAction: async () => {
-                      try {
-                        await updateApiGroup(row.id, { isActive: !row.isActive }, lang);
-                        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                        await loadData();
-                      } catch (err) {
-                        handleApiError(err);
-                      }
-                    },
-                  })
-                }
-              >
-                {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-              </Button>
+          canEditGrp || canDeleteGrp ? (
+            <div className="row-actions">
+              {canEditGrp && (
+                <>
+                  <RowActionButton
+                    icon="edit"
+                    label={copy.editBtn}
+                    onClick={() => {
+                      setEditingId(row.id);
+                      setFormName(row.name);
+                      setFormDesc(row.description ?? '');
+                      setHadInitialDesc(Boolean(row.description));
+                      setFormActive(row.isActive);
+                      setNameError('');
+                      setMode('edit');
+                    }}
+                  />
+                  <RowActionButton
+                    icon="power"
+                    label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                    variant={row.isActive ? 'warning' : 'success'}
+                    onClick={() =>
+                      setModal({
+                        variant: 'confirm',
+                        title: copy.toggleTitle,
+                        message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
+                        onConfirmAction: async () => {
+                          try {
+                            await updateApiGroup(row.id, { isActive: !row.isActive }, lang);
+                            setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+                            await loadData();
+                          } catch (err) {
+                            handleApiError(err);
+                          }
+                        },
+                      })
+                    }
+                  />
+                </>
+              )}
+              {canDeleteGrp && (
+                <RowActionButton
+                  icon="trash"
+                  label={copy.deleteBtn}
+                  variant="danger"
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.deleteTitle,
+                      message: copy.deleteMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await deleteApiGroup(row.id, lang);
+                          setModal({
+                            variant: 'success',
+                            title: copy.deleteSuccessTitle,
+                            message: copy.deleteSuccessMsg,
+                          });
+                          await loadData();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
             </div>
           ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canManageGrp, lang]
+    [copy, canEditGrp, canDeleteGrp, lang]
   );
 
   const canViewActiveTab = tab === 'systems' ? canViewSys : canViewGrp;
-  const canCreateActiveTab = tab === 'systems' ? canCreateSys : canManageGrp;
+  const canCreateActiveTab = tab === 'systems' ? canCreateSys : canCreateGrp;
 
   return (
     <>
       {mode === 'list' ? (
-        <>
+        <section className="surface-card panel clean-table-panel">
           {canCreateActiveTab && (
-            <div className="page-actions">
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setEditingId(null);
-                  setFormName('');
-                  setFormDesc('');
-                  setHadInitialDesc(false);
-                  setFormActive(true);
-                  setNameError('');
-                  setMode('create');
-                }}
-              >
-                {tab === 'systems' ? copy.addSysBtn : copy.addGrpBtn}
-              </Button>
-            </div>
+            <button
+              type="button"
+              className="compact-add-icon-btn"
+              aria-label={tab === 'systems' ? copy.addSysAria : copy.addGrpAria}
+              title={tab === 'systems' ? copy.addSysAria : copy.addGrpAria}
+              onClick={() => {
+                setEditingId(null);
+                setFormName('');
+                setFormDesc('');
+                setHadInitialDesc(false);
+                setFormActive(true);
+                setNameError('');
+                setMode('create');
+              }}
+            >
+              <ReferenceIcon name="plus" size={18} />
+            </button>
           )}
-          <section className="surface-card panel">
-            <div className="tabs">
-              <button
-                type="button"
-                className={`tab ${tab === 'systems' ? 'active' : ''}`}
-                onClick={() => {
-                  setTab('systems');
-                  setPage(1);
-                  setSearch('');
-                }}
-              >
-                {copy.tabSystems}
-              </button>
-              <button
-                type="button"
-                className={`tab ${tab === 'api-groups' ? 'active' : ''}`}
-                onClick={() => {
-                  setTab('api-groups');
-                  setPage(1);
-                  setSearch('');
-                }}
-              >
-                {copy.tabGroups}
-              </button>
-            </div>
 
-            {!canViewActiveTab ? (
-              <ErrorState
-                title={tab === 'systems' ? copy.noViewSysTitle : copy.noViewGrpTitle}
-                message={tab === 'systems' ? copy.noViewSysDesc : copy.noViewGrpDesc}
-              />
-            ) : (
-              <>
-                <div className="panel-head">
-                  <div>
-                    <h2 className="panel-title heading-font">
-                      {tab === 'systems' ? copy.sysTitle : copy.grpTitle}
-                    </h2>
-                    <p className="panel-desc">
-                      {tab === 'systems' ? copy.sysDesc : copy.grpDesc}
-                    </p>
-                  </div>
-                </div>
-
-              <SearchFilterBar
-                searchValue={search}
-                searchPlaceholder={copy.searchPlaceholder}
-                searchAriaLabel={copy.searchAria}
-                onSearchChange={(val) => {
-                  setSearch(val);
-                  setPage(1);
-                }}
-                filterValue={activeFilter}
-                filterAriaLabel={copy.filterAria}
-                filterPlaceholder={copy.filterAll}
-                filterOptions={[
-                  { value: 'true', label: copy.filterActive },
-                  { value: 'false', label: copy.filterInactive },
-                ]}
-                onFilterChange={(val) => {
-                  setActiveFilter((val as '' | 'true' | 'false') || '');
-                  setPage(1);
-                }}
-              />
-
-              {loadError ? (
-                <ErrorState
-                  title={copy.errorTitle}
-                  message={loadError.message}
-                  traceId={loadError.traceId}
-                  retryLabel={copy.retryBtn}
-                  onRetry={() => void loadData()}
+          {!canViewActiveTab ? (
+            <ErrorState
+              title={tab === 'systems' ? copy.noViewSysTitle : copy.noViewGrpTitle}
+              message={tab === 'systems' ? copy.noViewSysDesc : copy.noViewGrpDesc}
+            />
+          ) : loadError ? (
+            <ErrorState
+              title={copy.errorTitle}
+              message={loadError.message}
+              retryLabel={copy.retryBtn}
+              onRetry={() => void loadData()}
+            />
+          ) : (
+            <>
+              {tab === 'systems' ? (
+                <DataTable
+                  columns={systemColumns}
+                  rows={systems}
+                  getRowKey={(r) => r.id}
+                  isLoading={loading}
+                  loadingTitle={copy.loadingText}
+                  emptyTitle={copy.emptyTitle}
+                  emptyDescription={copy.emptyDesc}
                 />
               ) : (
-                <>
-                  {tab === 'systems' ? (
-                    <DataTable
-                      columns={systemColumns}
-                      rows={systems}
-                      getRowKey={(r) => r.id}
-                      isLoading={loading}
-                      loadingTitle={copy.loadingText}
-                      emptyTitle={copy.emptyTitle}
-                      emptyDescription={copy.emptyDesc}
-                    />
-                  ) : (
-                    <DataTable
-                      columns={groupColumns}
-                      rows={groups}
-                      getRowKey={(r) => r.id}
-                      isLoading={loading}
-                      loadingTitle={copy.loadingText}
-                      emptyTitle={copy.emptyTitle}
-                      emptyDescription={copy.emptyDesc}
-                    />
-                  )}
-                  {totalCount > 0 && (
-                    <PaginationBar
-                      currentPage={page}
-                      totalPages={totalPages}
-                      totalItems={totalCount}
-                      pageLabel={`${copy.pagePrefix} ${page} ${copy.ofWord} ${totalPages}`}
-                      previousLabel={copy.prevBtn}
-                      nextLabel={copy.nextBtn}
-                      onPageChange={setPage}
-                    />
-                  )}
-                </>
+                <DataTable
+                  columns={groupColumns}
+                  rows={groups}
+                  getRowKey={(r) => r.id}
+                  isLoading={loading}
+                  loadingTitle={copy.loadingText}
+                  emptyTitle={copy.emptyTitle}
+                  emptyDescription={copy.emptyDesc}
+                />
+              )}
+              {totalCount > 0 && (
+                <PaginationBar
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalCount}
+                  pageLabel={`${copy.pagePrefix} ${page} ${copy.ofWord} ${totalPages}`}
+                  previousLabel={copy.prevBtn}
+                  nextLabel={copy.nextBtn}
+                  onPageChange={setPage}
+                />
               )}
             </>
           )}
         </section>
-        </>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={
@@ -649,13 +669,13 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
           cancelButtonLabel={copy.cancelBtn}
           onBack={() => setMode('list')}
           onCancel={() => setMode('list')}
-          onSubmit={() => void handleSave()}
+          onSubmit={() => void handleSaveForm()}
         >
           <div className="form-grid-2">
-            <FormField id="master-name-input" label={copy.nameLabel} required error={nameError}>
+            <FormField id="m01-name" label={copy.nameLabel} required error={nameError}>
               <TextInput
-                ref={nameRef}
-                id="master-name-input"
+                ref={nameInputRef}
+                id="m01-name"
                 value={formName}
                 hasError={Boolean(nameError)}
                 onChange={(e) => {
@@ -666,29 +686,28 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
             </FormField>
 
             {mode === 'edit' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 24 }}>
-                <input
-                  id="master-active-input"
-                  type="checkbox"
-                  checked={formActive}
-                  onChange={(e) => setFormActive(e.target.checked)}
-                />
-                <label htmlFor="master-active-input" style={{ fontSize: 13.5 }}>
-                  {copy.activeStatusLabel}
+              <div className="form-field" style={{ justifyContent: 'center' }}>
+                <label className="matrix-inline-check">
+                  <input
+                    type="checkbox"
+                    className="matrix-checkbox"
+                    checked={formActive}
+                    onChange={(e) => setFormActive(e.target.checked)}
+                  />
+                  <span>{copy.activeStatusLabel}</span>
                 </label>
               </div>
             )}
           </div>
 
-          <div style={{ marginTop: 14 }}>
-            <FormField id="master-desc-input" label={copy.descLabel}>
-              <TextareaInput
-                id="master-desc-input"
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-              />
-            </FormField>
-          </div>
+          <FormField id="m01-desc" label={copy.descLabel}>
+            <TextareaInput
+              id="m01-desc"
+              rows={3}
+              value={formDesc}
+              onChange={(e) => setFormDesc(e.target.value)}
+            />
+          </FormField>
         </StandaloneFormPage>
       )}
 
@@ -698,7 +717,7 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
         title={modal?.title ?? ''}
         message={modal?.message ?? ''}
         confirmLabel={t.modalConfirmBtn}
-        cancelLabel={modal?.variant === 'confirm' ? t.modalCancelBtn : undefined}
+        cancelLabel={t.modalCancelBtn}
         closeAriaLabel={t.modalCloseAria}
         onConfirm={() => {
           const active = modal;
@@ -708,13 +727,12 @@ export function CompanySystemsPage({ lang, permissions, onSessionExpired }: Comp
             return;
           }
           setModal(null);
-          if (active.variant === 'error') {
-            nameRef.current?.focus();
+          if (active.variant === 'error' && nameError) {
+            nameInputRef.current?.focus();
           }
         }}
-        onCancel={modal?.variant === 'confirm' ? () => setModal(null) : undefined}
+        onCancel={() => setModal(null)}
       />
     </>
   );
 }
-

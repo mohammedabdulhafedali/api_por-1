@@ -6,6 +6,7 @@ import {
   IntegrationDeveloperItem,
   IntegrationItem,
   createIntegration,
+  deleteIntegration,
   getIntegrationDetails,
   listEligibleIntegrationDocuments,
   listIntegrationAssignableUsers,
@@ -64,13 +65,17 @@ import {
 } from '../../api/publishingPortalApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
+  BackIconButton,
   Button,
   CentralModalDialog,
+  DataTable,
+  DataTableColumn,
   ErrorState,
   FormField,
   LoadingState,
   PaginationBar,
   ReferenceIcon,
+  RowActionButton,
   SearchFilterBar,
   SelectInput,
   StandaloneFormPage,
@@ -111,14 +116,13 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    pageTitle: 'قائمة التكاملات (UI-22)',
-    pageDesc:
-      'يعرض التكاملات المرتبطة بنسبة 1:1 مع وثائق API المصرح بعرضها، مع تصفية نطاق التكليف كمطوّر والدخول لصفحة التفاصيل والتبويبات.',
+    pageTitle: 'التكاملات',
+    pageDesc: '',
     noViewTitle: 'صلاحية عرض التكاملات غير متوفرة',
     noViewDesc: 'يتطلب عرض قائمة التكاملات توفر صلاحية integrations.view.',
     noCreateTitle: 'صلاحية إنشاء التكامل غير متوفرة',
     noCreateDesc: 'يتطلب إنشاء تكامل جديد توفر صلاحية integrations.create.',
-    addBtn: 'إضافة تكامل جديد (1:1)',
+    addBtn: 'إضافة تكامل',
     searchPlaceholder: 'ابحث بالرمز المرجعي أو عنوان الوثيقة أو مجموعة API...',
     searchAria: 'البحث في التكاملات',
     scopeFilterAria: 'تصفية حسب نطاق التكليف',
@@ -127,23 +131,29 @@ const COPY = {
     colRef: 'الرمز المرجعي',
     colDoc: 'الوثيقة والأطراف',
     colGroup: 'مجموعة API',
-    colDevs: 'مطوّرو التكامل والنطاق',
+    colDevs: 'المطورون',
     colVersions: 'الإصدارات',
+    colState: 'الحالة',
     colActions: 'الإجراءات',
-    detailsBtn: 'التفاصيل والتبويبات (UI-09)',
-    assignDevsBtn: 'إدارة المطورين (D05)',
+    detailsBtn: 'التفاصيل',
+    assignDevsBtn: 'المطورون',
+    deleteBtn: 'حذف',
+    deleteConfirmTitle: 'تأكيد حذف التكامل',
+    deleteConfirmMsg: 'هل أنت متأكد من حذف هذا التكامل؟ سيُمنع الحذف إذا كان يحتوي على إصدارات أو طلبات تغيير.',
+    deleteSuccessTitle: 'تم حذف التكامل',
+    deleteSuccessMsg: 'تم حذف التكامل بنجاح.',
     scopeAssignedBadge: 'مكلّف كمطوّر',
     scopeViewOnlyBadge: 'عرض فقط',
-    createBadge: 'إضافة تكامل · UI-08 / D04',
-    detailsBadge: 'تفاصيل التكامل والتبويبات · UI-09 / D06',
-    assignBadge: 'تعيين مطوري التكامل والنطاق · D05',
-    createTitle: 'إنشاء تكامل مرتبط بوثيقة API (1:1)',
+    createBadge: 'إضافة تكامل',
+    detailsBadge: 'تفاصيل التكامل',
+    assignBadge: 'تعيين مطوري التكامل',
+    createTitle: 'إنشاء تكامل مرتبط بوثيقة API',
     detailsTitle: 'تفاصيل التكامل وملخص الأطراف',
-    assignTitle: 'إدارة مطوري التكامل (D05)',
+    assignTitle: 'إدارة مطوري التكامل',
     formSub:
-      'تظهر فقط وثائق API غير المرتبطة بتكامل سابق والمخولة لك بـ doc.view وdoc.manage_integration؛ ويظل تعيين المطورين منفصلًا عن صلاحيات الوثيقة.',
+      'تظهر فقط وثائق API غير المرتبطة بتكامل سابق والمخولة لك.',
     assignFormSub:
-      'يحدد هذا التعيين نطاق مسؤولية المطور على التكامل فقط، ولا يمنحه تلقائيًا أي صلاحية doc.* على الوثيقة (تُمنح من شاشة صلاحيات الوثيقة UI-21A).',
+      'يحدد هذا التعيين نطاق مسؤولية المطور على التكامل فقط، ولا يمنحه تلقائيًا أي صلاحية على الوثيقة.',
     backBtn: 'العودة إلى قائمة التكاملات',
     backDetailsBtn: 'العودة إلى تفاصيل التكامل',
     saveCreateBtn: 'حفظ وإنشاء التكامل',
@@ -152,11 +162,11 @@ const COPY = {
     docSelectLabel: 'وثيقة API غير المرتبطة',
     selectDocPrompt: '-- اختر وثيقة API --',
     noEligibleDocsNotice:
-      'لا توجد وثائق API غير مرتبطة ومخوّلة لك بإنشاء تكامل حاليًا. أنشئ وثيقة أولًا من UI-07.',
+      'لا توجد وثائق API غير مرتبطة ومخوّلة لك بإنشاء تكامل حاليًا.',
     refCodeLabel: 'الرمز المرجعي للتكامل (اختياري — يُولّد تلقائيًا عند تركه فارغًا)',
     refCodePlaceholder: 'INT-PAYMENTS-001',
     partiesPreviewLabel: 'ملخص الأطراف ومجموعة API:',
-    initialDevsLabel: 'مطورو التكامل (D05 — يتطلب doc.assign)',
+    initialDevsLabel: 'مطورو التكامل',
     noDevsLabel: 'بدون مطورين',
     providerLabel: 'المزوّد',
     consumerLabel: 'المستهلك',
@@ -172,24 +182,24 @@ const COPY = {
     stateDraft: 'مسودة (DRAFT)',
     stateArchived: 'مؤرشفة (ARCHIVED)',
     tabDevelopers: 'المطورون والنطاق',
-    tabFiles: 'الملفات (UI-10)',
-    tabRevisions: 'المراجعات (UI-11)',
-    tabVersions: 'الإصدارات (UI-12)',
-    tabChanges: 'طلبات التغيير (UI-13)',
-    tabAudit: 'السجل والنشر (UI-14)',
-    intDevsTitle: 'المطورون المكلّفون على هذا التكامل (D05)',
-    docDevsTitle: 'المطورون المكلّفون على الوثيقة الأم (D02)',
+    tabFiles: 'الملفات',
+    tabRevisions: 'المراجعات',
+    tabVersions: 'الإصدارات',
+    tabChanges: 'طلبات التغيير',
+    tabAudit: 'السجل',
+    intDevsTitle: 'المطورون المكلّفون على هذا التكامل',
+    docDevsTitle: 'المطورون المكلّفون على الوثيقة الأم',
     aclSeparationNote:
-      'تنبيه الفصل المعتمد: عرض الشارات يوضّح صلاحية doc.* الفعلية لكل مطور في مصفوفة الوثيقة دون منح تلقائي.',
-    aclView: 'doc.view',
-    aclFiles: 'doc.files_manage',
-    aclVersions: 'doc.version_manage',
-    aclChange: 'doc.change',
-    filesTabDesc: 'قواعد متطلبات الملفات المعتمدة لهذا التكامل (تُفعّل عمليات الرفع والفحص والتنزيل في Sprint S08/S09):',
-    revisionsTabDesc: 'مراحل مسار الاعتماد المرتبط بالوثيقة (تُفعّل دورة المراجعات والقرارات في Sprint S09/S10):',
-    versionsTabDesc: 'إدارة إصدارات API بالنص الحر (تُفعّل في Sprint S08):',
-    changesTabDesc: 'أنواع طلبات التغيير المسموحة حسب السياسة المرتبطة (تُفعّل في Sprint S11):',
-    auditTabDesc: 'ملخص النشر وسجل الأحداث الإلحاقي للتكامل والوثيقة (OP-01):',
+      'عرض الشارات يوضّح الصلاحيات الفعلية لكل مطور في مصفوفة الوثيقة.',
+    aclView: 'عرض',
+    aclFiles: 'إدارة الملفات',
+    aclVersions: 'إدارة الإصدارات',
+    aclChange: 'طلبات التغيير',
+    filesTabDesc: 'قواعد متطلبات الملفات المعتمدة لهذا التكامل:',
+    revisionsTabDesc: 'مراحل مسار الاعتماد المرتبط بالوثيقة:',
+    versionsTabDesc: 'إدارة إصدارات API:',
+    changesTabDesc: 'أنواع طلبات التغيير المسموحة حسب السياسة المرتبطة:',
+    auditTabDesc: 'سجل الأحداث الإلحاقي للتكامل والوثيقة:',
     colFileType: 'نوع الملف',
     colExtensions: 'الامتدادات',
     colMode: 'الإلزامية',
@@ -214,41 +224,41 @@ const COPY = {
     emptyAudit: 'لا توجد أحداث مسجلة بعد.',
     validationDoc: 'يرجى اختيار وثيقة API غير مرتبطة لإنشاء التكامل.',
     createdTitle: 'تم إنشاء التكامل بنجاح',
-    createdMsg: 'تم ربط التكامل بالوثيقة بنسبة 1:1 وحفظ السجل.',
+    createdMsg: 'تم ربط التكامل بالوثيقة وحفظ السجل.',
     devsUpdatedTitle: 'تم تحديث مطوري التكامل',
-    devsUpdatedMsg: 'تم حفظ قائمة مطوري التكامل وتسجيل العملية دون تغيير مصفوفة صلاحيات الوثيقة.',
+    devsUpdatedMsg: 'تم حفظ قائمة مطوري التكامل وتسجيل العملية.',
     loadingText: 'جارٍ تحميل التكاملات...',
     pageWord: 'صفحة',
     ofWord: 'من',
     // S08 V01-V04 Strings (AR)
-    versionsListTitle: 'إصدارات API المسجلة (V04 — نص حر يدوي)',
-    versionsCreateBtn: 'إنشاء إصدار API (V04)',
-    versionsCreateBadge: 'إضافة إصدار API · UI-12 / V04',
-    versionsCreateTitle: 'إنشاء إصدار API جديد برقم يدوي',
+    versionsListTitle: 'إصدارات API المسجلة',
+    versionsCreateBtn: 'إنشاء إصدار API',
+    versionsCreateBadge: 'إضافة إصدار API',
+    versionsCreateTitle: 'إنشاء إصدار API جديد',
     versionsCreateSub:
-      'أدخل رقم أو تسمية الإصدار بالنص الحر حسب فريق التطوير (لا يُفرض نمط SemVer). يظل هذا الإصدار منفصلًا تمامًا عن مراجعات حزم التوثيق (#1، #2...).',
-    versionsLabelField: 'رقم / تسمية إصدار API (نص حر)',
+      'أدخل رقم أو تسمية الإصدار بالنص الحر حسب فريق التطوير.',
+    versionsLabelField: 'رقم / تسمية إصدار API',
     versionsLabelPlaceholder: 'مثال: V2026-Q4 أو 1.1 أو pilot-beta',
     versionsSaveBtn: 'حفظ وإنشاء الإصدار',
     versionsCreatedTitle: 'تم إنشاء إصدار API',
-    versionsCreatedMsg: 'تم حفظ رقم الإصدار اليدوي بنجاح ويمكنك الآن تجهيز مسودة التوثيق ورفع الملفات له.',
+    versionsCreatedMsg: 'تم حفظ رقم الإصدار بنجاح ويمكنك الآن تجهيز مسودة التوثيق ورفع الملفات له.',
     versionsValidationEmpty: 'يرجى إدخال رقم أو تسمية إصدار API.',
-    versionsNoPermNote: 'لا تملك صلاحية versions.view أو إنشاء إصدارات لهذا التكامل.',
-    colVerLabel: 'رقم الإصدار (نص حر)',
+    versionsNoPermNote: 'لا تملك صلاحية عرض أو إنشاء إصدارات لهذا التكامل.',
+    colVerLabel: 'رقم الإصدار',
     colVerCreated: 'تاريخ الإنشاء',
     colVerRevCount: 'عدد المراجعات',
     colVerLatestRev: 'حالة أحدث مراجعة',
     openFilesForVersionBtn: 'ملفات هذا الإصدار',
     emptyVersions: 'لا توجد إصدارات API مسجلة لهذا التكامل بعد.',
-    filesWorkspaceTitle: 'حزمة ملفات التكامل والحجر والفحص الأمني (V01–V03)',
+    filesWorkspaceTitle: 'حزمة ملفات التكامل والفحص الأمني',
     filesSelectVersionLabel: 'إصدار API المستهدف',
     filesInitDraftBtn: 'تهيئة مسودة حزمة توثيق (#1)',
-    filesUploadBtn: 'رفع ملف جديد (V02/V03)',
-    filesUploadBadge: 'رفع ملف وفحصه · UI-10 / V02-V03',
+    filesUploadBtn: 'رفع ملف جديد',
+    filesUploadBadge: 'رفع ملف وفحصه',
     filesUploadTitle: 'رفع ملف توثيقي داخل مسودة المراجعة',
     filesUploadSub:
-      'يُحفظ الملف في مخزن خاص معزول خارج مجلدات الويب مع التحقق من الامتداد والحجم وبنية المحتوى وبصمة SHA-256، ويُفحص أمنيًا قبل إتاحته.',
-    filesTypeSelectLabel: 'نوع الملف المعتمد (وفق قالب الوثيقة)',
+      'يُحفظ الملف في مخزن خاص معزول مع التحقق من الامتداد والحجم وبنية المحتوى وبصمة SHA-256، ويُفحص أمنيًا قبل إتاحته.',
+    filesTypeSelectLabel: 'نوع الملف المعتمد',
     filesInputFileLabel: 'اختيار الملف من جهازك',
     filesSubmitUploadBtn: 'رفع وفحص وحفظ الملف',
     filesValidationMissing: 'يرجى اختيار نوع الملف وإرفاق الملف قبل الإرسال.',
@@ -272,44 +282,44 @@ const COPY = {
     uploadCleanTitle: 'تم رفع الملف واجتياز الفحص',
     uploadCleanMsg: (name: string, sha: string) =>
       `تم فحص الملف (${name}) وحفظه في المخزن الخاص الثابت بنجاح.\nSHA-256: ${sha}`,
-    uploadPendingTitle: 'تم الحجز بانتظار الفحص الأمني (Fail-Closed)',
+    uploadPendingTitle: 'تم الحجز بانتظار الفحص الأمني',
     uploadPendingMsg: (name: string, sha: string) =>
-      `تم التحقق من سلامة بنية (${name}) وعزله في الحجر الأمني بحالة PENDING_SCAN لعدم توفر محرك فحص فعلي من IT حاليًا. لن يُتاح الملف للتنزيل أو الاعتماد حتى اجتياز الفحص.\nSHA-256: ${sha}`,
+      `تم التحقق من سلامة بنية (${name}) وعزله في الحجر الأمني بحالة PENDING_SCAN لعدم توفر محرك فحص فعلي حاليًا.\nSHA-256: ${sha}`,
     rescanStillPendingTitle: 'لا يزال الملف في الحجر (PENDING_SCAN)',
     rescanStillPendingMsg: 'محرك الفحص الأمني الفعلي غير متصل بعد؛ تم إبقاء الملف معزولًا.',
     fileRemovedTitle: 'تمت إزالة الملف',
     fileRemovedMsg: 'تم حذف ارتباط الملف من مسودة المراجعة وتسجيل الحدث.',
     draftCreatedTitle: 'تمت تهيئة مسودة المراجعة',
-    draftCreatedMsg: 'تم فتح مسودة حزمة توثيق (#1) مستقلة عن رقم إصدار API لرفع الملفات.',
+    draftCreatedMsg: 'تم فتح مسودة حزمة توثيق (#1) لرفع الملفات.',
     // S09 V05-V08 Strings (AR)
-    submitRevisionBtn: 'تقديم المراجعة للاعتماد (V05)',
-    submitRevisionConfirmTitle: 'تأكيد تقديم حزمة التوثيق (V05)',
+    submitRevisionBtn: 'تقديم المراجعة للاعتماد',
+    submitRevisionConfirmTitle: 'تأكيد تقديم حزمة التوثيق',
     submitRevisionConfirmMsg: (revNum: number) =>
       `سيتم التحقق من اكتمال جميع الملفات الإلزامية وحالة الفحص ثم قفل المراجعة #${revNum} بحالة SUBMITTED وإحالتها لمسار المراجعة. هل تريد المتابعة؟`,
     submitRevisionSuccessTitle: 'تم تقديم المراجعة بنجاح',
     submitRevisionSuccessMsg: (revNum: number, cleanCount: number) =>
-      `تم تقديم حزمة التوثيق #${revNum} بحالة SUBMITTED مع ${cleanCount} ملفًا سليمًا، وأصبحت المراجعة محمية من التعديل (V06).`,
-    requirementsChecklistTitle: 'تقدم استيفاء الملفات الإلزامية قبل التقديم (V05)',
+      `تم تقديم حزمة التوثيق #${revNum} بحالة SUBMITTED مع ${cleanCount} ملفًا سليمًا.`,
+    requirementsChecklistTitle: 'تقدم استيفاء الملفات الإلزامية قبل التقديم',
     reqSatisfiedBadge: 'مكتمل',
     reqMissingBadge: 'ناقص',
     reqExceedsBadge: 'تجاوز الحد الأقصى',
     protectedRevisionBanner: (status: string) =>
-      `هذه المراجعة في حالة ${status} ومحمية بالكامل من رفع أو حذف أو تعديل الملفات (V06). لبدء تعديل بعد الاعتماد، أنشئ نسخة عمل جديدة مرتبطة بطلب تغيير معتمد.`,
-    createWorkingCopyBtn: 'إنشاء نسخة عمل جديدة (V06)',
-    workingCopyBadge: 'نسخة عمل من مراجعة معتمدة · UI-11 / V06 · OP-05',
+      `هذه المراجعة في حالة ${status} ومحمية بالكامل من رفع أو حذف أو تعديل الملفات. لبدء تعديل بعد الاعتماد، أنشئ نسخة عمل جديدة مرتبطة بطلب تغيير معتمد.`,
+    createWorkingCopyBtn: 'إنشاء نسخة عمل جديدة',
+    workingCopyBadge: 'نسخة عمل من مراجعة معتمدة',
     workingCopyTitle: 'إنشاء نسخة عمل جديدة من مراجعة معتمدة',
     workingCopySub:
-      'تُفتح نسخة العمل (#التالي) استنادًا إلى مراجعة معتمدة (APPROVED) وطلب تغيير معتمد، مع نسخ الملفات السليمة غير المشمولة بالتغيير ومنع فتح أكثر من مسودة نشطة لنفس الإصدار (OP-05).',
-    workingCopyBaseLabel: 'المراجعة المرجعية المعتمدة (Base Revision)',
-    workingCopyCrLabel: 'طلب التغيير المعتمد (Approved Change Request)',
-    workingCopyNoApprovedBase: 'لا توجد مراجعة معتمدة (APPROVED) لهذا الإصدار بعد.',
+      'تُفتح نسخة العمل استنادًا إلى مراجعة معتمدة وطلب تغيير معتمد، مع نسخ الملفات السليمة غير المشمولة بالتغيير.',
+    workingCopyBaseLabel: 'المراجعة المرجعية المعتمدة',
+    workingCopyCrLabel: 'طلب التغيير المعتمد',
+    workingCopyNoApprovedBase: 'لا توجد مراجعة معتمدة لهذا الإصدار بعد.',
     workingCopyNoApprovedCr: 'لا توجد طلبات تغيير معتمدة مرتبطة بمراجعة معتمدة لهذا الإصدار بعد.',
     workingCopySubmitBtn: 'فتح نسخة العمل',
     workingCopyCreatedTitle: 'تم فتح نسخة العمل بنجاح',
     workingCopyCreatedMsg: (revNum: number) =>
-      `تم إنشاء مسودة نسخة العمل #${revNum} مع نسخ الملفات الموروثة من المراجعة المعتمدة وتسجيل الحدث.`,
+      `تم إنشاء مسودة نسخة العمل #${revNum} مع نسخ الملفات الموروثة من المراجعة المعتمدة.`,
     workingCopyValidationMissing: 'يرجى اختيار المراجعة المعتمدة وطلب التغيير المعتمد قبل الإرسال.',
-    revisionsHistoryTitle: 'سجل مراجعات حزمة التوثيق لهذا الإصدار (UI-11 / V05–V06)',
+    revisionsHistoryTitle: 'سجل مراجعات حزمة التوثيق لهذا الإصدار',
     colRevNumber: 'رقم المراجعة',
     colRevStatus: 'الحالة والحماية',
     colRevLineage: 'الأساس وطلب التغيير',
@@ -320,10 +330,10 @@ const COPY = {
     editableDraftTag: 'مسودة قابلة للتعديل',
     verifiedDownloadNotice: (name: string, sha: string) =>
       `تم التحقق من الصلاحية وبصمة SHA-256 وتدقيق تنزيل (${name}) — ${sha.slice(0, 16)}…`,
-    wordUpdateBtn: 'تحديث حقول Word (V08)',
-    wordDerivativesTitle: 'نتائج إثبات جدوى تحديث حقول Word عبر Open XML SDK (V08)',
+    wordUpdateBtn: 'تحديث حقول Word',
+    wordDerivativesTitle: 'نتائج تحديث حقول Word',
     wordDerivativesNote:
-      'يتم تعديل نسخة مشتقة مستقلة مع بقاء الملف الأصلي سليمًا وبصمته دون أي مساس، ويُحظر تنزيل أي مشتق لم يجتز التحقق البنيوي والفحص الأمني (OP-03).',
+      'يتم تعديل نسخة مشتقة مستقلة مع بقاء الملف الأصلي سليمًا وبصمته دون أي مساس.',
     wordStatusVerified: 'مشتق متحقق وقابل للتنزيل (VERIFIED)',
     wordStatusNoFields: 'لا توجد حقول معرّفة (NO_RECOGNIZED_FIELDS)',
     wordStatusPending: 'بانتظار الفحص الأمني (PENDING_SCAN)',
@@ -333,37 +343,37 @@ const COPY = {
     wordSourceShaLabel: 'بصمة الملف الأصلي (ثابتة)',
     wordDerivedShaLabel: 'بصمة المشتق',
     wordDownloadDerivedBtn: 'تنزيل المشتق المتحقق',
-    wordBlockedDownloadTag: 'محجوب من النشر والتنزيل (OP-03)',
-    wordGeneratedTitle: 'نتيجة معالجة مشتق Word (V08)',
+    wordBlockedDownloadTag: 'محجوب من النشر والتنزيل',
+    wordGeneratedTitle: 'نتيجة معالجة مشتق Word',
     wordGeneratedVerifiedMsg: (count: number, kind: string) =>
-      `تم توليد مشتق .docx متحقق واجتياز OpenXmlValidator والفحص الأمني دون تعديل الملف الأصلي.\nالآلية: ${kind} · الحقول المحدّثة: ${count}`,
+      `تم توليد مشتق .docx متحقق دون تعديل الملف الأصلي.\nالآلية: ${kind} · الحقول المحدّثة: ${count}`,
     wordGeneratedBlockedMsg: (status: string, detail: string) =>
-      `حُفظ سجل الفحص بحالة ${status} ومُنع نشر المشتق أو تنزيله (OP-03).\nالتفصيل: ${detail}`,
+      `حُفظ سجل الفحص بحالة ${status} ومُنع نشر المشتق أو تنزيله.\nالتفصيل: ${detail}`,
     // S10 W01-W04 Workflow Strings (AR)
-    workflowInboxBtn: 'صندوق المراجعات بانتظار قراري (W01–W04)',
-    workflowInboxBadge: 'صندوق سير العمل المتسلسل · UI-11 / W01–W04',
-    workflowInboxTitle: 'طلبات المراجعة النشطة ضمن أدواري',
+    workflowInboxBtn: 'صندوق المراجعات',
+    workflowInboxBadge: 'صندوق سير العمل',
+    workflowInboxTitle: 'المراجعات بانتظار القرار',
     workflowInboxSub:
-      'يعرض فقط المراحل النشطة (ACTIVE) المسندة لأي دور نشط تملكه ضمن الوثائق المصرح لك بالوصول إليها (ADR-01). يكفي قرار عضو مؤهل واحد لإتمام المرحلة.',
+      'يعرض فقط المراحل النشطة المسندة لأي دور نشط تملكه ضمن الوثائق المصرح لك بالوصول إليها.',
     workflowInboxEmpty: 'لا توجد حاليًا مراحل اعتماد نشطة بانتظار قرار من أدوارك.',
     colWfIntegration: 'التكامل والوثيقة',
     colWfRevision: 'الإصدار / المراجعة',
     colWfStage: 'المرحلة النشطة والدور',
     colWfSubmittedBy: 'مُقدَّمة من',
     openReviewDetailsBtn: 'فتح التبويب',
-    decideStageBtn: 'اتخاذ قرار المرحلة (W02)',
-    workflowRunTitle: 'مسار الاعتماد التنفيذي المجمد (W01–W04)',
+    decideStageBtn: 'اتخاذ قرار المرحلة',
+    workflowRunTitle: 'مسار الاعتماد التنفيذي',
     workflowSnapshotNote:
-      'ملاحظة W01: نسخة المراحل هنا مجمدة لحظة التقديم، ولا تتأثر بأي تعديل لاحق في إعدادات مسار الاعتماد.',
+      'نسخة المراحل هنا مجمدة لحظة التقديم، ولا تتأثر بأي تعديل لاحق في إعدادات مسار الاعتماد.',
     workflowActiveStageTag: 'المرحلة النشطة حاليًا',
-    workflowReworkAlertTitle: 'إعادة للعمل (RETURNED — W04)',
-    workflowRejectedAlertTitle: 'مرفوضة نهائيًا (REJECTED — W04)',
+    workflowReworkAlertTitle: 'إعادة للعمل (RETURNED)',
+    workflowRejectedAlertTitle: 'مرفوضة نهائيًا (REJECTED)',
     workflowReworkInstruction:
-      'يمكنك تعديل ملفات هذه المراجعة أو استبدالها ثم إعادة التقديم لتشغيل دورة مراجعة جديدة مع بقاء السجل السابق.',
-    workflowDecisionBadge: 'تسجيل قرار مرحلة الاعتماد · UI-11 / W02–W04',
-    workflowDecisionTitle: 'اتخاذ قرار ذري على المرحلة النشطة',
+      'يمكنك تعديل ملفات هذه المراجعة أو استبدالها ثم إعادة التقديم لتشغيل دورة مراجعة جديدة.',
+    workflowDecisionBadge: 'تسجيل قرار مرحلة الاعتماد',
+    workflowDecisionTitle: 'اتخاذ قرار على المرحلة النشطة',
     workflowDecisionSub:
-      'قرار واحد ذري لكل مرحلة. اختيار الإعادة للعمل (RETURN) أو الرفض (REJECT) يتطلب كتابة ملاحظات إلزامية.',
+      'قرار واحد لكل مرحلة. اختيار الإعادة للعمل أو الرفض يتطلب كتابة ملاحظات إلزامية.',
     decisionChoiceLabel: 'القرار المطلوب',
     decisionApproveOpt: 'اعتماد المرحلة والانتقال / الإكمال (APPROVE)',
     decisionReturnOpt: 'إعادة للعمل بملاحظات إلزامية (RETURN)',
@@ -371,23 +381,23 @@ const COPY = {
     decisionNotesLabel: 'ملاحظات المراجع (إلزامية عند الإعادة أو الرفض)',
     decisionNotesPlaceholder: 'اذكر التعديلات المطلوبة أو أسباب الرفض بوضوح...',
     decisionSubmitBtn: 'تأكيد وتسجيل القرار',
-    decisionNotesRequiredErr: 'الملاحظات إلزامية عند اختيار الإعادة للعمل أو الرفض (W04).',
+    decisionNotesRequiredErr: 'الملاحظات إلزامية عند اختيار الإعادة للعمل أو الرفض.',
     decisionRecordedTitle: 'تم تسجيل قرار المرحلة بنجاح',
     decisionRecordedMsg: (outcome: string) =>
-      `تم تسجيل القرار الذري للمرحلة وتحديث حالة التشغيل والمراجعة إلى: ${outcome}`,
-    workflowHistoryTitle: 'سجل قرارات المراحل ومحاولات المراجعة (W04)',
+      `تم تسجيل القرار للمرحلة وتحديث حالة التشغيل والمراجعة إلى: ${outcome}`,
+    workflowHistoryTitle: 'سجل قرارات المراحل ومحاولات المراجعة',
     workflowHistoryEmpty: 'لم تُسجل قرارات مراحل على هذه المراجعة بعد.',
     // S11 W05-W07 Change Requests & Notifications Strings (AR)
-    crWorkspaceTitle: 'طلبات التغيير المقيدة بالملفات المتأثرة (UI-13 / W05–W06)',
-    crCreateBtn: 'إنشاء طلب تغيير (W05)',
+    crWorkspaceTitle: 'طلبات التغيير المقيدة بالملفات المتأثرة',
+    crCreateBtn: 'إنشاء طلب تغيير',
     crEditBtn: 'تعديل الطلب',
-    crSubmitBtn: 'إرسال للاعتماد (W06)',
-    crCreateBadge: 'إنشاء طلب تغيير · UI-13 / W05',
-    crEditBadge: 'تعديل طلب تغيير · UI-13 / W05',
-    crCreateTitle: 'إنشاء طلب تغيير لمراجعة معتمدة',
-    crEditTitle: 'تعديل مسودة طلب التغيير',
+    crSubmitBtn: 'إرسال للاعتماد',
+    crCreateBadge: 'إنشاء طلب تغيير',
+    crEditBadge: 'تعديل طلب تغيير',
+    crCreateTitle: 'إضافة طلب تغيير',
+    crEditTitle: 'تعديل طلب التغيير',
     crFormSub:
-      'يُربط الطلب حصرًا بمراجعة معتمدة (APPROVED) وبملفات متأثرة تنتمي لتلك المراجعة ونوع تغيير مصرح في سياسة الوثيقة.',
+      'يُربط الطلب حصرًا بمراجعة معتمدة وبملفات متأثرة تنتمي لتلك المراجعة ونوع تغيير مصرح في سياسة الوثيقة.',
     crSourceRevLabel: 'المراجعة المعتمدة المستهدفة',
     crChangeTypeLabel: 'نوع التغيير ومسار الاعتماد المستقل',
     crReasonLabel: 'سبب طلب التغيير',
@@ -395,7 +405,7 @@ const COPY = {
     crImpactLabel: 'الأثر على الجهة المستهلكة (اختياري)',
     crImpactPlaceholder: 'لا يوجد أثر كاسر / إضافة حقل اختياري...',
     crAffectedFilesLabel: 'الملفات المتأثرة ضمن المراجعة المعتمدة (ملف واحد على الأقل)',
-    crSaveCreateBtn: 'حفظ كمسودة طلب تغيير',
+    crSaveCreateBtn: 'حفظ الطلب',
     crSaveEditBtn: 'حفظ تعديلات الطلب',
     crValidationMissing: 'يرجى اختيار المراجعة ونوع التغيير والسبب وتحديد ملف متأثر واحد على الأقل.',
     crEmptyList: 'لا توجد طلبات تغيير مسجلة لهذا التكامل بعد.',
@@ -404,46 +414,46 @@ const COPY = {
     crCreatedMsg: 'حُفظ طلب التغيير بحالة DRAFT ومقيدًا بالملفات المختارة.',
     crUpdatedTitle: 'تم تحديث طلب التغيير',
     crUpdatedMsg: 'تم حفظ التعديلات على طلب التغيير بنجاح.',
-    crSubmittedTitle: 'تم إرسال طلب التغيير للاعتماد المستقل (W06)',
+    crSubmittedTitle: 'تم إرسال طلب التغيير للاعتماد المستقل',
     crSubmittedMsg: 'انطلق مسار اعتماد مستقل لطلب التغيير وفق مسار نوع التغيير المعتمد.',
-    notificationsBtn: 'الإشعارات الداخلية (W07)',
-    notificationsBadge: 'مركز الإشعارات الداخلية · W07',
-    notificationsTitle: 'الإشعارات الداخلية لأحداث مراحل الاعتماد',
-    notificationsSub: 'إشعارات داخلية آمنة خاصة بحسابك الحالي، مع عداد غير المقروء ووسم القراءة.',
+    notificationsBtn: 'الإشعارات الداخلية',
+    notificationsBadge: 'مركز الإشعارات الداخلية',
+    notificationsTitle: 'الإشعارات الداخلية',
+    notificationsSub: 'إشعارات داخلية خاصة بحسابك الحالي.',
     notificationsUnreadBadge: (count: number) => `غير مقروء: ${count}`,
     notificationsEmpty: 'لا توجد إشعارات مسجلة لحسابك حاليًا.',
     markReadBtn: 'تحديد كمقروء',
     readTag: 'مقروء',
     unreadTag: 'جديد (غير مقروء)',
     // S12 P01-P03 Publishing & Consumer Version Usage (AR)
-    tabPublishing: 'النشر وإصدار المستهلك (UI-14)',
-    publishingWorkspaceTitle: 'حزم النشر للجهة المستهلكة وإصدار الاستخدام الحالي (UI-14 / P01–P03)',
-    publishRevisionBtn: 'نشر انتقائي لمراجعة معتمدة (P01)',
-    publishBadge: 'نشر انتقائي لمراجعة معتمدة · UI-14 / P01',
-    publishTitle: 'نشر حزمة توثيق انتقائية من مراجعة معتمدة',
+    tabPublishing: 'النشر وإصدار المستهلك',
+    publishingWorkspaceTitle: 'حزم النشر للجهة المستهلكة وإصدار الاستخدام الحالي',
+    publishRevisionBtn: 'نشر انتقائي لمراجعة معتمدة',
+    publishBadge: 'نشر انتقائي لمراجعة معتمدة',
+    publishTitle: 'نشر حزمة التوثيق',
     publishSub:
-      'يُشترط أن تكون المراجعة بحالة APPROVED وجميع الملفات المختارة سليمة (CLEAN). لن تظهر الملفات غير المختارة للمستهلك.',
+      'يُشترط أن تكون المراجعة بحالة APPROVED وجميع الملفات المختارة سليمة (CLEAN).',
     publishRevLabel: 'المراجعة المعتمدة المستهدفة',
     publishFilesLabel: 'الملفات السليمة المتاحة للنشر الانتقائي',
-    publishSubmitBtn: 'تأكيد النشر وإتاحته للمستهلك',
+    publishSubmitBtn: 'نشر الحزمة',
     publishValidationMissing: 'يرجى اختيار مراجعة معتمدة وملف سليم واحد على الأقل.',
     publishSuccessTitle: 'تم نشر الحزمة بنجاح',
     publishSuccessMsg: (verLabel: string, count: number) =>
       `تم نشر حزمة الإصدار (${verLabel}) مع ${count} ملفًا مختارًا وبحالة PUBLISHED.`,
-    withdrawBtn: 'إيقاف النشر (P02)',
-    withdrawConfirmTitle: 'تأكيد إيقاف النشر (P02)',
+    withdrawBtn: 'إيقاف النشر',
+    withdrawConfirmTitle: 'تأكيد إيقاف النشر',
     withdrawConfirmMsg: (verLabel: string, revNum: number) =>
-      `سيتم تحويل حزمة الإصدار (${verLabel} · المراجعة #${revNum}) إلى WITHDRAWN وحجبها عن بوابة المستهلك مع بقاء سجلها للتدقيق.`,
+      `سيتم تحويل حزمة الإصدار (${verLabel} · المراجعة #${revNum}) إلى WITHDRAWN وحجبها عن بوابة المستهلك.`,
     withdrawSuccessTitle: 'تم إيقاف النشر',
     withdrawSuccessMsg: 'تم تحويل حالة الحزمة إلى WITHDRAWN وحجبها عن بوابة المستهلك.',
-    consumerVersionTitle: 'إصدار API المعتمد للاستخدام حاليًا لدى المستهلك (UI-12 / P03)',
+    consumerVersionTitle: 'إصدار API المعتمد للاستخدام حاليًا لدى المستهلك',
     consumerVersionCurrentLabel: 'الإصدار النشط حاليًا',
     consumerVersionUnset: 'لم يتم تحديد إصدار نشط بعد',
     consumerVersionSelectLabel: 'تعيين / تحديث الإصدار النشط (من الإصدارات المنشورة فقط)',
-    consumerVersionSaveBtn: 'اعتماد الإصدار النشط (P03)',
+    consumerVersionSaveBtn: 'اعتماد الإصدار النشط',
     consumerVersionSavedTitle: 'تم تحديث إصدار الاستخدام الحالي',
     consumerVersionSavedMsg: (verLabel: string) =>
-      `أصبح (${verLabel}) هو الإصدار الوحيد النشط للاستخدام الحالي لدى المستهلك مع إغلاق السجل السابق تاريخيًا.`,
+      `أصبح (${verLabel}) هو الإصدار الوحيد النشط للاستخدام الحالي لدى المستهلك.`,
     emptyPublications: 'لا توجد حزم منشورة مسجلة لهذا التكامل بعد.',
     colPubVersion: 'الإصدار والمراجعة',
     colPubState: 'حالة النشر',
@@ -451,14 +461,13 @@ const COPY = {
     colPubActorDate: 'الناشر والتاريخ',
   },
   en: {
-    pageTitle: 'Integrations Directory (UI-22)',
-    pageDesc:
-      'Displays 1:1 integrations linked to authorized API documents with developer scope filtering and multi-tab details workspace.',
+    pageTitle: 'Integrations',
+    pageDesc: '',
     noViewTitle: 'Missing integrations view permission',
     noViewDesc: 'Viewing integrations requires integrations.view permission.',
     noCreateTitle: 'Missing integration create permission',
     noCreateDesc: 'Creating an integration requires integrations.create permission.',
-    addBtn: 'Create Integration (1:1)',
+    addBtn: 'Create Integration',
     searchPlaceholder: 'Search by reference code, document title, or API group...',
     searchAria: 'Search integrations',
     scopeFilterAria: 'Filter by developer scope',
@@ -467,23 +476,29 @@ const COPY = {
     colRef: 'Reference Code',
     colDoc: 'Document & Parties',
     colGroup: 'API Group',
-    colDevs: 'Developers & Scope',
+    colDevs: 'Developers',
     colVersions: 'Versions',
+    colState: 'State',
     colActions: 'Actions',
-    detailsBtn: 'Details & Tabs (UI-09)',
-    assignDevsBtn: 'Manage Developers (D05)',
+    detailsBtn: 'Details',
+    assignDevsBtn: 'Developers',
+    deleteBtn: 'Delete',
+    deleteConfirmTitle: 'Confirm Integration Deletion',
+    deleteConfirmMsg: 'Are you sure you want to delete this integration? Blocked if versions or change requests exist.',
+    deleteSuccessTitle: 'Integration Deleted',
+    deleteSuccessMsg: 'Integration has been deleted.',
     scopeAssignedBadge: 'Assigned Dev',
     scopeViewOnlyBadge: 'View Access',
-    createBadge: 'Create Integration · UI-08 / D04',
-    detailsBadge: 'Integration Details & Tabs · UI-09 / D06',
-    assignBadge: 'Assign Integration Developers · D05',
-    createTitle: 'Create 1:1 Integration from API Document',
+    createBadge: 'Create Integration',
+    detailsBadge: 'Integration Details',
+    assignBadge: 'Assign Integration Developers',
+    createTitle: 'Create Integration from API Document',
     detailsTitle: 'Integration Summary & Parties',
-    assignTitle: 'Manage Integration Developers (D05)',
+    assignTitle: 'Manage Integration Developers',
     formSub:
-      'Lists only unlinked API documents where you hold doc.view and doc.manage_integration; developer assignment remains independent of ACL permissions.',
+      'Lists only unlinked API documents where you hold view and integration permissions.',
     assignFormSub:
-      'Assigning a user here sets integration developer scope ONLY and does not grant any doc.* ACL permissions (configure in UI-21A).',
+      'Assigning a user here sets integration developer scope only and does not grant Document ACL permissions.',
     backBtn: 'Back to Integrations',
     backDetailsBtn: 'Back to Integration Details',
     saveCreateBtn: 'Save & Create Integration',
@@ -492,11 +507,11 @@ const COPY = {
     docSelectLabel: 'Unlinked API Document',
     selectDocPrompt: '-- Select API Document --',
     noEligibleDocsNotice:
-      'No unlinked authorized API documents found. Create an API document in UI-07 first.',
+      'No unlinked authorized API documents found.',
     refCodeLabel: 'Integration Reference Code (optional — auto-generated if blank)',
     refCodePlaceholder: 'INT-PAYMENTS-001',
     partiesPreviewLabel: 'Parties & API Group Summary:',
-    initialDevsLabel: 'Integration Developers (D05 — requires doc.assign)',
+    initialDevsLabel: 'Integration Developers',
     noDevsLabel: 'None assigned',
     providerLabel: 'Provider',
     consumerLabel: 'Consumer',
@@ -512,24 +527,24 @@ const COPY = {
     stateDraft: 'Draft (DRAFT)',
     stateArchived: 'Archived (ARCHIVED)',
     tabDevelopers: 'Developers & Scope',
-    tabFiles: 'Files (UI-10)',
-    tabRevisions: 'Revisions (UI-11)',
-    tabVersions: 'Versions (UI-12)',
-    tabChanges: 'Change Requests (UI-13)',
-    tabAudit: 'History & Publish (UI-14)',
-    intDevsTitle: 'Assigned Integration Developers (D05)',
-    docDevsTitle: 'Assigned Document Developers (D02)',
+    tabFiles: 'Files',
+    tabRevisions: 'Revisions',
+    tabVersions: 'Versions',
+    tabChanges: 'Change Requests',
+    tabAudit: 'History',
+    intDevsTitle: 'Assigned Integration Developers',
+    docDevsTitle: 'Assigned Document Developers',
     aclSeparationNote:
-      'Separation note: Badges reflect each developer’s actual Document ACL state from UI-21A without auto-granting.',
-    aclView: 'doc.view',
-    aclFiles: 'doc.files_manage',
-    aclVersions: 'doc.version_manage',
-    aclChange: 'doc.change',
-    filesTabDesc: 'Linked file requirement rules (file uploads, scanning, and downloads activate in Sprint S08/S09):',
-    revisionsTabDesc: 'Linked approval route stages (revisions & stage decisions activate in Sprint S09/S10):',
-    versionsTabDesc: 'Free-text API versioning workspace (activates in Sprint S08):',
-    changesTabDesc: 'Allowed change request types per linked policy (activates in Sprint S11):',
-    auditTabDesc: 'Publishing summary & append-only audit trail for this integration/document (OP-01):',
+      'Badges reflect each developer’s actual Document ACL state.',
+    aclView: 'View',
+    aclFiles: 'Manage Files',
+    aclVersions: 'Manage Versions',
+    aclChange: 'Change Requests',
+    filesTabDesc: 'Linked file requirement rules:',
+    revisionsTabDesc: 'Linked approval route stages:',
+    versionsTabDesc: 'API versioning workspace:',
+    changesTabDesc: 'Allowed change request types per linked policy:',
+    auditTabDesc: 'Audit trail for this integration/document:',
     colFileType: 'File Type',
     colExtensions: 'Extensions',
     colMode: 'Requirement Mode',
@@ -554,41 +569,41 @@ const COPY = {
     emptyAudit: 'No audit events recorded yet.',
     validationDoc: 'Please select an unlinked API document to create the integration.',
     createdTitle: 'Integration Created',
-    createdMsg: '1:1 Integration linked to API document successfully.',
+    createdMsg: 'Integration linked to API document successfully.',
     devsUpdatedTitle: 'Integration Developers Updated',
-    devsUpdatedMsg: 'Assigned integration developers updated and audited cleanly without changing Document ACL.',
+    devsUpdatedMsg: 'Assigned integration developers updated.',
     loadingText: 'Loading integrations...',
     pageWord: 'Page',
     ofWord: 'of',
     // S08 V01-V04 Strings (EN)
-    versionsListTitle: 'API Versions (V04 — Manual Free-Text)',
-    versionsCreateBtn: 'Create API Version (V04)',
-    versionsCreateBadge: 'Create API Version · UI-12 / V04',
-    versionsCreateTitle: 'Create Manual Free-Text API Version',
+    versionsListTitle: 'API Versions',
+    versionsCreateBtn: 'Create API Version',
+    versionsCreateBadge: 'Create API Version',
+    versionsCreateTitle: 'Create API Version',
     versionsCreateSub:
-      'Enter any developer-defined free-text version label (SemVer is NOT enforced). API versions remain strictly separate from documentation package revisions (#1, #2...).',
-    versionsLabelField: 'API Version Label (free text)',
+      'Enter any developer-defined free-text version label.',
+    versionsLabelField: 'API Version Label',
     versionsLabelPlaceholder: 'e.g. V2026-Q4, 1.1, or pilot-beta',
     versionsSaveBtn: 'Save & Create Version',
     versionsCreatedTitle: 'API Version Created',
-    versionsCreatedMsg: 'Manual free-text API version saved cleanly. You can now initialize a draft package and upload files.',
+    versionsCreatedMsg: 'API version saved cleanly. You can now initialize a draft package and upload files.',
     versionsValidationEmpty: 'Please enter an API version label.',
     versionsNoPermNote: 'Missing versions.view permission or read-only version scope.',
-    colVerLabel: 'Version Label (Free-Text)',
+    colVerLabel: 'Version Label',
     colVerCreated: 'Created At',
     colVerRevCount: 'Revisions',
     colVerLatestRev: 'Latest Revision Status',
     openFilesForVersionBtn: 'Open Version Files',
     emptyVersions: 'No API versions recorded for this integration yet.',
-    filesWorkspaceTitle: 'Integration Files, Quarantine & Security Scan (V01–V03)',
+    filesWorkspaceTitle: 'Integration Files & Security Scan',
     filesSelectVersionLabel: 'Target API Version',
     filesInitDraftBtn: 'Initialize Draft Package (#1)',
-    filesUploadBtn: 'Upload File (V02/V03)',
-    filesUploadBadge: 'Upload & Scan File · UI-10 / V02-V03',
+    filesUploadBtn: 'Upload File',
+    filesUploadBadge: 'Upload & Scan File',
     filesUploadTitle: 'Upload Documentation File to Draft Revision',
     filesUploadSub:
-      'Stored in private non-web immutable storage with extension, size, content signature & SHA-256 verification, and fail-closed malware scanning.',
-    filesTypeSelectLabel: 'Approved File Type (from Document Template)',
+      'Stored in private non-web immutable storage with extension, size, content signature & SHA-256 verification, and malware scanning.',
+    filesTypeSelectLabel: 'Approved File Type',
     filesInputFileLabel: 'Select File from Computer',
     filesSubmitUploadBtn: 'Upload, Scan & Store',
     filesValidationMissing: 'Please select both a file type and a local file.',
@@ -612,34 +627,34 @@ const COPY = {
     uploadCleanTitle: 'File Uploaded & Verified Clean',
     uploadCleanMsg: (name: string, sha: string) =>
       `File (${name}) passed security scan and was committed to immutable private storage.\nSHA-256: ${sha}`,
-    uploadPendingTitle: 'File Quarantined Pending Scan (Fail-Closed)',
+    uploadPendingTitle: 'File Quarantined Pending Scan',
     uploadPendingMsg: (name: string, sha: string) =>
-      `File (${name}) passed structural checks and is held in quarantine as PENDING_SCAN because no real AV scan engine from IT is active. Download and approval remain blocked until scanned.\nSHA-256: ${sha}`,
+      `File (${name}) passed structural checks and is held in quarantine as PENDING_SCAN.\nSHA-256: ${sha}`,
     rescanStillPendingTitle: 'Still Pending Security Scan',
     rescanStillPendingMsg: 'No active AV scanner responded cleanly; file remains quarantined.',
     fileRemovedTitle: 'File Removed from Draft',
     fileRemovedMsg: 'File link removed from the draft revision and audited.',
     draftCreatedTitle: 'Draft Revision Initialized',
-    draftCreatedMsg: 'Initialized independent Documentation Revision (#1) for uploading files.',
+    draftCreatedMsg: 'Initialized Documentation Revision (#1) for uploading files.',
     // S09 V05-V08 Strings (EN)
-    submitRevisionBtn: 'Submit Revision (V05)',
-    submitRevisionConfirmTitle: 'Confirm Revision Submission (V05)',
+    submitRevisionBtn: 'Submit Revision',
+    submitRevisionConfirmTitle: 'Confirm Revision Submission',
     submitRevisionConfirmMsg: (revNum: number) =>
       `All mandatory files and security scan states will be verified, and Revision #${revNum} will be locked as SUBMITTED. Proceed?`,
     submitRevisionSuccessTitle: 'Revision Submitted',
     submitRevisionSuccessMsg: (revNum: number, cleanCount: number) =>
-      `Documentation package Revision #${revNum} submitted cleanly (${cleanCount} clean file(s)) and locked from edits (V06).`,
-    requirementsChecklistTitle: 'Mandatory File Readiness Checklist (V05)',
+      `Documentation package Revision #${revNum} submitted cleanly (${cleanCount} clean file(s)).`,
+    requirementsChecklistTitle: 'Mandatory File Readiness Checklist',
     reqSatisfiedBadge: 'Complete',
     reqMissingBadge: 'Missing',
     reqExceedsBadge: 'Exceeds Max',
     protectedRevisionBanner: (status: string) =>
-      `This revision is ${status} and strictly protected from file uploads, deletions, or edits (V06). To modify after approval, create a new working copy linked to an approved change request.`,
-    createWorkingCopyBtn: 'Create Working Copy (V06)',
-    workingCopyBadge: 'Working Copy from Approved Revision · UI-11 / V06 · OP-05',
+      `This revision is ${status} and strictly protected from file uploads, deletions, or edits. To modify after approval, create a new working copy linked to an approved change request.`,
+    createWorkingCopyBtn: 'Create Working Copy',
+    workingCopyBadge: 'Working Copy from Approved Revision',
     workingCopyTitle: 'Create Working Copy from Approved Revision',
     workingCopySub:
-      'Opens the next draft working copy (#N) branched from an APPROVED revision and an APPROVED change request, carrying forward unaffected clean files while enforcing a single active draft per version (OP-05).',
+      'Opens the next draft working copy (#N) branched from an APPROVED revision and an APPROVED change request.',
     workingCopyBaseLabel: 'Approved Base Revision',
     workingCopyCrLabel: 'Approved Change Request',
     workingCopyNoApprovedBase: 'No APPROVED revision exists for this API version yet.',
@@ -649,7 +664,7 @@ const COPY = {
     workingCopyCreatedMsg: (revNum: number) =>
       `Opened draft Working Copy Revision #${revNum} carrying forward unaffected approved files.`,
     workingCopyValidationMissing: 'Please select both an approved base revision and an approved change request.',
-    revisionsHistoryTitle: 'Documentation Revisions Package History (UI-11 / V05–V06)',
+    revisionsHistoryTitle: 'Documentation Revisions Package History',
     colRevNumber: 'Revision #',
     colRevStatus: 'Status & Protection',
     colRevLineage: 'Base & Change Request',
@@ -660,10 +675,10 @@ const COPY = {
     editableDraftTag: 'Editable Draft',
     verifiedDownloadNotice: (name: string, sha: string) =>
       `Verified permissions, SHA-256 integrity, and audit log for (${name}) — ${sha.slice(0, 16)}…`,
-    wordUpdateBtn: 'Update Word Fields (V08)',
-    wordDerivativesTitle: 'Open XML SDK Word Governance Derivative PoC (V08)',
+    wordUpdateBtn: 'Update Word Fields',
+    wordDerivativesTitle: 'Word Governance Derivative',
     wordDerivativesNote:
-      'Updates are written strictly to a separate derivative while keeping the original file and SHA-256 untouched. Unverified or failed derivatives are blocked from publishing/download (OP-03).',
+      'Updates are written strictly to a separate derivative while keeping the original file and SHA-256 untouched.',
     wordStatusVerified: 'Verified & Publishable (VERIFIED)',
     wordStatusNoFields: 'No Recognized Fields (NO_RECOGNIZED_FIELDS)',
     wordStatusPending: 'Pending Security Scan (PENDING_SCAN)',
@@ -673,37 +688,37 @@ const COPY = {
     wordSourceShaLabel: 'Original SHA-256 (Unchanged)',
     wordDerivedShaLabel: 'Derived SHA-256',
     wordDownloadDerivedBtn: 'Download Verified Derivative',
-    wordBlockedDownloadTag: 'Publish / Download Blocked (OP-03)',
-    wordGeneratedTitle: 'Word Derivative PoC Result (V08)',
+    wordBlockedDownloadTag: 'Publish / Download Blocked',
+    wordGeneratedTitle: 'Word Derivative Result',
     wordGeneratedVerifiedMsg: (count: number, kind: string) =>
-      `Generated verified .docx derivative passing OpenXmlValidator and security scan without modifying the original file.\nStrategy: ${kind} · Fields updated: ${count}`,
+      `Generated verified .docx derivative without modifying the original file.\nStrategy: ${kind} · Fields updated: ${count}`,
     wordGeneratedBlockedMsg: (status: string, detail: string) =>
-      `Diagnostic recorded as ${status}; derivative publish & download remain blocked (OP-03).\nDetails: ${detail}`,
+      `Diagnostic recorded as ${status}; derivative publish & download remain blocked.\nDetails: ${detail}`,
     // S10 W01-W04 Workflow Strings (EN)
-    workflowInboxBtn: 'Pending Approvals Inbox (W01–W04)',
-    workflowInboxBadge: 'Sequential Workflow Inbox · UI-11 / W01–W04',
-    workflowInboxTitle: 'Active Review Stages Across My Roles',
+    workflowInboxBtn: 'Pending Reviews',
+    workflowInboxBadge: 'Workflow Inbox',
+    workflowInboxTitle: 'Pending Review Stages',
     workflowInboxSub:
-      'Lists only ACTIVE workflow stages matching any of your active roles on authorized API documents (ADR-01). A single eligible member decision completes each stage.',
+      'Lists only ACTIVE workflow stages matching any of your active roles on authorized API documents.',
     workflowInboxEmpty: 'No active workflow stages currently await a decision from your roles.',
     colWfIntegration: 'Integration & Document',
     colWfRevision: 'Version / Revision',
     colWfStage: 'Active Stage & Role',
     colWfSubmittedBy: 'Submitted By',
     openReviewDetailsBtn: 'Open Tab',
-    decideStageBtn: 'Record Stage Decision (W02)',
-    workflowRunTitle: 'Frozen Approval Workflow Execution (W01–W04)',
+    decideStageBtn: 'Record Stage Decision',
+    workflowRunTitle: 'Approval Workflow Execution',
     workflowSnapshotNote:
-      'W01 Snapshot Guarantee: Stage order & assigned roles were frozen upon submission and remain immune to subsequent route template edits.',
+      'Stage order & assigned roles were frozen upon submission.',
     workflowActiveStageTag: 'Currently Active Stage',
-    workflowReworkAlertTitle: 'Returned for Rework (RETURNED — W04)',
-    workflowRejectedAlertTitle: 'Workflow Rejected (REJECTED — W04)',
+    workflowReworkAlertTitle: 'Returned for Rework (RETURNED)',
+    workflowRejectedAlertTitle: 'Workflow Rejected (REJECTED)',
     workflowReworkInstruction:
-      'You may update/replace files on this returned revision and re-submit to initiate a new review run while preserving prior decision history.',
-    workflowDecisionBadge: 'Record Stage Decision · UI-11 / W02–W04',
-    workflowDecisionTitle: 'Atomic Stage Decision',
+      'You may update/replace files on this returned revision and re-submit to initiate a new review run.',
+    workflowDecisionBadge: 'Record Stage Decision',
+    workflowDecisionTitle: 'Stage Decision',
     workflowDecisionSub:
-      'Only one atomic decision is permitted per stage. Returning for rework (RETURN) or rejecting (REJECT) requires mandatory reviewer notes.',
+      'Returning for rework (RETURN) or rejecting (REJECT) requires mandatory reviewer notes.',
     decisionChoiceLabel: 'Stage Decision',
     decisionApproveOpt: 'Approve & Advance / Complete (APPROVE)',
     decisionReturnOpt: 'Return for Rework with Mandatory Notes (RETURN)',
@@ -711,21 +726,21 @@ const COPY = {
     decisionNotesLabel: 'Reviewer Notes (Mandatory for RETURN or REJECT)',
     decisionNotesPlaceholder: 'Specify required fixes or rejection rationale...',
     decisionSubmitBtn: 'Confirm & Submit Decision',
-    decisionNotesRequiredErr: 'Reviewer notes are mandatory when returning for rework or rejecting (W04).',
+    decisionNotesRequiredErr: 'Reviewer notes are mandatory when returning for rework or rejecting.',
     decisionRecordedTitle: 'Stage Decision Recorded',
     decisionRecordedMsg: (outcome: string) =>
-      `Atomic stage decision saved cleanly. Current workflow / revision outcome: ${outcome}`,
-    workflowHistoryTitle: 'Stage Decisions & Rework Attempts History (W04)',
+      `Stage decision saved cleanly. Current workflow / revision outcome: ${outcome}`,
+    workflowHistoryTitle: 'Stage Decisions & Rework Attempts History',
     workflowHistoryEmpty: 'No stage decisions have been recorded for this revision yet.',
     // S11 W05-W07 Change Requests & Notifications Strings (EN)
-    crWorkspaceTitle: 'File-Scoped Change Requests (UI-13 / W05–W06)',
-    crCreateBtn: 'Create Change Request (W05)',
+    crWorkspaceTitle: 'File-Scoped Change Requests',
+    crCreateBtn: 'Create Change Request',
     crEditBtn: 'Edit Request',
-    crSubmitBtn: 'Submit for Approval (W06)',
-    crCreateBadge: 'Create Change Request · UI-13 / W05',
-    crEditBadge: 'Edit Change Request · UI-13 / W05',
-    crCreateTitle: 'Create Change Request on Approved Revision',
-    crEditTitle: 'Edit Draft Change Request',
+    crSubmitBtn: 'Submit for Approval',
+    crCreateBadge: 'Create Change Request',
+    crEditBadge: 'Edit Change Request',
+    crCreateTitle: 'Create Change Request',
+    crEditTitle: 'Edit Change Request',
     crFormSub:
       'Strictly scoped to an APPROVED source revision, policy-allowed change type, and affected files belonging to that revision.',
     crSourceRevLabel: 'Approved Source Revision',
@@ -735,7 +750,7 @@ const COPY = {
     crImpactLabel: 'Consumer Impact (optional)',
     crImpactPlaceholder: 'Non-breaking optional field addition...',
     crAffectedFilesLabel: 'Affected Source Files in Approved Revision (select at least one)',
-    crSaveCreateBtn: 'Save Draft Change Request',
+    crSaveCreateBtn: 'Save Request',
     crSaveEditBtn: 'Save Changes',
     crValidationMissing: 'Please select a revision, change type, reason, and at least one affected file.',
     crEmptyList: 'No change requests recorded for this integration yet.',
@@ -744,46 +759,46 @@ const COPY = {
     crCreatedMsg: 'Saved change request as DRAFT restricted to selected source files.',
     crUpdatedTitle: 'Change Request Updated',
     crUpdatedMsg: 'Saved edits to change request cleanly.',
-    crSubmittedTitle: 'Change Request Submitted to Independent Workflow (W06)',
+    crSubmittedTitle: 'Change Request Submitted to Independent Workflow',
     crSubmittedMsg: 'Started independent approval workflow using the change type route.',
-    notificationsBtn: 'Internal Notifications (W07)',
-    notificationsBadge: 'Internal Notifications Center · W07',
-    notificationsTitle: 'Internal Workflow Stage Notifications',
-    notificationsSub: 'User-scoped internal notifications generated from workflow stage activations and final outcomes.',
+    notificationsBtn: 'Internal Notifications',
+    notificationsBadge: 'Internal Notifications Center',
+    notificationsTitle: 'Internal Notifications',
+    notificationsSub: 'User-scoped internal notifications.',
     notificationsUnreadBadge: (count: number) => `Unread: ${count}`,
     notificationsEmpty: 'No internal notifications recorded for your account.',
     markReadBtn: 'Mark as Read',
     readTag: 'Read',
     unreadTag: 'Unread',
     // S12 P01-P03 Publishing & Consumer Version Usage (EN)
-    tabPublishing: 'Publishing & Usage (UI-14)',
-    publishingWorkspaceTitle: 'Publications & Active Consumer Version (UI-14 / P01–P03)',
-    publishRevisionBtn: 'Selective Publish Approved Revision (P01)',
-    publishBadge: 'Publish Approved Revision · UI-14 / P01',
-    publishTitle: 'Publish Selective Files from Approved Revision',
+    tabPublishing: 'Publishing & Usage',
+    publishingWorkspaceTitle: 'Publications & Active Consumer Version',
+    publishRevisionBtn: 'Selective Publish Approved Revision',
+    publishBadge: 'Publish Approved Revision',
+    publishTitle: 'Publish Documentation Package',
     publishSub:
       'Target revision must be APPROVED and every selected file must have CLEAN scan status.',
     publishRevLabel: 'Target Approved Revision',
     publishFilesLabel: 'Select CLEAN Files to Publish',
-    publishSubmitBtn: 'Confirm & Publish Package',
+    publishSubmitBtn: 'Publish Package',
     publishValidationMissing: 'Select an approved revision and at least one CLEAN file.',
     publishSuccessTitle: 'Package Published',
     publishSuccessMsg: (verLabel: string, count: number) =>
       `Published version (${verLabel}) with ${count} selected files in PUBLISHED state.`,
-    withdrawBtn: 'Withdraw (P02)',
-    withdrawConfirmTitle: 'Confirm Publication Withdrawal (P02)',
+    withdrawBtn: 'Withdraw',
+    withdrawConfirmTitle: 'Confirm Publication Withdrawal',
     withdrawConfirmMsg: (verLabel: string, revNum: number) =>
-      `Publication (${verLabel} · Rev #${revNum}) will transition to WITHDRAWN and disappear from the consumer portal while retaining audit history.`,
+      `Publication (${verLabel} · Rev #${revNum}) will transition to WITHDRAWN and disappear from the consumer portal.`,
     withdrawSuccessTitle: 'Publication Withdrawn',
     withdrawSuccessMsg: 'Publication marked as WITHDRAWN and hidden from the consumer portal.',
-    consumerVersionTitle: 'Current Consumer API Version Usage (UI-12 / P03)',
+    consumerVersionTitle: 'Current Consumer API Version Usage',
     consumerVersionCurrentLabel: 'Active Version',
     consumerVersionUnset: 'Not assigned yet',
     consumerVersionSelectLabel: 'Set Active Version (Published versions only)',
-    consumerVersionSaveBtn: 'Save Active Consumer Version (P03)',
+    consumerVersionSaveBtn: 'Save Active Consumer Version',
     consumerVersionSavedTitle: 'Active Consumer Version Updated',
     consumerVersionSavedMsg: (verLabel: string) =>
-      `Set (${verLabel}) as the single active consumer version and closed prior usage window.`,
+      `Set (${verLabel}) as the single active consumer version.`,
     emptyPublications: 'No publications recorded for this integration yet.',
     colPubVersion: 'Version & Revision',
     colPubState: 'State',
@@ -803,6 +818,7 @@ export function IntegrationsPage({
   const permSet = useMemo(() => new Set(permissions), [permissions]);
   const canViewGlobal = permSet.has('integrations.view');
   const canCreateGlobal = permSet.has('integrations.create');
+  const canDeleteGlobal = permSet.has('integrations.delete');
   const canAssignGlobal = permSet.has('integrations.assign_developer');
   const canViewVersionsGlobal = permSet.has('versions.view');
   const canViewFilesGlobal = permSet.has('files.view');
@@ -1888,6 +1904,103 @@ export function IntegrationsPage({
     );
   }
 
+  const handleDeleteIntegration = (row: IntegrationItem) => {
+    setModal({
+      variant: 'confirm',
+      title: c.deleteConfirmTitle,
+      message: c.deleteConfirmMsg,
+      onConfirmAction: () => {
+        void (async () => {
+          setSubmitting(true);
+          try {
+            await deleteIntegration(row.id, lang);
+            setModal({ variant: 'success', title: c.deleteSuccessTitle, message: c.deleteSuccessMsg });
+            await loadIntegrations();
+          } catch (err) {
+            handleApiError(err, c.deleteConfirmTitle);
+          } finally {
+            setSubmitting(false);
+          }
+        })();
+      },
+    });
+  };
+
+  const integrationColumns: DataTableColumn<IntegrationItem>[] = [
+    {
+      key: 'ref',
+      header: c.colRef,
+      render: (row) => <code className="ltr-code">{row.referenceCode}</code>,
+    },
+    {
+      key: 'doc',
+      header: c.colDoc,
+      render: (row) => <strong>{row.derivedTitle}</strong>,
+    },
+    {
+      key: 'group',
+      header: c.colGroup,
+      render: (row) => <span>{row.apiGroupName}</span>,
+    },
+    {
+      key: 'devs',
+      header: c.colDevs,
+      render: (row) =>
+        (row.assignedDevelopers ?? []).length === 0 ? (
+          <span className="smalltxt dim">{c.noDevsLabel}</span>
+        ) : (
+          <span className="smalltxt">
+            {(row.assignedDevelopers ?? []).map((dev) => dev.fullName).join('، ')}
+          </span>
+        ),
+    },
+    {
+      key: 'versions',
+      header: c.colVersions,
+      render: (row) => <code className="ltr-code">{row.versionsCount}</code>,
+    },
+    {
+      key: 'state',
+      header: c.colState,
+      render: (row) => {
+        const st = formatStateBadge(row.documentState);
+        return <StatusBadge variant={st.variant}>{st.label}</StatusBadge>;
+      },
+    },
+    {
+      key: 'actions',
+      header: c.colActions,
+      render: (row) => {
+        const myDocPerms = new Set(row.myDocumentPermissions ?? []);
+        return (
+          <div className="row-actions">
+            <RowActionButton
+              icon="eye"
+              label={c.detailsBtn}
+              onClick={() => void openDetails(row.id)}
+            />
+            {canAssignGlobal && myDocPerms.has('doc.assign') && (
+              <RowActionButton
+                icon="users"
+                label={c.assignDevsBtn}
+                onClick={() => void openAssignDevelopers(row)}
+              />
+            )}
+            {canDeleteGlobal && myDocPerms.has('doc.manage_integration') && (
+              <RowActionButton
+                icon="trash"
+                label={c.deleteBtn}
+                variant="danger"
+                disabled={submitting}
+                onClick={() => handleDeleteIntegration(row)}
+              />
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   const renderDeveloperRow = (dev: IntegrationDeveloperItem) => (
     <tr key={dev.userId}>
       <td>
@@ -2141,15 +2254,11 @@ export function IntegrationsPage({
         <section className="surface-card">
           <div className="card-header-row">
             <div>
-              <span className="mode-pill">{c.workflowInboxBadge}</span>
-              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+              <h2 className="card-title heading-font">
                 {c.workflowInboxTitle}
               </h2>
-              <p className="card-subtitle">{c.workflowInboxSub}</p>
             </div>
-            <Button variant="outline" onClick={() => setMode('list')}>
-              {c.backBtn}
-            </Button>
+            <BackIconButton label={c.backBtn} onClick={() => setMode('list')} />
           </div>
 
           {inboxLoading ? (
@@ -2337,11 +2446,9 @@ export function IntegrationsPage({
         <section className="surface-card">
           <div className="card-header-row">
             <div>
-              <span className="mode-pill">{c.notificationsBadge}</span>
-              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+              <h2 className="card-title heading-font">
                 {c.notificationsTitle}
               </h2>
-              <p className="card-subtitle">{c.notificationsSub}</p>
             </div>
             <div className="button-row" style={{ alignItems: 'center' }}>
               {notificationsData && (
@@ -2349,9 +2456,7 @@ export function IntegrationsPage({
                   {c.notificationsUnreadBadge(notificationsData.unreadCount)}
                 </StatusBadge>
               )}
-              <Button variant="outline" onClick={() => setMode('list')}>
-                {c.backBtn}
-              </Button>
+              <BackIconButton label={c.backBtn} onClick={() => setMode('list')} />
             </div>
           </div>
 
@@ -2369,7 +2474,6 @@ export function IntegrationsPage({
                         <StatusBadge variant={n.isRead ? 'neutral' : 'info'}>
                           {n.isRead ? c.readTag : c.unreadTag}
                         </StatusBadge>
-                        <code className="ltr-code">{n.kind}</code>
                       </div>
                       <div className="slot-stat-value" style={{ fontSize: '0.94rem' }}>
                         {lang === 'ar' ? n.summaryAr : n.summaryEn}
@@ -2522,9 +2626,7 @@ export function IntegrationsPage({
             <>
               {/* Reference intHeader() top actions + header panel */}
               <div className="page-actions">
-                <Button variant="outline" onClick={() => setMode('list')}>
-                  {c.backBtn}
-                </Button>
+                <BackIconButton label={c.backBtn} onClick={() => setMode('list')} />
               </div>
 
               <div className="panel">
@@ -2661,7 +2763,6 @@ export function IntegrationsPage({
                   <div className="card-header-row" style={{ marginBottom: 10 }}>
                     <div>
                       <h3 className="card-title heading-font">{c.intDevsTitle}</h3>
-                      <p className="card-subtitle">{c.aclSeparationNote}</p>
                     </div>
                     {canAssignGlobal && (details.summary.myDocumentPermissions ?? []).includes('doc.assign') && (
                       <Button variant="primary" size="sm" onClick={() => void openAssignDevelopers(details.summary)}>
@@ -2704,9 +2805,6 @@ export function IntegrationsPage({
 
               {activeTab === 'files' && (
                 <div>
-                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
-                    {c.filesTabDesc}
-                  </p>
                   {details.requirementRules.length === 0 ? (
                     <p className="card-subtitle">{c.emptyRules}</p>
                   ) : (
@@ -3059,10 +3157,7 @@ export function IntegrationsPage({
 
                               {(filesWorkspace.wordDerivatives ?? []).length > 0 && (
                                 <div style={{ marginTop: 18, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
-                                  <h4 className="card-title heading-font">{c.wordDerivativesTitle}</h4>
-                                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
-                                    {c.wordDerivativesNote}
-                                  </p>
+                                  <h4 className="card-title heading-font" style={{ marginBottom: 10 }}>{c.wordDerivativesTitle}</h4>
                                   <div style={{ display: 'grid', gap: 10 }}>
                                     {(filesWorkspace.wordDerivatives ?? []).map((wd) => {
                                       const statusBadge =
@@ -3306,7 +3401,6 @@ export function IntegrationsPage({
                           <div className="card-header-row" style={{ marginBottom: 8 }}>
                             <div>
                               <h4 className="card-title heading-font">{c.workflowRunTitle}</h4>
-                              <p className="card-subtitle">{c.workflowSnapshotNote}</p>
                             </div>
                             <StatusBadge
                               variant={
@@ -3446,9 +3540,6 @@ export function IntegrationsPage({
                     </div>
                   )}
 
-                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
-                    {c.revisionsTabDesc}
-                  </p>
                   {details.approvalStages.length === 0 ? (
                     <p className="card-subtitle">{c.emptyStages}</p>
                   ) : (
@@ -3480,17 +3571,6 @@ export function IntegrationsPage({
 
               {activeTab === 'versions' && (
                 <div>
-                  <div className="slot-stat-box" style={{ marginBottom: 14 }}>
-                    <div className="slot-stat-label">{c.versionsTabDesc}</div>
-                    <div className="slot-stat-value">
-                      {c.colVersions}: <code className="ltr-code">{details.summary.versionsCount}</code> ·{' '}
-                      {c.pubOptionLabel}:{' '}
-                      {details.summary.publicationOption === 'POST_APPROVAL'
-                        ? c.pubPostApproval
-                        : c.pubManual}
-                    </div>
-                  </div>
-
                   {canViewVersionsGlobal ? (
                     <>
                       <div className="card-header-row" style={{ marginBottom: 10 }}>
@@ -3659,9 +3739,6 @@ export function IntegrationsPage({
                     </div>
                   )}
 
-                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
-                    {c.changesTabDesc}
-                  </p>
                   {details.allowedChangeTypes.length === 0 ? (
                     <p className="card-subtitle">{c.emptyChangeTypes}</p>
                   ) : (
@@ -3837,9 +3914,6 @@ export function IntegrationsPage({
 
               {activeTab === 'audit' && (
                 <div>
-                  <p className="card-subtitle" style={{ marginBottom: 10 }}>
-                    {c.auditTabDesc}
-                  </p>
                   {details.recentAuditEvents.length === 0 ? (
                     <p className="card-subtitle">{c.emptyAudit}</p>
                   ) : (
@@ -3960,147 +4034,87 @@ export function IntegrationsPage({
           </div>
         </StandaloneFormPage>
       ) : (
-        <>
-          <div className="page-actions">
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label={c.notificationsBtn}
-              disabled={submitting}
-              onClick={openNotificationsCenter}
-            >
-              {lang === 'ar' ? 'الإشعارات الداخلية' : 'Notifications'}
-            </Button>
-            {canViewWorkflowsGlobal && (
-              <Button
-                variant="secondary"
-                size="sm"
-                aria-label={c.workflowInboxBtn}
-                disabled={submitting}
-                onClick={openWorkflowInbox}
-              >
-                {lang === 'ar' ? 'صندوق المراجعات بانتظار قراري' : 'Pending Approvals Inbox'}
-              </Button>
-            )}
-            {canCreateGlobal && (
-              <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                {c.addBtn}
-              </Button>
-            )}
+        <section className="surface-card panel clean-table-panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <SearchFilterBar
+                searchValue={searchQuery}
+                searchPlaceholder={c.searchPlaceholder}
+                searchAriaLabel={c.searchAria}
+                onSearchChange={(val) => {
+                  setSearchQuery(val);
+                  setPage(1);
+                }}
+                filterValue={scopeFilter}
+                filterAriaLabel={c.scopeFilterAria}
+                filterPlaceholder={c.scopeAll}
+                filterOptions={[{ value: 'assigned', label: c.scopeAssigned }]}
+                onFilterChange={(val) => {
+                  setScopeFilter(val);
+                  setPage(1);
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {canViewWorkflowsGlobal && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-label={c.workflowInboxBtn}
+                  disabled={submitting}
+                  onClick={openWorkflowInbox}
+                >
+                  {c.workflowInboxBtn}
+                </Button>
+              )}
+              {canCreateGlobal && (
+                <button
+                  type="button"
+                  className="compact-add-icon-btn"
+                  title={c.addBtn}
+                  aria-label={c.addBtn}
+                  disabled={submitting}
+                  onClick={openCreate}
+                >
+                  <ReferenceIcon name="plus" size={18} />
+                </button>
+              )}
+            </div>
           </div>
 
-          <section className="surface-card panel">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title heading-font">
-                  {lang === 'ar' ? 'قائمة التكاملات' : 'Integration List'}
-                </h2>
-                <span className="sr-only">{c.pageTitle}</span>
-              </div>
-            </div>
-
-            <SearchFilterBar
-              searchValue={searchQuery}
-              searchPlaceholder={c.searchPlaceholder}
-              searchAriaLabel={c.searchAria}
-              onSearchChange={(val) => {
-                setSearchQuery(val);
-                setPage(1);
-              }}
-              filterValue={scopeFilter}
-              filterAriaLabel={c.scopeFilterAria}
-              filterPlaceholder={c.scopeAll}
-              filterOptions={[{ value: 'assigned', label: c.scopeAssigned }]}
-              onFilterChange={(val) => {
-                setScopeFilter(val);
-                setPage(1);
-              }}
+          {errorMsg ? (
+            <ErrorState
+              title={commonStrings.tableErrorTitle}
+              message={errorMsg}
+              retryLabel={commonStrings.tableRetryBtn}
+              onRetry={() => void loadIntegrations()}
             />
-
-            {errorMsg ? (
-              <ErrorState
-                title={commonStrings.tableErrorTitle}
-                message={errorMsg}
-                retryLabel={commonStrings.tableRetryBtn}
-                onRetry={() => void loadIntegrations()}
+          ) : (
+            <>
+              <DataTable<IntegrationItem>
+                columns={integrationColumns}
+                rows={items}
+                getRowKey={(row) => row.id}
+                isLoading={loading}
+                loadingTitle={c.loadingText}
+                emptyTitle={commonStrings.tableEmptyTitle}
+                emptyDescription={commonStrings.tableEmptyDesc}
               />
-            ) : loading ? (
-              <LoadingState title={c.loadingText} />
-            ) : items.length === 0 ? (
-              <div className="empty-state-box empty" role="status">
-                <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
-                <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
-              </div>
-            ) : (
-              <>
-                <div className="stack" style={{ marginTop: 14 }}>
-                  {items.map((row) => {
-                    const st = formatStateBadge(row.documentState);
-                    const myDocPerms = new Set(row.myDocumentPermissions ?? []);
-                    const devsText =
-                      (row.assignedDevelopers ?? []).length === 0
-                        ? c.noDevsLabel
-                        : (row.assignedDevelopers ?? []).map((dev) => dev.fullName).join('، ');
-                    return (
-                      <div key={row.id} className="item-card">
-                        <div>
-                          <div className="row wrap" style={{ marginBottom: 7 }}>
-                            <code className="tag ltr-code">{row.referenceCode}</code>
-                            <StatusBadge variant={st.variant}>{st.label}</StatusBadge>
-                          </div>
-                          <div className="item-title">
-                            <strong>{row.derivedTitle}</strong>
-                          </div>
-                          <div className="item-sub">
-                            {row.apiGroupName} ·{' '}
-                            <code className="ltr-code">{row.versionsCount}</code>{' '}
-                            {lang === 'ar' ? 'إصدار' : 'versions'}
-                          </div>
-                          <div className="item-sub">
-                            <b>{lang === 'ar' ? 'المطورون المسؤولون:' : 'Responsible Developers:'}</b>{' '}
-                            {devsText}
-                          </div>
-                        </div>
-                        <div className="row wrap button-row">
-                          <Button
-                            variant="secondary"
-                            aria-label={c.detailsBtn}
-                            onClick={() => void openDetails(row.id)}
-                          >
-                            <span>{lang === 'ar' ? 'عرض التكامل' : 'Open Integration'}</span>
-                            <ReferenceIcon name="left" size={14} />
-                          </Button>
-                          {canAssignGlobal && myDocPerms.has('doc.assign') && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              aria-label={c.assignDevsBtn}
-                              onClick={() => void openAssignDevelopers(row)}
-                            >
-                              {lang === 'ar' ? 'تعيين المطورين' : 'Manage Developers'}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
 
-                {totalCount > 0 && (
-                  <PaginationBar
-                    currentPage={page}
-                    totalPages={totalPages}
-                    totalItems={totalCount}
-                    pageLabel={`${c.pageWord} ${page} ${c.ofWord} ${totalPages}`}
-                    previousLabel={commonStrings.paginationPrev}
-                    nextLabel={commonStrings.paginationNext}
-                    onPageChange={setPage}
-                  />
-                )}
-              </>
-            )}
-          </section>
-        </>
+              {totalCount > 0 && (
+                <PaginationBar
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalCount}
+                  pageLabel={`${c.pageWord} ${page} ${c.ofWord} ${totalPages}`}
+                  previousLabel={commonStrings.paginationPrev}
+                  nextLabel={commonStrings.paginationNext}
+                  onPageChange={setPage}
+                />
+              )}
+            </>
+          )}
+        </section>
       )}
 
       <CentralModalDialog

@@ -157,6 +157,21 @@ async function sendCsrfJson<T>(
   return (await response.json()) as T;
 }
 
+async function sendCsrfDelete(url: string, lang: AppLanguage): Promise<void> {
+  const csrf = await fetchCsrfToken(lang);
+  const response = await fetch(url, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      'Accept-Language': lang,
+      [csrf.headerName]: csrf.token,
+    },
+  });
+  if (!response.ok) {
+    throw await parseProblemError(response, lang);
+  }
+}
+
 function buildListQuery(params: {
   page: number;
   pageSize: number;
@@ -198,6 +213,9 @@ export const updateRequirementTemplate = (
   lang: AppLanguage
 ) => sendCsrfJson<FileRequirementTemplateItem>('PATCH', `/api/v1/requirement-templates/${templateId}`, body, lang);
 
+export const deleteRequirementTemplate = (templateId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/requirement-templates/${templateId}`, lang);
+
 // M06 • Approval Routes & Stages (UI-05 & UI-05A)
 export const listApprovalRouteRoles = (lang: AppLanguage) =>
   getJson<ApprovalRouteRoleOption[]>('/api/v1/approval-routes/roles', lang);
@@ -224,6 +242,9 @@ export const replaceApprovalRouteStages = (
   lang: AppLanguage
 ) => sendCsrfJson<ApprovalRouteItem>('PUT', `/api/v1/approval-routes/${routeId}/stages`, body, lang);
 
+export const deleteApprovalRoute = (routeId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/approval-routes/${routeId}`, lang);
+
 // M07 • Change Types & Change Policies (UI-06)
 export const listAssignableRoutesForChangeTypes = (lang: AppLanguage) =>
   getJson<ApprovalRouteOption[]>('/api/v1/change-types/routes', lang);
@@ -244,6 +265,9 @@ export const updateChangeType = (
   lang: AppLanguage
 ) => sendCsrfJson<ChangeTypeItem>('PATCH', `/api/v1/change-types/${typeId}`, body, lang);
 
+export const deleteChangeType = (typeId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/change-types/${typeId}`, lang);
+
 export const listChangePolicies = (
   params: { page: number; pageSize: number; search?: string; isActive?: boolean | null },
   lang: AppLanguage
@@ -259,3 +283,6 @@ export const updateChangePolicy = (
   body: { name?: string; isActive?: boolean; changeTypeIds?: string[] },
   lang: AppLanguage
 ) => sendCsrfJson<ChangePolicyItem>('PATCH', `/api/v1/change-policies/${policyId}`, body, lang);
+
+export const deleteChangePolicy = (policyId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/change-policies/${policyId}`, lang);

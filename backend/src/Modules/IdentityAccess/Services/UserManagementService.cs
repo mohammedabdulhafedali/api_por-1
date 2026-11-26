@@ -34,6 +34,11 @@ public interface IUserManagementService
         UpdateUserRequest request,
         string traceId,
         CancellationToken cancellationToken = default);
+
+    Task DeleteUserAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid targetUserId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -76,6 +81,7 @@ public sealed class UserManagementService(
             var term = search.Trim().ToLowerInvariant();
             query = query.Where(u =>
                 u.FullName.ToLower().Contains(term) ||
+                u.Username.ToLower().Contains(term) ||
                 u.Email.ToLower().Contains(term));
         }
 
@@ -166,12 +172,40 @@ public sealed class UserManagementService(
                 messageEn: "A user account with this email address already exists.");
         }
 
+        var userId = Guid.NewGuid();
+        var hasExplicitUsername = !string.IsNullOrWhiteSpace(request.Username);
+        var username = hasExplicitUsername
+            ? request.Username!.Trim()
+            : PlatformUserStore.DeriveDefaultUsername(email, userId);
+        var normalizedUsername = userManager.NormalizeName(username) ?? username.ToUpperInvariant();
+
+        var usernameExists = await dbContext.Users.AsNoTracking()
+            .AnyAsync(u => u.NormalizedUsername == normalizedUsername, cancellationToken);
+        if (usernameExists)
+        {
+            if (hasExplicitUsername)
+            {
+                throw ApiContractException.Conflict(
+                    messageAr: "يوجد حساب مستخدم مسجل مسبقًا باسم المستخدم هذا.",
+                    messageEn: "A user account with this username already exists.");
+            }
+
+            username = $"{username}-{userId.ToString("N")[..6]}";
+            if (username.Length > 100)
+            {
+                username = username[..100];
+            }
+            normalizedUsername = userManager.NormalizeName(username) ?? username.ToUpperInvariant();
+        }
+
         await ValidateConsumerEntityIfProvidedAsync(request.ConsumerEntityId, cancellationToken);
 
         var user = new UserEntity
         {
-            Id = Guid.NewGuid(),
+            Id = userId,
             FullName = request.FullName.Trim(),
+            Username = username,
+            NormalizedUsername = normalizedUsername,
             Email = email,
             NormalizedEmail = normalizedEmail,
             PasswordHash = null, // New account requires owner activation via single-use token (04_Authentication.md)
@@ -314,6 +348,26 @@ public sealed class UserManagementService(
             targetUser.FullName = request.FullName.Trim();
         }
 
+        if (!string.IsNullOrWhiteSpace(request.Username))
+        {
+            var nextUsername = request.Username.Trim();
+            var nextNormalizedUsername = userManager.NormalizeName(nextUsername) ?? nextUsername.ToUpperInvariant();
+            if (!string.Equals(targetUser.NormalizedUsername, nextNormalizedUsername, StringComparison.Ordinal))
+            {
+                var exists = await dbContext.Users.AsNoTracking()
+                    .AnyAsync(u => u.Id != targetUser.Id && u.NormalizedUsername == nextNormalizedUsername, cancellationToken);
+                if (exists)
+                {
+                    throw ApiContractException.Conflict(
+                        messageAr: "يوجد حساب مستخدم آخر مسجل باسم المستخدم هذا.",
+                        messageEn: "Another user account with this username already exists.");
+                }
+
+                targetUser.Username = nextUsername;
+                targetUser.NormalizedUsername = nextNormalizedUsername;
+            }
+        }
+
         if (request.ClearConsumerEntity)
         {
             targetUser.ConsumerEntityId = null;
@@ -364,6 +418,96 @@ public sealed class UserManagementService(
 
         var (roles, _) = await authHelper.ResolveRolesAndEffectivePermissionsAsync(targetUser.Id, cancellationToken);
         return MapToSummaryDto(targetUser, roles, traceId, DateTimeOffset.UtcNow);
+    }
+
+    public async Task DeleteUserAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid targetUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await authHelper.RequireGeneralPermissionAsync(
+            actorPrincipal,
+            UserPermissionCodes.UsersDelete,
+            "USER_DELETE_DENIED",
+            targetResourceId: targetUserId,
+            cancellationToken: cancellationToken);
+
+        var targetUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == targetUserId, cancellationToken);
+        if (targetUser is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "حساب المستخدم المطلوب غير موجود.",
+                messageEn: "Target user account was not found.");
+        }
+
+        if (actor.Id == targetUser.Id)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكنك حذف حسابك النشط الحالي.",
+                messageEn: "You cannot delete your own active account.");
+        }
+
+        var hasAnotherActiveAdmin = await HasAnotherActiveUserWithPermissionAsync(
+            excludedUserId: targetUser.Id,
+            permissionCode: UserPermissionCodes.UsersEdit,
+            cancellationToken);
+        if (!hasAnotherActiveAdmin)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف آخر حساب فعّال يملك صلاحية إدارة المستخدمين.",
+                messageEn: "Cannot delete the last active user holding user-management permission.");
+        }
+
+        var hasBusinessRefs =
+            await dbContext.ApiDocuments.AsNoTracking().AnyAsync(d => d.CreatedBy == targetUserId, cancellationToken) ||
+            await dbContext.DocumentDevelopers.AsNoTracking().AnyAsync(d => d.UserId == targetUserId, cancellationToken) ||
+            await dbContext.DocumentUserPermissions.AsNoTracking().AnyAsync(d => d.UserId == targetUserId, cancellationToken) ||
+            await dbContext.Integrations.AsNoTracking().AnyAsync(i => i.CreatedBy == targetUserId, cancellationToken) ||
+            await dbContext.IntegrationDevelopers.AsNoTracking().AnyAsync(i => i.UserId == targetUserId, cancellationToken) ||
+            await dbContext.DocumentRevisions.AsNoTracking().AnyAsync(r => r.CreatedBy == targetUserId, cancellationToken) ||
+            await dbContext.RevisionFiles.AsNoTracking().AnyAsync(rf => rf.UploadedBy == targetUserId, cancellationToken) ||
+            await dbContext.ChangeRequests.AsNoTracking().AnyAsync(cr => cr.RequestedBy == targetUserId, cancellationToken) ||
+            await dbContext.WorkflowRuns.AsNoTracking().AnyAsync(wr => wr.SubmittedBy == targetUserId, cancellationToken) ||
+            await dbContext.WorkflowDecisions.AsNoTracking().AnyAsync(wd => wd.ActorUserId == targetUserId, cancellationToken) ||
+            await dbContext.Publications.AsNoTracking().AnyAsync(p => p.PublishedBy == targetUserId, cancellationToken) ||
+            await dbContext.ConsumerVersionUsage.AsNoTracking().AnyAsync(c => c.AssignedBy == targetUserId, cancellationToken) ||
+            await dbContext.ReleaseHistoryEvents.AsNoTracking().AnyAsync(r => r.ActorUserId == targetUserId, cancellationToken) ||
+            await dbContext.WordDerivativeRecords.AsNoTracking().AnyAsync(w => w.CreatedBy == targetUserId, cancellationToken) ||
+            await dbContext.AuditEvents.AsNoTracking().AnyAsync(a => a.ActorUserId == targetUserId, cancellationToken);
+
+        if (hasBusinessRefs)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف حساب المستخدم لارتباطه بوثائق أو معاملات أو سجلات تدقيق قائمة؛ يمكنك تعطيل الحساب بدلًا من حذفه.",
+                messageEn: "Cannot delete a user account referenced by existing documents, transactions, or audit records; deactivate the account instead.");
+        }
+
+        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var sessions = await dbContext.AuthSessions.Where(s => s.UserId == targetUserId).ToListAsync(cancellationToken);
+        if (sessions.Count > 0) dbContext.AuthSessions.RemoveRange(sessions);
+
+        var roles = await dbContext.UserRoles.Where(r => r.UserId == targetUserId).ToListAsync(cancellationToken);
+        if (roles.Count > 0) dbContext.UserRoles.RemoveRange(roles);
+
+        var overrides = await dbContext.UserPermissionOverrides.Where(o => o.UserId == targetUserId).ToListAsync(cancellationToken);
+        if (overrides.Count > 0) dbContext.UserPermissionOverrides.RemoveRange(overrides);
+
+        var notifications = await dbContext.Notifications.Where(n => n.UserId == targetUserId).ToListAsync(cancellationToken);
+        if (notifications.Count > 0) dbContext.Notifications.RemoveRange(notifications);
+
+        dbContext.Users.Remove(targetUser);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        await authHelper.WriteAuditEventAsync(
+            actorUserId: actor.Id,
+            operation: "USER_DELETED",
+            resourceKind: "USER",
+            resourceId: targetUser.Id,
+            result: "SUCCESS",
+            summary: new { targetUser.FullName, targetUser.Email },
+            cancellationToken);
     }
 
     private async Task ValidateConsumerEntityIfProvidedAsync(
@@ -426,7 +570,8 @@ public sealed class UserManagementService(
             ConsumerEntityId: user.ConsumerEntityId,
             CreatedAt: user.CreatedAt,
             Roles: roles,
-            TraceId: traceId);
+            TraceId: traceId,
+            Username: user.Username);
     }
 }
 

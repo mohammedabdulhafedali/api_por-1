@@ -200,7 +200,7 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     expect(await screen.findByText('GovernanceReviewer')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'مصفوفة الصلاحيات' }));
-    expect(await screen.findByText(/مصفوفة الصلاحيات الكاملة للدور/)).toBeInTheDocument();
+    expect(await screen.findByText(/مصفوفة صلاحيات الدور/)).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     // Initially only dashboard.view is checked
@@ -246,7 +246,7 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     expect(usersCreateCell).toBeChecked();
 
     // Save via CentralModalDialog confirmation
-    fireEvent.click(screen.getByRole('button', { name: 'حفظ مصفوفة الدور' }));
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ الصلاحيات' }));
     const confirmModal = await screen.findByRole('dialog');
     expect(within(confirmModal).getByText('تأكيد حفظ مصفوفة صلاحيات الدور')).toBeInTheDocument();
     fireEvent.click(within(confirmModal).getByRole('button', { name: 'إغلاق نافذة الرسالة' }));
@@ -369,7 +369,7 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     expect(await screen.findByText('مطور تكامل')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'الصلاحيات' }));
-    expect(await screen.findByText(/مصفوفة الصلاحيات الفردية للمستخدم/)).toBeInTheDocument();
+    expect(await screen.findByText(/صلاحيات المستخدم الفردية/)).toBeInTheDocument();
 
     // Revoke inherited 'users.view' (uncheck) and Grant 'roles.view' (check)
     const usersViewCheckbox = (await screen.findByLabelText('المستخدمون - عرض')) as HTMLInputElement;
@@ -387,7 +387,7 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     expect(screen.getByText(/منح فردي \(GRANT\): 1/)).toBeInTheDocument();
 
     // Save overrides via CentralModalDialog confirmation
-    fireEvent.click(screen.getByRole('button', { name: 'حفظ الصلاحيات الفردية' }));
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ' }));
     const confirmModal = await screen.findByRole('dialog');
     fireEvent.click(within(confirmModal).getByRole('button', { name: 'إغلاق نافذة الرسالة' }));
 
@@ -404,7 +404,7 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     expect(usersViewCheckbox).toBeChecked();
     expect(rolesViewCheckbox).not.toBeChecked();
 
-    fireEvent.click(screen.getByRole('button', { name: 'حفظ الصلاحيات الفردية' }));
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ' }));
     const confirmResetModal = await screen.findByRole('dialog');
     fireEvent.click(within(confirmResetModal).getByRole('button', { name: 'إغلاق نافذة الرسالة' }));
     await screen.findByText('تم حفظ الصلاحيات الفردية');
@@ -493,7 +493,7 @@ describe('Task I04 Role Permission Matrix (UI-25) & User Overrides (UI-15A)', ()
     fireEvent.click(await screen.findByRole('button', { name: 'مصفوفة الصلاحيات' }));
 
     await screen.findByLabelText('لوحة التحكم - عرض');
-    fireEvent.click(screen.getByRole('button', { name: 'حفظ مصفوفة الدور' }));
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ الصلاحيات' }));
     const confirmModal = await screen.findByRole('dialog');
     fireEvent.click(within(confirmModal).getByRole('button', { name: 'إغلاق نافذة الرسالة' }));
 

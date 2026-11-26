@@ -123,6 +123,21 @@ async function sendCsrfJson<T>(
   return (await response.json()) as T;
 }
 
+async function sendCsrfDelete(url: string, lang: AppLanguage): Promise<void> {
+  const csrf = await fetchCsrfToken(lang);
+  const response = await fetch(url, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      'Accept-Language': lang,
+      [csrf.headerName]: csrf.token,
+    },
+  });
+  if (!response.ok) {
+    throw await parseProblemError(response, lang);
+  }
+}
+
 function buildListQs(params: {
   page: number;
   pageSize: number;
@@ -168,6 +183,9 @@ export const updateCompanySystem = (
   lang: AppLanguage
 ) => sendCsrfJson<CompanySystemItem>('PATCH', `/api/v1/company-systems/${systemId}`, payload, lang);
 
+export const deleteCompanySystem = (systemId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/company-systems/${systemId}`, lang);
+
 // M02 Internal & External Providers
 export const listInternalProviders = (params: {
   page: number;
@@ -186,6 +204,9 @@ export const createInternalProvider = (companySystemId: string, lang: AppLanguag
 
 export const updateInternalProvider = (providerId: string, isActive: boolean, lang: AppLanguage) =>
   sendCsrfJson<InternalProviderItem>('PATCH', `/api/v1/internal-providers/${providerId}`, { isActive }, lang);
+
+export const deleteInternalProvider = (providerId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/internal-providers/${providerId}`, lang);
 
 export const listExternalProviders = (params: {
   page: number;
@@ -210,6 +231,9 @@ export const updateExternalProvider = (
   lang: AppLanguage
 ) => sendCsrfJson<ExternalProviderItem>('PATCH', `/api/v1/external-providers/${providerId}`, payload, lang);
 
+export const deleteExternalProvider = (providerId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/external-providers/${providerId}`, lang);
+
 // M03 Consumer Categories & Consumers
 export const listConsumerCategories = (params: {
   page: number;
@@ -231,6 +255,9 @@ export const updateConsumerCategory = (
   payload: { name?: string; isActive?: boolean },
   lang: AppLanguage
 ) => sendCsrfJson<ConsumerCategoryItem>('PATCH', `/api/v1/consumer-categories/${categoryId}`, payload, lang);
+
+export const deleteConsumerCategory = (categoryId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/consumer-categories/${categoryId}`, lang);
 
 export const listConsumers = (params: {
   page: number;
@@ -256,6 +283,9 @@ export const updateConsumer = (
   lang: AppLanguage
 ) => sendCsrfJson<ConsumerItem>('PATCH', `/api/v1/consumers/${consumerId}`, payload, lang);
 
+export const deleteConsumer = (consumerId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/consumers/${consumerId}`, lang);
+
 // M04 API Groups
 export const listApiGroups = (params: {
   page: number;
@@ -279,6 +309,9 @@ export const updateApiGroup = (
   payload: { name?: string; description?: string | null; clearDescription?: boolean; isActive?: boolean },
   lang: AppLanguage
 ) => sendCsrfJson<ApiGroupItem>('PATCH', `/api/v1/api-groups/${groupId}`, payload, lang);
+
+export const deleteApiGroup = (groupId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/api-groups/${groupId}`, lang);
 
 // M04 File Types Dictionary
 export const getCommonFileTypesCatalog = (lang: AppLanguage) =>
@@ -319,4 +352,8 @@ export const updateFileType = (
   },
   lang: AppLanguage
 ) => sendCsrfJson<FileTypeItem>('PATCH', `/api/v1/file-types/${fileTypeId}`, payload, lang);
+
+export const deleteFileType = (fileTypeId: string, lang: AppLanguage) =>
+  sendCsrfDelete(`/api/v1/file-types/${fileTypeId}`, lang);
+
 

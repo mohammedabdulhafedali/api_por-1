@@ -52,6 +52,11 @@ public interface IIntegrationManagementService
         CreateIntegrationRequest request,
         string traceId,
         CancellationToken cancellationToken = default);
+
+    Task DeleteIntegrationAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid integrationId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -527,6 +532,55 @@ public sealed class IntegrationManagementService(
 
         var details = await GetIntegrationDetailsAsync(actorPrincipal, entity.Id, traceId, cancellationToken);
         return details.Summary;
+    }
+
+    public async Task DeleteIntegrationAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid integrationId,
+        CancellationToken cancellationToken = default)
+    {
+        var (access, integration) = await documentAuthorization.RequireIntegrationDocumentPermissionAsync(
+            actorPrincipal,
+            integrationId,
+            DocumentPermissionCatalog.ManageIntegration,
+            "INTEGRATION_DELETE_DENIED",
+            cancellationToken);
+
+        var hasVersions = await dbContext.ApiVersions.AsNoTracking()
+            .AnyAsync(v => v.IntegrationId == integrationId, cancellationToken);
+        var hasChangeRequests = await dbContext.ChangeRequests.AsNoTracking()
+            .AnyAsync(cr => cr.IntegrationId == integrationId, cancellationToken);
+        var hasConsumerUsage = await dbContext.ConsumerVersionUsage.AsNoTracking()
+            .AnyAsync(u => u.IntegrationId == integrationId, cancellationToken);
+
+        if (hasVersions || hasChangeRequests || hasConsumerUsage)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف التكامل لوجود إصدارات أو طلبات تغيير مسجلة عليه.",
+                messageEn: "Cannot delete an integration that has registered versions or change requests.");
+        }
+
+        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var devs = await dbContext.IntegrationDevelopers
+            .Where(d => d.IntegrationId == integrationId)
+            .ToListAsync(cancellationToken);
+        if (devs.Count > 0)
+        {
+            dbContext.IntegrationDevelopers.RemoveRange(devs);
+        }
+
+        dbContext.Integrations.Remove(integration);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            access.Actor.Id,
+            "INTEGRATION_DELETED",
+            "INTEGRATION",
+            integration.Id,
+            "SUCCESS",
+            new { integration.DocumentId, integration.ReferenceCode },
+            cancellationToken);
     }
 
     private async Task<List<Guid>> ValidateActiveUserIdsAsync(

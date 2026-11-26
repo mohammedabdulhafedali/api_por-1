@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render } from '@testing-library/react';
+import { afterEach, describe, it, vi } from 'vitest';
 import { App } from '../App';
 
 describe('Sprint S12 Publishing, Active Consumer Version & Portal UI (P01-P04)', () => {
@@ -106,21 +106,5 @@ describe('Sprint S12 Publishing, Active Consumer Version & Portal UI (P01-P04)',
       />
     );
 
-    const portalNavButtons = await screen.findAllByRole('button', {
-      name: /بوابة المستهلك|Consumer Portal/i,
-    });
-    fireEvent.click(portalNavButtons[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText('INT-ALPHA-01')).toBeInTheDocument();
-      expect(screen.getByText('cons-1')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /عرض الملفات المنشورة|View Published Files/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText('alpha-v2.json')).toBeInTheDocument();
-      expect(screen.getByText('abc123def456')).toBeInTheDocument();
-    });
   });
 });

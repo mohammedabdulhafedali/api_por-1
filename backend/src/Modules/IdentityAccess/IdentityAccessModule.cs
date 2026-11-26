@@ -486,6 +486,24 @@ public sealed class IdentityAccessModule : IBackendModule
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
+        usersGroup.MapDelete("/{userId:guid}", async (
+                Guid userId,
+                HttpContext httpContext,
+                IUserManagementService userManagementService,
+                CancellationToken cancellationToken) =>
+            {
+                await userManagementService.DeleteUserAsync(httpContext.User, userId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission(UserPermissionCodes.UsersDelete, "USER_DELETE_DENIED", "USER")
+            .WithName("DeleteUser")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
         // ====================================================================
         // Task I03 • Role Management & Atomic Multi-Role Assignment (API-005, API-008..010, API-013)
         // ====================================================================

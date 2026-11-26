@@ -51,26 +51,7 @@ public sealed class InitialAdminBootstrapService(
 
     public async Task EnsureGovernanceDictionaryAsync(CancellationToken cancellationToken = default)
     {
-        var existingCodes = await dbContext.Permissions.AsNoTracking()
-            .Select(p => p.Code)
-            .ToListAsync(cancellationToken);
-        var existingSet = new HashSet<string>(existingCodes, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (code, resource, action) in BaselinePermissions)
-        {
-            if (!existingSet.Contains(code))
-            {
-                dbContext.Permissions.Add(new PermissionEntity
-                {
-                    Id = Guid.NewGuid(),
-                    Code = code,
-                    Resource = resource,
-                    Action = action
-                });
-            }
-        }
-
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await CanonicalPermissionSyncHelper.EnsureSeededAndBackfilledAsync(dbContext, cancellationToken);
 
         var adminRole = await dbContext.Roles
             .FirstOrDefaultAsync(r => r.Name == DefaultSystemAdminRoleName, cancellationToken);
@@ -156,10 +137,14 @@ public sealed class InitialAdminBootstrapService(
         var adminRole = await dbContext.Roles.AsNoTracking()
             .FirstAsync(r => r.Name == DefaultSystemAdminRoleName, cancellationToken);
 
+        var adminId = Guid.NewGuid();
+        var derivedUsername = Identity.PlatformUserStore.DeriveDefaultUsername(email, adminId);
         var adminUser = new UserEntity
         {
-            Id = Guid.NewGuid(),
+            Id = adminId,
             FullName = request.FullName.Trim(),
+            Username = derivedUsername,
+            NormalizedUsername = derivedUsername.ToUpperInvariant(),
             Email = email,
             NormalizedEmail = normalizedEmail,
             PasswordHash = null,

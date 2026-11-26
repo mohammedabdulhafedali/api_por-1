@@ -41,6 +41,11 @@ public interface IApprovalRouteAndChangeConfigService
         string traceId,
         CancellationToken cancellationToken = default);
 
+    Task DeleteApprovalRouteAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid routeId,
+        CancellationToken cancellationToken = default);
+
     // M07 • Change Types & Change Policies
     Task<IReadOnlyList<ApprovalRouteOptionDto>> GetAssignableRoutesForChangeTypesAsync(CancellationToken cancellationToken = default);
 
@@ -65,6 +70,11 @@ public interface IApprovalRouteAndChangeConfigService
         string traceId,
         CancellationToken cancellationToken = default);
 
+    Task DeleteChangeTypeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid typeId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<ChangePolicyDto>> GetChangePoliciesAsync(
         int? page,
         int? pageSize,
@@ -84,6 +94,11 @@ public interface IApprovalRouteAndChangeConfigService
         Guid policyId,
         UpdateChangePolicyRequest request,
         string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteChangePolicyAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid policyId,
         CancellationToken cancellationToken = default);
 }
 
@@ -363,6 +378,56 @@ public sealed class ApprovalRouteAndChangeConfigService(
         return (await BuildApprovalRouteDtosAsync([route], traceId, cancellationToken))[0];
     }
 
+    public async Task DeleteApprovalRouteAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid routeId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+
+        var route = await dbContext.ApprovalRoutes
+            .FirstOrDefaultAsync(r => r.Id == routeId, cancellationToken)
+            ?? throw ApiContractException.NotFound(
+                messageAr: "مسار الاعتماد غير موجود.",
+                messageEn: "Approval route was not found.");
+
+        var hasChangeTypes = await dbContext.ChangeTypes.AsNoTracking()
+            .AnyAsync(ct => ct.RouteId == routeId, cancellationToken);
+        var hasDocs = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.ApprovalRouteId == routeId, cancellationToken);
+        var hasRuns = await dbContext.WorkflowRuns.AsNoTracking()
+            .AnyAsync(wr => wr.RouteId == routeId, cancellationToken);
+
+        if (hasChangeTypes || hasDocs || hasRuns)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف مسار اعتماد مرتبط بأنواع تغيير أو وثائق أو معاملات اعتماد.",
+                messageEn: "Cannot delete an approval route referenced by change types, documents, or workflow runs.");
+        }
+
+        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var stages = await dbContext.ApprovalRouteStages
+            .Where(s => s.RouteId == routeId)
+            .ToListAsync(cancellationToken);
+        if (stages.Count > 0)
+        {
+            dbContext.ApprovalRouteStages.RemoveRange(stages);
+        }
+
+        dbContext.ApprovalRoutes.Remove(route);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "APPROVAL_ROUTE_DELETED",
+            "APPROVAL_ROUTE",
+            route.Id,
+            "SUCCESS",
+            new { route.Name },
+            cancellationToken);
+    }
+
     // ========================================================================
     // M07 • Change Types & Change Policies (UI-06)
     // ========================================================================
@@ -544,6 +609,44 @@ public sealed class ApprovalRouteAndChangeConfigService(
         return (await BuildChangeTypeDtosAsync([entity], traceId, cancellationToken))[0];
     }
 
+    public async Task DeleteChangeTypeAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid typeId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+
+        var entity = await dbContext.ChangeTypes
+            .FirstOrDefaultAsync(ct => ct.Id == typeId, cancellationToken)
+            ?? throw ApiContractException.NotFound(
+                messageAr: "نوع طلب التغيير غير موجود.",
+                messageEn: "Change request type was not found.");
+
+        var usedInPolicies = await dbContext.ChangePolicyTypes.AsNoTracking()
+            .AnyAsync(cpt => cpt.ChangeTypeId == typeId, cancellationToken);
+        var usedInRequests = await dbContext.ChangeRequests.AsNoTracking()
+            .AnyAsync(cr => cr.ChangeTypeId == typeId, cancellationToken);
+
+        if (usedInPolicies || usedInRequests)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف نوع طلب تغيير مرتبط بسياسة تغيير أو طلبات تغيير قائمة.",
+                messageEn: "Cannot delete a change type referenced by change policies or change requests.");
+        }
+
+        dbContext.ChangeTypes.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "CHANGE_TYPE_DELETED",
+            "CHANGE_TYPE",
+            entity.Id,
+            "SUCCESS",
+            new { entity.Name, entity.RouteId },
+            cancellationToken);
+    }
+
     public async Task<PagedResult<ChangePolicyDto>> GetChangePoliciesAsync(
         int? page,
         int? pageSize,
@@ -720,6 +823,51 @@ public sealed class ApprovalRouteAndChangeConfigService(
             cancellationToken);
 
         return (await BuildChangePolicyDtosAsync([policy], traceId, cancellationToken))[0];
+    }
+
+    public async Task DeleteChangePolicyAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid policyId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+
+        var policy = await dbContext.ChangePolicies
+            .FirstOrDefaultAsync(cp => cp.Id == policyId, cancellationToken)
+            ?? throw ApiContractException.NotFound(
+                messageAr: "سياسة التغيير غير موجودة.",
+                messageEn: "Change policy was not found.");
+
+        var usedInDocs = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.ChangePolicyId == policyId, cancellationToken);
+        if (usedInDocs)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف سياسة تغيير مرتبطة بوثائق API قائمة.",
+                messageEn: "Cannot delete a change policy referenced by existing API documents.");
+        }
+
+        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var links = await dbContext.ChangePolicyTypes
+            .Where(cpt => cpt.PolicyId == policyId)
+            .ToListAsync(cancellationToken);
+        if (links.Count > 0)
+        {
+            dbContext.ChangePolicyTypes.RemoveRange(links);
+        }
+
+        dbContext.ChangePolicies.Remove(policy);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "CHANGE_POLICY_DELETED",
+            "CHANGE_POLICY",
+            policy.Id,
+            "SUCCESS",
+            new { policy.Name },
+            cancellationToken);
     }
 
     // ========================================================================

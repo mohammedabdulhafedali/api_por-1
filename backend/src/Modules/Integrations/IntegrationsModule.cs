@@ -134,5 +134,19 @@ public sealed class IntegrationsModule : IBackendModule
             .WithRequestValidation<CreateIntegrationRequest>()
             .WithName("CreateIntegration")
             .Produces<IntegrationDto>(StatusCodes.Status201Created);
+
+        integrations.MapDelete("/{integrationId:guid}", async (
+                Guid integrationId,
+                HttpContext httpContext,
+                IIntegrationManagementService service,
+                CancellationToken cancellationToken) =>
+            {
+                await service.DeleteIntegrationAsync(httpContext.User, integrationId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("integrations.delete", "INTEGRATION_DELETE_DENIED", "INTEGRATION")
+            .WithName("DeleteIntegration")
+            .Produces(StatusCodes.Status204NoContent);
     }
 }

@@ -462,35 +462,8 @@ public sealed class PermissionManagementService(
         return await BuildUserPermissionsMatrixResponseAsync(targetUserId, traceId, cancellationToken);
     }
 
-    private async Task EnsureCanonicalDictionarySeededAsync(CancellationToken cancellationToken)
-    {
-        var existingCodes = await dbContext.Permissions.AsNoTracking()
-            .Select(p => p.Code)
-            .ToListAsync(cancellationToken);
-        var existingSet = new HashSet<string>(existingCodes, StringComparer.OrdinalIgnoreCase);
-
-        var addedAny = false;
-        foreach (var entry in PlatformPermissionCatalog.CanonicalEntries)
-        {
-            if (!existingSet.Contains(entry.Code))
-            {
-                dbContext.Permissions.Add(new PermissionEntity
-                {
-                    Id = Guid.NewGuid(),
-                    Code = entry.Code,
-                    Resource = entry.Resource,
-                    Action = entry.Action
-                });
-                existingSet.Add(entry.Code);
-                addedAny = true;
-            }
-        }
-
-        if (addedAny)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-    }
+    private Task EnsureCanonicalDictionarySeededAsync(CancellationToken cancellationToken) =>
+        CanonicalPermissionSyncHelper.EnsureSeededAndBackfilledAsync(dbContext, cancellationToken);
 
     private async Task<List<PermissionDictionaryItemDto>> LoadOrderedCatalogItemsAsync(CancellationToken cancellationToken)
     {

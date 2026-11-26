@@ -37,18 +37,8 @@ export interface UiCatalogSpecRow {
 export const STANDALONE_NAV_ITEMS: NavItemSpec[] = [
   {
     id: 'UI-17',
-    label: { ar: 'لوحة التحكم', en: 'Dashboard' },
+    label: { ar: 'لوحة الداشبورد', en: 'Dashboard' },
     routePreview: '/dashboard',
-  },
-  {
-    id: 'UI-18',
-    label: { ar: 'البحث والاستعراض', en: 'Search & Browse' },
-    routePreview: '/search',
-  },
-  {
-    id: 'UI-19',
-    label: { ar: 'بوابة المستهلك', en: 'Consumer Portal' },
-    routePreview: '/portal',
   },
 ];
 
@@ -106,6 +96,11 @@ export const SIDEBAR_GROUPS: NavGroupSpec[] = [
         label: { ar: 'أنواع طلبات التغيير', en: 'Change Request Types' },
         routePreview: '/settings/change-types',
       },
+      {
+        id: 'UI-06P',
+        label: { ar: 'سياسات التغيير', en: 'Change Policies' },
+        routePreview: '/settings/change-policies',
+      },
     ],
   },
   {
@@ -135,14 +130,13 @@ export const SIDEBAR_GROUPS: NavGroupSpec[] = [
     items: [
       {
         id: 'UI-21',
-        label: { ar: 'قائمة وثائق API', en: 'API Documents List' },
+        label: { ar: 'وثائق API', en: 'API Documents' },
         routePreview: '/api-documents',
       },
       {
-        id: 'UI-07',
-        label: { ar: 'إضافة وثيقة API', en: 'Create API Document' },
-        routePreview: '/api-documents/new',
-        defaultMode: 'create',
+        id: 'UI-04G',
+        label: { ar: 'مجموعة واجهات API', en: 'API Interface Groups' },
+        routePreview: '/api-documents/groups',
       },
     ],
   },
@@ -152,19 +146,8 @@ export const SIDEBAR_GROUPS: NavGroupSpec[] = [
     items: [
       {
         id: 'UI-22',
-        label: { ar: 'قائمة التكاملات', en: 'Integrations List' },
+        label: { ar: 'التكاملات', en: 'Integrations' },
         routePreview: '/integrations',
-      },
-      {
-        id: 'UI-08',
-        label: { ar: 'إضافة تكامل', en: 'Create Integration' },
-        routePreview: '/integrations/new',
-        defaultMode: 'create',
-      },
-      {
-        id: 'UI-09',
-        label: { ar: 'تفاصيل التكامل والتبويبات', en: 'Integration Details & Tabs' },
-        routePreview: '/integrations/:integrationId',
       },
     ],
   },
@@ -284,7 +267,7 @@ export const UX_SPEC_CATALOG_ROWS: UiCatalogSpecRow[] = [
 
 export const UI_STRINGS = {
   ar: {
-    brandTitle: 'حوكمة وثائق APIs',
+    brandTitle: 'إدارة توثيق وحوكمة API',
     brandSubtitle: 'منصة حوكمة الوثائق والتكاملات',
     topbarBreadcrumb: 'Sprint S01 · المكونات المشتركة F02/F08',
     topbarPageTitle: 'قالب الصفحة الأولي والهوية البصرية المعتمدة',

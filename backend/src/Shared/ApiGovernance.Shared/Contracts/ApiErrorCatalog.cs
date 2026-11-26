@@ -118,8 +118,8 @@ public static class ApiErrorLocalizer
                 ? ("تجاوز حد المحاولات", "تم تجاوز الحد المسموح به من الطلبات. يرجى المحاولة لاحقًا.")
                 : ("Too Many Requests", "Rate limit exceeded. Please try again later."),
             _ => isArabic
-                ? ("خطأ داخلي في الخادم", "حدث خطأ غير متوقع أثناء معالجة الطلب. يرجى مراجعة معرف التتبع.")
-                : ("Internal Server Error", "An unexpected error occurred while processing the request. Refer to the traceId.")
+                ? ("تعذر إتمام العملية حاليًا", "حدث خلل غير متوقع أثناء تنفيذ الطلب. يرجى المحاولة مرة أخرى بعد قليل.")
+                : ("Unable to Complete Request", "An unexpected issue occurred while processing your request. Please try again shortly.")
         };
     }
 }

@@ -43,6 +43,11 @@ public interface IRequirementTemplateService
         UpdateRequirementTemplateRequest request,
         string traceId,
         CancellationToken cancellationToken = default);
+
+    Task DeleteRequirementTemplateAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid templateId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -394,6 +399,51 @@ public sealed class RequirementTemplateService(
         await tx.CommitAsync(cancellationToken);
 
         return await GetRequirementTemplateAsync(template.Id, traceId, cancellationToken);
+    }
+
+    public async Task DeleteRequirementTemplateAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid templateId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+
+        var template = await dbContext.FileRequirementTemplates
+            .FirstOrDefaultAsync(t => t.Id == templateId, cancellationToken)
+            ?? throw ApiContractException.NotFound(
+                messageAr: "قالب متطلبات الملفات غير موجود.",
+                messageEn: "File requirement template was not found.");
+
+        var hasDocuments = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.RequirementTemplateId == templateId, cancellationToken);
+        if (hasDocuments)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف قالب متطلبات مرتبط بوثائق API قائمة.",
+                messageEn: "Cannot delete a requirement template referenced by existing API documents.");
+        }
+
+        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var rules = await dbContext.FileRequirementRules
+            .Where(r => r.TemplateId == templateId)
+            .ToListAsync(cancellationToken);
+        if (rules.Count > 0)
+        {
+            dbContext.FileRequirementRules.RemoveRange(rules);
+        }
+
+        dbContext.FileRequirementTemplates.Remove(template);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "REQUIREMENT_TEMPLATE_DELETED",
+            SnapshotResourceKind,
+            template.Id,
+            "SUCCESS",
+            new { template.Name },
+            cancellationToken);
     }
 
     private sealed record ValidatedRuleSpec(

@@ -268,17 +268,21 @@ public sealed class IdentityAuthenticationIntegrationTests
                 Assert.Equal(HttpStatusCode.Unauthorized, loginRes.StatusCode);
             }
 
-            // 2. Admin signs in, initiates activation/reset -> 204 (zero secrets in HTTP response), token goes only to IAuthTokenDeliveryChannel
+            // 2. Admin signs in via Username (not email), initiates activation/reset -> 204 (zero secrets in HTTP response), token goes only to IAuthTokenDeliveryChannel
             using (var adminClient = CreateCookieClient(factory))
             {
+                var adminUsername = adminEmail.Split('@')[0];
                 var csrf = await FetchCsrfHeaderTokenAsync(adminClient);
                 using var loginReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
                 {
-                    Content = JsonContent.Create(new { email = adminEmail, password = adminPass })
+                    Content = JsonContent.Create(new { username = adminUsername, password = adminPass })
                 };
                 loginReq.Headers.Add("X-CSRF-TOKEN", csrf);
                 using var loginRes = await adminClient.SendAsync(loginReq);
                 Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+                using var loginDoc = JsonDocument.Parse(await loginRes.Content.ReadAsStringAsync());
+                Assert.Equal(adminUsername, loginDoc.RootElement.GetProperty("username").GetString());
+                Assert.Equal(adminEmail, loginDoc.RootElement.GetProperty("email").GetString());
 
                 // Fetch fresh CSRF after authentication (antiforgery binds to authenticated user identity!)
                 var authedCsrf = await FetchCsrfHeaderTokenAsync(adminClient);

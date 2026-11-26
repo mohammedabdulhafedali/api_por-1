@@ -12,16 +12,15 @@ export interface ChangePasswordViewProps {
 
 const COPY = {
   ar: {
-    badge: 'أمان الحساب · I01',
+    badge: 'أمان الحساب',
     title: 'تغيير كلمة المرور',
-    subtitle:
-      'بعد تغيير كلمة المرور، سيتم إبطال الجلسات النشطة فورًا وإعادة توجيهك لتسجيل الدخول من جديد.',
-    backBtn: 'العودة إلى لوحة العمل',
-    submitBtn: 'حفظ كلمة المرور الجديدة',
+    subtitle: '',
+    backBtn: 'العودة',
+    submitBtn: 'حفظ',
     cancelBtn: 'إلغاء',
     currentLabel: 'كلمة المرور الحالية',
     newLabel: 'كلمة المرور الجديدة',
-    newHint: '15 خانة على الأقل تشمل أحرفًا كبيرة وصغيرة وأرقامًا ورموزًا خاصة.',
+    newHint: '15 خانة على الأقل تشمل حروفًا كبيرة وصغيرة وأرقامًا ورموزًا.',
     confirmLabel: 'تأكيد كلمة المرور الجديدة',
     requiredCurrent: 'كلمة المرور الحالية مطلوبة.',
     minLengthNew: 'يجب ألا تقل كلمة المرور الجديدة عن 15 حرفًا.',
@@ -33,16 +32,15 @@ const COPY = {
     successMsg: 'تم تحديث كلمة المرور وإبطال الجلسات السابقة. يرجى تسجيل الدخول مرة أخرى.',
   },
   en: {
-    badge: 'Account Security · I01',
+    badge: 'Account Security',
     title: 'Change Password',
-    subtitle:
-      'Changing your password immediately revokes active sessions and requires signing in again.',
-    backBtn: 'Back to Workspace',
-    submitBtn: 'Save New Password',
+    subtitle: '',
+    backBtn: 'Back',
+    submitBtn: 'Save',
     cancelBtn: 'Cancel',
     currentLabel: 'Current Password',
     newLabel: 'New Password',
-    newHint: 'Minimum 15 characters with uppercase, lowercase, digit, and symbol.',
+    newHint: 'Minimum 15 characters with upper, lower, digit, and symbol.',
     confirmLabel: 'Confirm New Password',
     requiredCurrent: 'Current password is required.',
     minLengthNew: 'New password must be at least 15 characters.',
@@ -167,7 +165,6 @@ export function ChangePasswordView({
               id="cp-current"
               type="password"
               autoComplete="current-password"
-              ltrCode
               value={currentPassword}
               hasError={Boolean(errors.currentPassword)}
               onChange={(e) => {
@@ -189,7 +186,6 @@ export function ChangePasswordView({
               id="cp-new"
               type="password"
               autoComplete="new-password"
-              ltrCode
               value={newPassword}
               hasError={Boolean(errors.newPassword)}
               onChange={(e) => {
@@ -209,7 +205,6 @@ export function ChangePasswordView({
               id="cp-confirm"
               type="password"
               autoComplete="new-password"
-              ltrCode
               value={confirmPassword}
               hasError={Boolean(errors.confirmPassword)}
               onChange={(e) => {

@@ -36,6 +36,8 @@ public static class BaselineSchemaConfiguration
             b.HasKey(x => x.Id).HasName("pk_users");
             b.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
             b.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(200).IsRequired();
+            b.Property(x => x.Username).HasColumnName("username").HasMaxLength(100).IsRequired();
+            b.Property(x => x.NormalizedUsername).HasColumnName("normalized_username").HasMaxLength(100).IsRequired();
             b.Property(x => x.Email).HasColumnName("email").HasMaxLength(320).IsRequired();
             b.Property(x => x.NormalizedEmail).HasColumnName("normalized_email").HasMaxLength(320).IsRequired();
             b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(512);
@@ -48,6 +50,8 @@ public static class BaselineSchemaConfiguration
             b.Property(x => x.ConsumerEntityId).HasColumnName("consumer_entity_id");
             b.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
 
+            b.HasIndex(x => x.Username).IsUnique().HasDatabaseName("ux_users_username");
+            b.HasIndex(x => x.NormalizedUsername).IsUnique().HasDatabaseName("ux_users_normalized_username");
             b.HasIndex(x => x.Email).IsUnique().HasDatabaseName("ux_users_email");
             b.HasIndex(x => x.NormalizedEmail).IsUnique().HasDatabaseName("ux_users_normalized_email");
             b.HasIndex(x => x.ConsumerEntityId).HasDatabaseName("ix_users_consumer_entity_id");

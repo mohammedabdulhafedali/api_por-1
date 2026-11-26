@@ -4,6 +4,7 @@ import {
   FileTypeCatalogEntry,
   FileTypeItem,
   createFileType,
+  deleteFileType,
   getCommonFileTypesCatalog,
   listFileTypes,
   updateFileType,
@@ -17,7 +18,8 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   SelectInput,
   StandaloneFormPage,
   StatusBadge,
@@ -41,7 +43,7 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    title: 'قاموس أنواع الملفات والامتدادات المعتمدة (UI-04 · M04)',
+    title: 'أنواع الملفات',
     desc: 'إدارة أنواع الملفات انطلاقًا من قاموس الأنواع الشائعة فقط مع تعبئة الامتدادات تلقائيًا وتحديد الحد الأقصى للحجم وقالب Word لنوع Word فقط (الإلزامية والأعداد تُضبط في قوالب المتطلبات).',
     noViewTitle: 'صلاحية عرض أنواع الملفات غير متوفرة',
     noViewDesc: 'يتطلب عرض أنواع الملفات توفر صلاحية file_types.view.',
@@ -67,20 +69,25 @@ const COPY = {
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createBadge: 'إضافة نوع ملف · UI-04 / M04',
-    editBadge: 'تعديل نوع ملف · UI-04 / M04',
-    createTitle: 'تعريف نوع ملف من قائمة الأنواع الشائعة',
-    editTitle: 'تعديل إعدادات نوع الملف',
-    formSub: 'تُملأ الامتدادات تلقائيًا ويُحظر أي امتداد خارج الكتالوج المعتمد. يظهر حقل قالب Word عند اختيار نوع Word فقط.',
-    catalogLabel: 'نوع الملف القياسي (من القاموس المعتمد)',
+    deleteBtn: 'حذف',
+    deleteTitle: 'تأكيد حذف نوع الملف',
+    deleteConfirmMsg: 'هل أنت متأكد من حذف نوع الملف؟ سيُمنع الحذف إذا كان مستخدمًا في قوالب المتطلبات أو الملفات المرفوعة.',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف نوع الملف من القاموس.',
+    createBadge: 'إضافة نوع ملف',
+    editBadge: 'تعديل نوع ملف',
+    createTitle: 'إضافة نوع ملف',
+    editTitle: 'تعديل نوع الملف',
+    formSub: '',
+    catalogLabel: 'نوع الملف القياسي',
     catalogPlaceholder: 'اختر نوعًا قياسيًا...',
     displayNameLabel: 'الاسم الظاهر',
-    maxSizeMbLabel: 'الحد الأقصى للحجم (بالميجابايت MB)',
-    autoExtensionsLabel: 'الامتدادات التلقائية المعتمدة:',
-    wordTemplateLabel: 'معرّف كائن قالب Word (UUID — لنوع WORD_DOC فقط، اختياري)',
+    maxSizeMbLabel: 'الحد الأقصى للحجم (MB)',
+    autoExtensionsLabel: 'الامتدادات المعتمدة:',
+    wordTemplateLabel: 'قالب Word (اختياري)',
     activeLabel: 'نوع الملف فعّال',
-    backBtn: 'العودة إلى أنواع الملفات',
-    saveCreateBtn: 'حفظ وتعريف النوع',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
     cancelBtn: 'إلغاء',
     requiredCatalogError: 'يرجى اختيار نوع ملف من القائمة المعتمدة.',
@@ -106,8 +113,8 @@ const COPY = {
     nextBtn: 'التالي',
   },
   en: {
-    title: 'File Types & Approved Extensions Dictionary (UI-04 · M04)',
-    desc: 'Select common file types with auto-populated verified extensions, max size limits, and Word template support exclusively for Word documents (requirements/counts are configured in Templates).',
+    title: 'File Types',
+    desc: 'Manage approved file types, extensions, and max upload sizes.',
     noViewTitle: 'File Types View Unavailable',
     noViewDesc: 'file_types.view permission is required to view file types.',
     addBtn: 'Define File Type from Catalog',
@@ -132,20 +139,25 @@ const COPY = {
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createBadge: 'Create File Type · UI-04 / M04',
-    editBadge: 'Edit File Type · UI-04 / M04',
-    createTitle: 'Define File Type from Common Catalog',
-    editTitle: 'Edit File Type Settings',
-    formSub: 'Extensions auto-populate from the verified catalog. Word template applies only to WORD_DOC.',
-    catalogLabel: 'Common File Type (Approved Catalog)',
-    catalogPlaceholder: 'Select common type...',
+    deleteBtn: 'Delete',
+    deleteTitle: 'Confirm File Type Deletion',
+    deleteConfirmMsg: 'Are you sure you want to delete this file type? Deletion is blocked if referenced by templates or files.',
+    deleteSuccessTitle: 'Deleted Successfully',
+    deleteSuccessMsg: 'File type has been deleted.',
+    createBadge: 'Create File Type',
+    editBadge: 'Edit File Type',
+    createTitle: 'Add File Type',
+    editTitle: 'Edit File Type',
+    formSub: '',
+    catalogLabel: 'Standard File Type',
+    catalogPlaceholder: 'Select file type...',
     displayNameLabel: 'Display Name',
-    maxSizeMbLabel: 'Maximum File Size (MB)',
-    autoExtensionsLabel: 'Verified Auto-Populated Extensions:',
-    wordTemplateLabel: 'Word Template Object ID (Optional UUID — WORD_DOC only)',
+    maxSizeMbLabel: 'Maximum Size (MB)',
+    autoExtensionsLabel: 'Allowed Extensions:',
+    wordTemplateLabel: 'Word Template (Optional)',
     activeLabel: 'File Type is Active',
-    backBtn: 'Back to File Types',
-    saveCreateBtn: 'Create File Type',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
     cancelBtn: 'Cancel',
     requiredCatalogError: 'Please choose a file type from the catalog.',
@@ -177,7 +189,9 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
   const t = UI_STRINGS[lang];
 
   const canView = permissions.some((p) => p.toLowerCase() === 'file_types.view');
-  const canManage = permissions.some((p) => p.toLowerCase() === 'file_types.manage');
+  const canCreate = permissions.some((p) => p.toLowerCase() === 'file_types.create');
+  const canEdit = permissions.some((p) => p.toLowerCase() === 'file_types.edit');
+  const canDelete = permissions.some((p) => p.toLowerCase() === 'file_types.delete');
 
   const [mode, setMode] = useState<PageMode>('list');
   const [editingItem, setEditingItem] = useState<FileTypeItem | null>(null);
@@ -317,7 +331,6 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
   const columns: DataTableColumn<FileTypeItem>[] = useMemo(
     () => [
       { key: 'name', header: copy.colName, render: (row) => <strong>{row.displayName}</strong> },
-      { key: 'code', header: copy.colCode, render: (row) => <code className="ltr-code">{row.catalogCode}</code> },
       {
         key: 'ext',
         header: copy.colExt,
@@ -337,18 +350,6 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
         render: (row) => <code className="ltr-code">{Math.round(row.maxSizeBytes / (1024 * 1024))} MB</code>,
       },
       {
-        key: 'wordTpl',
-        header: copy.colWordTpl,
-        render: (row) =>
-          !row.supportsWordTemplate ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{copy.wordTplNA}</span>
-          ) : row.wordTemplateObjectId ? (
-            <StatusBadge variant="info">{copy.wordTplSet}</StatusBadge>
-          ) : (
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{copy.wordTplEmpty}</span>
-          ),
-      },
-      {
         key: 'status',
         header: copy.colStatus,
         render: (row) => (
@@ -361,52 +362,76 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
         key: 'actions',
         header: copy.colActions,
         render: (row) =>
-          canManage ? (
-            <div className="button-row" style={{ gap: 6 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingItem(row);
-                  setFormCatalogCode(row.catalogCode);
-                  setFormDisplayName(row.displayName);
-                  setFormMaxSizeMb(String(Math.max(1, Math.round(row.maxSizeBytes / (1024 * 1024)))));
-                  setFormWordTplId(row.wordTemplateObjectId ?? '');
-                  setFormActive(row.isActive);
-                  setFieldErrors({});
-                  setMode('edit');
-                }}
-              >
-                {copy.editBtn}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModal({
-                    variant: 'confirm',
-                    title: copy.toggleTitle,
-                    message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
-                    onConfirmAction: async () => {
-                      try {
-                        await updateFileType(row.id, { isActive: !row.isActive }, lang);
-                        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                        await loadData();
-                      } catch (err) {
-                        handleApiError(err);
-                      }
-                    },
-                  })
-                }
-              >
-                {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-              </Button>
+          canEdit || canDelete ? (
+            <div className="row-actions">
+              {canEdit && (
+                <>
+                  <RowActionButton
+                    icon="edit"
+                    label={copy.editBtn}
+                    onClick={() => {
+                      setEditingItem(row);
+                      setFormCatalogCode(row.catalogCode);
+                      setFormDisplayName(row.displayName);
+                      setFormMaxSizeMb(String(Math.max(1, Math.round(row.maxSizeBytes / (1024 * 1024)))));
+                      setFormWordTplId(row.wordTemplateObjectId ?? '');
+                      setFormActive(row.isActive);
+                      setFieldErrors({});
+                      setMode('edit');
+                    }}
+                  />
+                  <RowActionButton
+                    icon="power"
+                    label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                    variant={row.isActive ? 'warning' : 'success'}
+                    onClick={() =>
+                      setModal({
+                        variant: 'confirm',
+                        title: copy.toggleTitle,
+                        message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
+                        onConfirmAction: async () => {
+                          try {
+                            await updateFileType(row.id, { isActive: !row.isActive }, lang);
+                            setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+                            await loadData();
+                          } catch (err) {
+                            handleApiError(err);
+                          }
+                        },
+                      })
+                    }
+                  />
+                </>
+              )}
+              {canDelete && (
+                <RowActionButton
+                  icon="trash"
+                  label={copy.deleteBtn}
+                  variant="danger"
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.deleteTitle,
+                      message: copy.deleteConfirmMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await deleteFileType(row.id, lang);
+                          setModal({ variant: 'success', title: copy.deleteSuccessTitle, message: copy.deleteSuccessMsg });
+                          await loadData();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
             </div>
           ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canManage, lang]
+    [copy, canEdit, canDelete, lang]
   );
 
   if (!canView) {
@@ -420,11 +445,14 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
   return (
     <>
       {mode === 'list' ? (
-        <>
-          {canManage && (
-            <div className="page-actions">
-              <Button
-                variant="primary"
+        <section className="surface-card panel clean-table-panel">
+          {canCreate && (
+            <div className="compact-panel-top-actions">
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={copy.addBtn}
+                aria-label={copy.addBtn}
                 onClick={() => {
                   setEditingItem(null);
                   setFormCatalogCode('');
@@ -436,38 +464,10 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
                   setMode('create');
                 }}
               >
-                {copy.addBtn}
-              </Button>
+                <ReferenceIcon name="plus" size={18} />
+              </button>
             </div>
           )}
-          <section className="surface-card panel">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title heading-font">{copy.title}</h2>
-                <p className="panel-desc">{copy.desc}</p>
-              </div>
-            </div>
-
-          <SearchFilterBar
-            searchValue={search}
-            searchPlaceholder={copy.searchPlaceholder}
-            searchAriaLabel={copy.searchAria}
-            onSearchChange={(val) => {
-              setSearch(val);
-              setPage(1);
-            }}
-            filterValue={activeFilter}
-            filterAriaLabel={copy.filterAria}
-            filterPlaceholder={copy.filterAll}
-            filterOptions={[
-              { value: 'true', label: copy.filterActive },
-              { value: 'false', label: copy.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setActiveFilter((val as '' | 'true' | 'false') || '');
-              setPage(1);
-            }}
-          />
 
           {loadError ? (
             <ErrorState
@@ -501,8 +501,7 @@ export function FileTypesManagementPage({ lang, permissions, onSessionExpired }:
               )}
             </>
           )}
-          </section>
-        </>
+        </section>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={mode === 'create' ? copy.createBadge : copy.editBadge}

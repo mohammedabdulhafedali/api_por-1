@@ -24,7 +24,7 @@ interface AuditLogPageProps {
 
 const AUDIT_TEXT = {
   ar: {
-    badge: 'سجل التدقيق غير القابل للتعديل · UI-16 / OP-01',
+    badge: 'سجل التدقيق',
     title: 'سجل التدقيق الإلحاقي للأمان والعمليات',
     subtitle:
       'استعراض زمني لجميع أحداث المصادقة، الصلاحيات، التغييرات، الاعتمادات، والنشر. السجل للقراءة فقط ولا يقبل التعديل أو الحذف.',
@@ -44,7 +44,7 @@ const AUDIT_TEXT = {
     viewJsonBtn: 'عرض JSON',
     systemActor: 'النظام / غير مصادق',
     emptyTitle: 'لا توجد أحداث تدقيق مطابقة لمعايير البحث الحالية.',
-    modalTitle: 'تفاصيل حدث التدقيق (OP-01)',
+    modalTitle: 'تفاصيل حدث التدقيق',
     closeBtn: 'إغلاق',
     prevPage: 'السابق',
     nextPage: 'التالي',
@@ -55,7 +55,7 @@ const AUDIT_TEXT = {
       `صفحة ${page} من ${totalPages} · إجمالي السجلات: ${totalCount}`,
   },
   en: {
-    badge: 'Append-Only Audit Log · UI-16 / OP-01',
+    badge: 'Audit Log',
     title: 'Security & Operations Audit Log',
     subtitle:
       'Chronological ledger of authentication, RBAC/ACL grants, approvals, file scans, and publishing operations. Read-only append-only ledger.',
@@ -75,7 +75,7 @@ const AUDIT_TEXT = {
     viewJsonBtn: 'Inspect JSON',
     systemActor: 'System / Unauthenticated',
     emptyTitle: 'No audit events match your active filters.',
-    modalTitle: 'Audit Event Details (OP-01)',
+    modalTitle: 'Audit Event Details',
     closeBtn: 'Close',
     prevPage: 'Previous',
     nextPage: 'Next',
@@ -160,21 +160,8 @@ export function AuditLogPage({ lang, permissions, onSessionExpired }: AuditLogPa
 
   return (
     <div className="module-stack" data-testid="audit-log-page">
-      <div className="content-card">
-        <div className="card-header-row">
-          <div>
-            <StatusBadge variant="info">{txt.badge}</StatusBadge>
-            <h2 className="section-title" style={{ marginTop: 8 }}>
-              {txt.title}
-            </h2>
-            <p className="section-subtitle">{txt.subtitle}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void loadEvents(page)}>
-            {lang === 'ar' ? 'تحديث' : 'Refresh'}
-          </Button>
-        </div>
-
-        <div className="monitoring-filter-grid" style={{ marginTop: 14 }}>
+      <section className="surface-card panel clean-table-panel">
+        <div className="monitoring-filter-grid" style={{ marginBottom: 14 }}>
           <TextInput
             value={search}
             placeholder={txt.searchPlaceholder}
@@ -234,9 +221,7 @@ export function AuditLogPage({ lang, permissions, onSessionExpired }: AuditLogPa
             </Button>
           </div>
         </div>
-      </div>
 
-      <div className="content-card">
         {loading && !data ? (
           <LoadingState title={txt.loadingText} />
         ) : errorMsg ? (
@@ -344,7 +329,7 @@ export function AuditLogPage({ lang, permissions, onSessionExpired }: AuditLogPa
             </div>
           </>
         )}
-      </div>
+      </section>
 
       {selectedEvent && (
         <CentralModalDialog

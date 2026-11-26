@@ -6,6 +6,8 @@ import {
   InternalProviderItem,
   createExternalProvider,
   createInternalProvider,
+  deleteExternalProvider,
+  deleteInternalProvider,
   listCompanySystems,
   listExternalProviders,
   listInternalProviders,
@@ -21,7 +23,8 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   SelectInput,
   StandaloneFormPage,
   StatusBadge,
@@ -47,47 +50,35 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    tabInternal: 'مزودون داخليون (من أنظمة الشركة)',
-    tabExternal: 'مزودون خارجيون (مستقلون)',
-    internalTitle: 'الأنظمة المزودة الداخلية (UI-03 · M02)',
-    internalDesc: 'تفعيل أحد أنظمة الشركة كمزوّد داخلي دون تكرار؛ تعطيل المزود الداخلي يحافظ على أصل نظام الشركة.',
-    externalTitle: 'الأنظمة المزودة الخارجية (UI-03 · M02)',
-    externalDesc: 'سجل مستقل للمزودين الخارجيين دون حقل «شركة مزودة».',
+    tabInternal: 'مزودون داخليون',
+    tabExternal: 'مزودون خارجيون',
     noViewTitle: 'صلاحية عرض المزودين غير متوفرة',
-    noViewDesc: 'يتطلب عرض الأنظمة المزودة توفر صلاحية providers.view.',
-    addInternalBtn: 'تفعيل نظام شركة كمزود داخلي',
-    addExternalBtn: 'إضافة مزود خارجي',
-    searchPlaceholder: 'ابحث باسم المزود...',
-    searchAria: 'البحث في المزودين',
-    filterAria: 'تصفية حسب الحالة',
-    filterAll: 'كل الحالات',
-    filterActive: 'الفعّالة فقط',
-    filterInactive: 'المعطلة فقط',
+    noViewDesc: 'يتطلب عرض الأنظمة المزودة توفر صلاحية العرض على حسابك.',
+    addInternalAria: 'إضافة مزود داخلي',
+    addExternalAria: 'إضافة مزود خارجي',
     colName: 'الاسم',
     colDesc: 'الوصف',
-    colCompanyStatus: 'حالة أصل نظام الشركة',
-    colDocsCount: 'الوثائق المرتبطة',
-    colStatus: 'حالة المزود',
+    colCompanyStatus: 'حالة نظام الشركة',
+    colStatus: 'الحالة',
     colActions: 'الإجراءات',
     activeBadge: 'فعّال',
     inactiveBadge: 'معطّل',
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createIntBadge: 'تفعيل مزوّد داخلي · UI-03 / M02',
+    deleteBtn: 'حذف',
+    createIntBadge: 'تفعيل مزوّد داخلي',
     createIntTitle: 'تفعيل نظام شركة كمزوّد داخلي',
-    createIntSub: 'اختر نظام شركة فعّالًا غير مسجل مسبقًا كمزوّد داخلي (يُمنع التكرار).',
-    createExtBadge: 'إضافة مزوّد خارجي · UI-03 / M02',
-    editExtBadge: 'تعديل مزوّد خارجي · UI-03 / M02',
-    createExtTitle: 'إضافة مزوّد خارجي مستقل',
+    createExtBadge: 'إضافة مزوّد خارجي',
+    editExtBadge: 'تعديل مزوّد خارجي',
+    createExtTitle: 'إضافة مزوّد خارجي جديد',
     editExtTitle: 'تعديل بيانات المزوّد الخارجي',
-    extFormSub: 'سجل مستقل لا يرتبط بأي نظام شركة داخلي.',
-    companySelectLabel: 'نظام الشركة الفعّال',
+    companySelectLabel: 'نظام الشركة',
     companySelectPlaceholder: 'اختر نظام شركة...',
     nameLabel: 'اسم المزوّد الخارجي',
     descLabel: 'الوصف (اختياري)',
     activeLabel: 'المزود الخارجي فعّال',
-    backBtn: 'العودة إلى قائمة المزودين',
+    backBtn: 'العودة إلى القائمة',
     saveCreateBtn: 'حفظ وإنشاء',
     saveEditBtn: 'حفظ التعديلات',
     cancelBtn: 'إلغاء',
@@ -96,17 +87,21 @@ const COPY = {
     validationTitle: 'تعذر الحفظ',
     validationMsg: 'يرجى مراجعة الحقول المطلوبة.',
     createSuccessTitle: 'تمت الإضافة بنجاح',
-    createSuccessMsg: 'تم حفظ بيانات المزوّد في قاعدة البيانات وتسجيل العملية في سجل التدقيق.',
+    createSuccessMsg: 'تم حفظ بيانات المزوّد بنجاح.',
     editSuccessTitle: 'تم التحديث بنجاح',
-    editSuccessMsg: 'تم تحديث بيانات المزوّد وتسجيل التغيير في سجل التدقيق.',
-    toggleTitle: 'تأكيد تغيير حالة المزوّد',
-    deactivateIntMsg: 'سيتم تعطيل المزوّد الداخلي مع الإبقاء على أصل نظام الشركة سليمًا (ومنع التعطيل عند وجود وثائق نشطة). هل تؤكد؟',
-    deactivateExtMsg: 'سيؤدي التعطيل إلى منع اختيار المزود في الوثائق الجديدة (مع حماية المراجع النشطة). هل تؤكد؟',
+    editSuccessMsg: 'تم تحديث بيانات المزوّد بنجاح.',
+    toggleTitle: 'تأكيد تغيير الحالة',
+    deactivateIntMsg: 'هل تؤكد تعطيل هذا المزوّد الداخلي؟',
+    deactivateExtMsg: 'هل تؤكد تعطيل هذا المزوّد الخارجي؟',
     activateMsg: 'هل تريد إعادة تفعيل هذا المزوّد؟',
-    loadingText: 'جارٍ تحميل قائمة المزودين...',
-    emptyTitle: 'لا يوجد مزودون مطابقون',
-    emptyDesc: 'عدّل معايير البحث أو أضف مزوّدًا جديدًا.',
-    errorTitle: 'تعذر تحميل المزودين',
+    deleteTitle: 'تأكيد الحذف',
+    deleteMsg: 'هل تؤكد حذف هذا المزوّد نهائيًا؟',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف المزوّد بنجاح.',
+    loadingText: 'جارٍ تحميل البيانات...',
+    emptyTitle: 'لا يوجد مزودون مسجلون',
+    emptyDesc: 'اضغط على زر (+) لإضافة مزوّد جديد.',
+    errorTitle: 'تعذر تحميل البيانات',
     retryBtn: 'إعادة المحاولة',
     pagePrefix: 'الصفحة',
     ofWord: 'من',
@@ -114,47 +109,35 @@ const COPY = {
     nextBtn: 'التالي',
   },
   en: {
-    tabInternal: 'Internal Providers (Company Systems)',
-    tabExternal: 'External Providers (Standalone)',
-    internalTitle: 'Internal Provider Systems (UI-03 · M02)',
-    internalDesc: 'Activate a company system as an internal provider without duplicates; deactivation preserves the original company system.',
-    externalTitle: 'External Provider Systems (UI-03 · M02)',
-    externalDesc: 'Standalone external providers registry without any company system parent field.',
+    tabInternal: 'Internal Providers',
+    tabExternal: 'External Providers',
     noViewTitle: 'Providers View Unavailable',
-    noViewDesc: 'providers.view permission is required to view providers.',
-    addInternalBtn: 'Activate Internal Provider',
-    addExternalBtn: 'Add External Provider',
-    searchPlaceholder: 'Search by provider name...',
-    searchAria: 'Search providers',
-    filterAria: 'Filter by status',
-    filterAll: 'All Statuses',
-    filterActive: 'Active Only',
-    filterInactive: 'Inactive Only',
+    noViewDesc: 'View permission is required to view providers.',
+    addInternalAria: 'Add Internal Provider',
+    addExternalAria: 'Add External Provider',
     colName: 'Name',
     colDesc: 'Description',
     colCompanyStatus: 'Company System Status',
-    colDocsCount: 'Linked Docs',
-    colStatus: 'Provider Status',
+    colStatus: 'Status',
     colActions: 'Actions',
     activeBadge: 'Active',
     inactiveBadge: 'Inactive',
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createIntBadge: 'Activate Internal Provider · UI-03 / M02',
+    deleteBtn: 'Delete',
+    createIntBadge: 'Activate Internal Provider',
     createIntTitle: 'Activate Company System as Internal Provider',
-    createIntSub: 'Select an active company system not already registered as an internal provider.',
-    createExtBadge: 'Create External Provider · UI-03 / M02',
-    editExtBadge: 'Edit External Provider · UI-03 / M02',
+    createExtBadge: 'Create External Provider',
+    editExtBadge: 'Edit External Provider',
     createExtTitle: 'Create External Provider',
     editExtTitle: 'Edit External Provider',
-    extFormSub: 'Independent record with no company system parent field.',
-    companySelectLabel: 'Active Company System',
+    companySelectLabel: 'Company System',
     companySelectPlaceholder: 'Select a company system...',
     nameLabel: 'External Provider Name',
     descLabel: 'Description (Optional)',
     activeLabel: 'External Provider is Active',
-    backBtn: 'Back to Providers List',
+    backBtn: 'Back to List',
     saveCreateBtn: 'Save & Create',
     saveEditBtn: 'Save Changes',
     cancelBtn: 'Cancel',
@@ -163,16 +146,20 @@ const COPY = {
     validationTitle: 'Unable to Save Provider',
     validationMsg: 'Please review required fields and try again.',
     createSuccessTitle: 'Provider Added',
-    createSuccessMsg: 'Provider saved to database and logged in the audit trail.',
+    createSuccessMsg: 'Provider saved successfully.',
     editSuccessTitle: 'Provider Updated',
-    editSuccessMsg: 'Changes saved and logged in the audit trail.',
+    editSuccessMsg: 'Changes saved successfully.',
     toggleTitle: 'Confirm Status Change',
-    deactivateIntMsg: 'Deactivating internal provider preserves the underlying company system record. Continue?',
-    deactivateExtMsg: 'Deactivating blocks new API document links while protecting active references. Continue?',
+    deactivateIntMsg: 'Are you sure you want to deactivate this internal provider?',
+    deactivateExtMsg: 'Are you sure you want to deactivate this external provider?',
     activateMsg: 'Re-activate this provider?',
+    deleteTitle: 'Confirm Deletion',
+    deleteMsg: 'Are you sure you want to permanently delete this provider?',
+    deleteSuccessTitle: 'Provider Deleted',
+    deleteSuccessMsg: 'Provider has been permanently deleted.',
     loadingText: 'Loading providers...',
-    emptyTitle: 'No matching providers found',
-    emptyDesc: 'Adjust search criteria or add a new provider.',
+    emptyTitle: 'No providers found',
+    emptyDesc: 'Click the (+) button to add a new provider.',
     errorTitle: 'Failed to Load Providers',
     retryBtn: 'Retry',
     pagePrefix: 'Page',
@@ -182,17 +169,22 @@ const COPY = {
   },
 } as const;
 
-export function ProvidersManagementPage({ lang, permissions, onSessionExpired }: ProvidersManagementPageProps) {
+export function ProvidersManagementPage({
+  lang,
+  permissions,
+  onSessionExpired,
+}: ProvidersManagementPageProps) {
   const copy = COPY[lang];
   const t = UI_STRINGS[lang];
+  const hasPerm = (code: string) => permissions.some((p) => p.toLowerCase() === code.toLowerCase());
 
-  const canView = permissions.some((p) => p.toLowerCase() === 'providers.view');
-  const canCreate = permissions.some((p) => p.toLowerCase() === 'providers.create');
-  const canEdit = permissions.some((p) => p.toLowerCase() === 'providers.edit');
+  const canView = hasPerm('providers.view');
+  const canCreate = hasPerm('providers.create');
+  const canEdit = hasPerm('providers.edit');
+  const canDelete = hasPerm('providers.delete');
 
   const [tab, setTab] = useState<ProviderTab>('internal');
   const [mode, setMode] = useState<PageMode>('list');
-  const [editingExt, setEditingExt] = useState<ExternalProviderItem | null>(null);
 
   const [internalItems, setInternalItems] = useState<InternalProviderItem[]>([]);
   const [externalItems, setExternalItems] = useState<ExternalProviderItem[]>([]);
@@ -200,18 +192,16 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'' | 'true' | 'false'>('');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<{ message: string; traceId?: string } | null>(null);
 
   const [selectedSystemId, setSelectedSystemId] = useState('');
+  const [editingExt, setEditingExt] = useState<ExternalProviderItem | null>(null);
   const [extName, setExtName] = useState('');
   const [extDesc, setExtDesc] = useState('');
   const [extActive, setExtActive] = useState(true);
   const [fieldError, setFieldError] = useState('');
   const [modal, setModal] = useState<ModalState | null>(null);
-
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   const loadDirectory = useCallback(async () => {
@@ -220,12 +210,20 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
     setLoadError(null);
     try {
       if (tab === 'internal') {
-        const res = await listInternalProviders({ page, pageSize: 10, search, isActive: activeFilter, lang });
+        const res = await listInternalProviders({
+          page,
+          pageSize: 10,
+          lang,
+        });
         setInternalItems(res.items);
         setTotalPages(res.totalPages);
         setTotalCount(res.totalCount);
       } else {
-        const res = await listExternalProviders({ page, pageSize: 10, search, isActive: activeFilter, lang });
+        const res = await listExternalProviders({
+          page,
+          pageSize: 10,
+          lang,
+        });
         setExternalItems(res.items);
         setTotalPages(res.totalPages);
         setTotalCount(res.totalCount);
@@ -236,17 +234,20 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
         return;
       }
       const apiErr = err instanceof ApiProblemError ? err : null;
-      setLoadError({ message: apiErr?.message ?? copy.errorTitle, traceId: apiErr?.traceId });
+      setLoadError({
+        message: apiErr?.message ?? copy.errorTitle,
+        traceId: apiErr?.traceId,
+      });
     } finally {
       setLoading(false);
     }
-  }, [canView, tab, page, search, activeFilter, lang, onSessionExpired, copy.errorTitle]);
+  }, [canView, tab, page, lang, onSessionExpired, copy.errorTitle]);
 
   useEffect(() => {
-    if (mode === 'list') {
+    if (mode === 'list' && canView) {
       void loadDirectory();
     }
-  }, [mode, loadDirectory]);
+  }, [mode, canView, loadDirectory]);
 
   const handleApiError = (err: unknown) => {
     if (err instanceof ApiProblemError && err.status === 401) {
@@ -263,91 +264,110 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
 
   const openCreatePage = async () => {
     setFieldError('');
+    setEditingExt(null);
+    setExtName('');
+    setExtDesc('');
+    setExtActive(true);
+    setSelectedSystemId('');
     if (tab === 'internal') {
-      setSelectedSystemId('');
-      setMode('create');
       try {
-        const res = await listCompanySystems({ page: 1, pageSize: 100, isActive: 'true', lang });
-        setCompanySystems(res.items.filter((s) => !s.isRegisteredInternalProvider));
+        const sysRes = await listCompanySystems({ page: 1, pageSize: 100, isActive: 'true', lang });
+        const eligible = sysRes.items.filter((s) => !s.isRegisteredInternalProvider);
+        setCompanySystems(eligible);
+        if (eligible.length > 0) {
+          setSelectedSystemId(eligible[0].id);
+        }
       } catch (err) {
         handleApiError(err);
+        return;
       }
-    } else {
-      setEditingExt(null);
-      setExtName('');
-      setExtDesc('');
-      setExtActive(true);
-      setMode('create');
     }
+    setMode('create');
   };
 
   const handleSave = async () => {
     if (tab === 'internal') {
       if (!selectedSystemId) {
         setFieldError(copy.requiredSystemError);
-        setModal({ variant: 'error', title: copy.validationTitle, message: copy.validationMsg });
+        setModal({
+          variant: 'error',
+          title: copy.validationTitle,
+          message: copy.validationMsg,
+        });
         return;
       }
       try {
         await createInternalProvider(selectedSystemId, lang);
         setMode('list');
-        setModal({ variant: 'success', title: copy.createSuccessTitle, message: copy.createSuccessMsg });
+        setModal({
+          variant: 'success',
+          title: copy.createSuccessTitle,
+          message: copy.createSuccessMsg,
+        });
         await loadDirectory();
       } catch (err) {
         handleApiError(err);
       }
-      return;
-    }
-
-    if (extName.trim().length < 2) {
-      setFieldError(copy.requiredNameError);
-      setModal({ variant: 'error', title: copy.validationTitle, message: copy.validationMsg });
-      return;
-    }
-
-    try {
-      if (mode === 'create') {
-        await createExternalProvider({ name: extName.trim(), description: extDesc.trim() || null }, lang);
-        setModal({ variant: 'success', title: copy.createSuccessTitle, message: copy.createSuccessMsg });
-      } else if (editingExt) {
-        await updateExternalProvider(
-          editingExt.id,
-          {
-            name: extName.trim(),
-            description: extDesc.trim() || null,
-            clearDescription: !extDesc.trim() && Boolean(editingExt.description),
-            isActive: extActive,
-          },
-          lang
-        );
-        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+    } else {
+      if (extName.trim().length < 2) {
+        setFieldError(copy.requiredNameError);
+        setModal({
+          variant: 'error',
+          title: copy.validationTitle,
+          message: copy.validationMsg,
+        });
+        return;
       }
-      setMode('list');
-      await loadDirectory();
-    } catch (err) {
-      handleApiError(err);
+      try {
+        if (mode === 'create') {
+          await createExternalProvider(
+            { name: extName.trim(), description: extDesc.trim() || null },
+            lang
+          );
+        } else if (editingExt) {
+          await updateExternalProvider(
+            editingExt.id,
+            {
+              name: extName.trim(),
+              description: extDesc.trim() || null,
+              clearDescription: !extDesc.trim() && Boolean(editingExt.description),
+              isActive: extActive,
+            },
+            lang
+          );
+        }
+        const wasCreate = mode === 'create';
+        setMode('list');
+        setModal({
+          variant: 'success',
+          title: wasCreate ? copy.createSuccessTitle : copy.editSuccessTitle,
+          message: wasCreate ? copy.createSuccessMsg : copy.editSuccessMsg,
+        });
+        await loadDirectory();
+      } catch (err) {
+        handleApiError(err);
+      }
     }
   };
 
   const internalColumns: DataTableColumn<InternalProviderItem>[] = useMemo(
     () => [
       { key: 'name', header: copy.colName, render: (row) => <strong>{row.companySystemName}</strong> },
-      { key: 'desc', header: copy.colDesc, render: (row) => <span>{row.companySystemDescription ?? '—'}</span> },
       {
-        key: 'sysStatus',
+        key: 'desc',
+        header: copy.colDesc,
+        render: (row) => row.companySystemDescription || <span style={{ color: 'var(--text-muted)' }}>—</span>,
+      },
+      {
+        key: 'companyStatus',
         header: copy.colCompanyStatus,
         render: (row) => (
-          <StatusBadge variant={row.companySystemIsActive ? 'success' : 'danger'}>
+          <StatusBadge variant={row.companySystemIsActive ? 'info' : 'warning'}>
             {row.companySystemIsActive ? copy.activeBadge : copy.inactiveBadge}
           </StatusBadge>
         ),
       },
       {
-        key: 'docs',
-        header: copy.colDocsCount,
-        render: (row) => <code className="ltr-code">{row.documentsCount}</code>,
-      },
-      {
         key: 'status',
         header: copy.colStatus,
         render: (row) => (
@@ -360,102 +380,159 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
         key: 'actions',
         header: copy.colActions,
         render: (row) =>
-          canEdit ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setModal({
-                  variant: 'confirm',
-                  title: copy.toggleTitle,
-                  message: row.isActive ? copy.deactivateIntMsg : copy.activateMsg,
-                  onConfirmAction: async () => {
-                    try {
-                      await updateInternalProvider(row.id, !row.isActive, lang);
-                      setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                      await loadDirectory();
-                    } catch (err) {
-                      handleApiError(err);
-                    }
-                  },
-                })
-              }
-            >
-              {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-            </Button>
-          ) : null,
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canEdit, lang]
-  );
-
-  const externalColumns: DataTableColumn<ExternalProviderItem>[] = useMemo(
-    () => [
-      { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
-      { key: 'desc', header: copy.colDesc, render: (row) => <span>{row.description ?? '—'}</span> },
-      {
-        key: 'docs',
-        header: copy.colDocsCount,
-        render: (row) => <code className="ltr-code">{row.documentsCount}</code>,
-      },
-      {
-        key: 'status',
-        header: copy.colStatus,
-        render: (row) => (
-          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-            {row.isActive ? copy.activeBadge : copy.inactiveBadge}
-          </StatusBadge>
-        ),
-      },
-      {
-        key: 'actions',
-        header: copy.colActions,
-        render: (row) =>
-          canEdit ? (
-            <div className="button-row" style={{ gap: 6 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingExt(row);
-                  setExtName(row.name);
-                  setExtDesc(row.description ?? '');
-                  setExtActive(row.isActive);
-                  setFieldError('');
-                  setMode('edit');
-                }}
-              >
-                {copy.editBtn}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModal({
-                    variant: 'confirm',
-                    title: copy.toggleTitle,
-                    message: row.isActive ? copy.deactivateExtMsg : copy.activateMsg,
-                    onConfirmAction: async () => {
-                      try {
-                        await updateExternalProvider(row.id, { isActive: !row.isActive }, lang);
-                        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                        await loadDirectory();
-                      } catch (err) {
-                        handleApiError(err);
-                      }
-                    },
-                  })
-                }
-              >
-                {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-              </Button>
+          canEdit || canDelete ? (
+            <div className="row-actions">
+              {canEdit && (
+                <RowActionButton
+                  icon="power"
+                  label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                  variant={row.isActive ? 'warning' : 'success'}
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.toggleTitle,
+                      message: row.isActive ? copy.deactivateIntMsg : copy.activateMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await updateInternalProvider(row.id, !row.isActive, lang);
+                          setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+                          await loadDirectory();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
+              {canDelete && (
+                <RowActionButton
+                  icon="trash"
+                  label={copy.deleteBtn}
+                  variant="danger"
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.deleteTitle,
+                      message: copy.deleteMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await deleteInternalProvider(row.id, lang);
+                          setModal({
+                            variant: 'success',
+                            title: copy.deleteSuccessTitle,
+                            message: copy.deleteSuccessMsg,
+                          });
+                          await loadDirectory();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
             </div>
           ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canEdit, lang]
+    [copy, canEdit, canDelete, lang]
+  );
+
+  const externalColumns: DataTableColumn<ExternalProviderItem>[] = useMemo(
+    () => [
+      { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
+      {
+        key: 'desc',
+        header: copy.colDesc,
+        render: (row) => row.description || <span style={{ color: 'var(--text-muted)' }}>—</span>,
+      },
+      {
+        key: 'status',
+        header: copy.colStatus,
+        render: (row) => (
+          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+            {row.isActive ? copy.activeBadge : copy.inactiveBadge}
+          </StatusBadge>
+        ),
+      },
+      {
+        key: 'actions',
+        header: copy.colActions,
+        render: (row) =>
+          canEdit || canDelete ? (
+            <div className="row-actions">
+              {canEdit && (
+                <>
+                  <RowActionButton
+                    icon="edit"
+                    label={copy.editBtn}
+                    onClick={() => {
+                      setEditingExt(row);
+                      setExtName(row.name);
+                      setExtDesc(row.description ?? '');
+                      setExtActive(row.isActive);
+                      setFieldError('');
+                      setMode('edit');
+                    }}
+                  />
+                  <RowActionButton
+                    icon="power"
+                    label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                    variant={row.isActive ? 'warning' : 'success'}
+                    onClick={() =>
+                      setModal({
+                        variant: 'confirm',
+                        title: copy.toggleTitle,
+                        message: row.isActive ? copy.deactivateExtMsg : copy.activateMsg,
+                        onConfirmAction: async () => {
+                          try {
+                            await updateExternalProvider(row.id, { isActive: !row.isActive }, lang);
+                            setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+                            await loadDirectory();
+                          } catch (err) {
+                            handleApiError(err);
+                          }
+                        },
+                      })
+                    }
+                  />
+                </>
+              )}
+              {canDelete && (
+                <RowActionButton
+                  icon="trash"
+                  label={copy.deleteBtn}
+                  variant="danger"
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.deleteTitle,
+                      message: copy.deleteMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await deleteExternalProvider(row.id, lang);
+                          setModal({
+                            variant: 'success',
+                            title: copy.deleteSuccessTitle,
+                            message: copy.deleteSuccessMsg,
+                          });
+                          await loadDirectory();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
+            </div>
+          ) : null,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [copy, canEdit, canDelete, lang]
   );
 
   if (!canView) {
@@ -469,79 +546,48 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
   return (
     <>
       {mode === 'list' ? (
-        <section className="surface-card panel">
-          <div className="tabs">
-            <button
-              type="button"
-              className={`tab ${tab === 'internal' ? 'active' : ''}`}
-              onClick={() => {
-                setTab('internal');
-                setPage(1);
-                setSearch('');
-              }}
-            >
-              {copy.tabInternal}
-            </button>
-            <button
-              type="button"
-              className={`tab ${tab === 'external' ? 'active' : ''}`}
-              onClick={() => {
-                setTab('external');
-                setPage(1);
-                setSearch('');
-              }}
-            >
-              {copy.tabExternal}
-            </button>
-          </div>
-          {tab === 'internal' && (
-            <div className="info-box" style={{ marginBottom: 14 }}>
-              {copy.internalDesc}
+        <section className="surface-card panel clean-table-panel">
+          <div className="clean-tabs-header-row">
+            <div className="tabs" style={{ marginBottom: 0 }}>
+              <button
+                type="button"
+                className={`tab ${tab === 'internal' ? 'active' : ''}`}
+                onClick={() => {
+                  setTab('internal');
+                  setPage(1);
+                }}
+              >
+                {copy.tabInternal}
+              </button>
+              <button
+                type="button"
+                className={`tab ${tab === 'external' ? 'active' : ''}`}
+                onClick={() => {
+                  setTab('external');
+                  setPage(1);
+                }}
+              >
+                {copy.tabExternal}
+              </button>
             </div>
-          )}
 
-          <div className="card-header-row">
-            <div>
-              <h2 className="card-title heading-font">
-                {tab === 'internal' ? copy.internalTitle : copy.externalTitle}
-              </h2>
-              <p className="card-subtitle">
-                {tab === 'internal' ? copy.internalDesc : copy.externalDesc}
-              </p>
-            </div>
             {canCreate && (
-              <Button variant="primary" onClick={() => void openCreatePage()}>
-                {tab === 'internal' ? copy.addInternalBtn : copy.addExternalBtn}
-              </Button>
+              <button
+                type="button"
+                className="compact-inline-add-btn"
+                aria-label={tab === 'internal' ? copy.addInternalAria : copy.addExternalAria}
+                title={tab === 'internal' ? copy.addInternalAria : copy.addExternalAria}
+                onClick={() => void openCreatePage()}
+              >
+                <ReferenceIcon name="plus" size={18} />
+              </button>
             )}
           </div>
-
-          <SearchFilterBar
-            searchValue={search}
-            searchPlaceholder={copy.searchPlaceholder}
-            searchAriaLabel={copy.searchAria}
-            onSearchChange={(val) => {
-              setSearch(val);
-              setPage(1);
-            }}
-            filterValue={activeFilter}
-            filterAriaLabel={copy.filterAria}
-            filterPlaceholder={copy.filterAll}
-            filterOptions={[
-              { value: 'true', label: copy.filterActive },
-              { value: 'false', label: copy.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setActiveFilter((val as '' | 'true' | 'false') || '');
-              setPage(1);
-            }}
-          />
 
           {loadError ? (
             <ErrorState
               title={copy.errorTitle}
               message={loadError.message}
-              traceId={loadError.traceId}
               retryLabel={copy.retryBtn}
               onRetry={() => void loadDirectory()}
             />
@@ -598,7 +644,7 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
                 ? copy.createExtTitle
                 : copy.editExtTitle
           }
-          formSubtitle={tab === 'internal' ? copy.createIntSub : copy.extFormSub}
+          formSubtitle=""
           backButtonLabel={copy.backBtn}
           submitButtonLabel={mode === 'create' ? copy.saveCreateBtn : copy.saveEditBtn}
           cancelButtonLabel={copy.cancelBtn}
@@ -623,10 +669,10 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
           ) : (
             <>
               <div className="form-grid-2">
-                <FormField id="ext-provider-name" label={copy.nameLabel} required error={fieldError}>
+                <FormField id="external-provider-name" label={copy.nameLabel} required error={fieldError}>
                   <TextInput
                     ref={nameRef}
-                    id="ext-provider-name"
+                    id="external-provider-name"
                     value={extName}
                     hasError={Boolean(fieldError)}
                     onChange={(e) => {
@@ -637,29 +683,28 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
                 </FormField>
 
                 {mode === 'edit' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 24 }}>
-                    <input
-                      id="ext-provider-active"
-                      type="checkbox"
-                      checked={extActive}
-                      onChange={(e) => setExtActive(e.target.checked)}
-                    />
-                    <label htmlFor="ext-provider-active" style={{ fontSize: 13.5 }}>
-                      {copy.activeLabel}
+                  <div className="form-field" style={{ justifyContent: 'center' }}>
+                    <label className="matrix-inline-check">
+                      <input
+                        type="checkbox"
+                        className="matrix-checkbox"
+                        checked={extActive}
+                        onChange={(e) => setExtActive(e.target.checked)}
+                      />
+                      <span>{copy.activeLabel}</span>
                     </label>
                   </div>
                 )}
               </div>
 
-              <div style={{ marginTop: 14 }}>
-                <FormField id="ext-provider-desc" label={copy.descLabel}>
-                  <TextareaInput
-                    id="ext-provider-desc"
-                    value={extDesc}
-                    onChange={(e) => setExtDesc(e.target.value)}
-                  />
-                </FormField>
-              </div>
+              <FormField id="external-provider-desc" label={copy.descLabel}>
+                <TextareaInput
+                  id="external-provider-desc"
+                  rows={3}
+                  value={extDesc}
+                  onChange={(e) => setExtDesc(e.target.value)}
+                />
+              </FormField>
             </>
           )}
         </StandaloneFormPage>
@@ -671,7 +716,7 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
         title={modal?.title ?? ''}
         message={modal?.message ?? ''}
         confirmLabel={t.modalConfirmBtn}
-        cancelLabel={modal?.variant === 'confirm' ? t.modalCancelBtn : undefined}
+        cancelLabel={t.modalCancelBtn}
         closeAriaLabel={t.modalCloseAria}
         onConfirm={() => {
           const active = modal;
@@ -681,13 +726,12 @@ export function ProvidersManagementPage({ lang, permissions, onSessionExpired }:
             return;
           }
           setModal(null);
-          if (active.variant === 'error') {
+          if (active.variant === 'error' && fieldError) {
             nameRef.current?.focus();
           }
         }}
-        onCancel={modal?.variant === 'confirm' ? () => setModal(null) : undefined}
+        onCancel={() => setModal(null)}
       />
     </>
   );
 }
-

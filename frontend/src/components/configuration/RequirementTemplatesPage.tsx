@@ -5,10 +5,9 @@ import {
   RequirementFileTypeOption,
   RequirementRuleInput,
   RequirementRuleMode,
-  RequirementTemplateSnapshotItem,
   createRequirementTemplate,
+  deleteRequirementTemplate,
   listRequirementFileTypeOptions,
-  listRequirementTemplateSnapshots,
   listRequirementTemplates,
   updateRequirementTemplate,
 } from '../../api/governanceConfigApi';
@@ -16,10 +15,13 @@ import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
   Button,
   CentralModalDialog,
+  DataTable,
+  DataTableColumn,
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   SelectInput,
   StandaloneFormPage,
   StatusBadge,
@@ -33,7 +35,7 @@ interface RequirementTemplatesPageProps {
   onSessionExpired: () => void;
 }
 
-type PageMode = 'list' | 'create' | 'edit' | 'snapshots';
+type PageMode = 'list' | 'create' | 'edit';
 
 interface RuleDraftRow {
   key: string;
@@ -53,7 +55,7 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    pageTitle: 'قوالب متطلبات الملفات واللقطات التاريخية (UI-23)',
+    pageTitle: 'قوالب متطلبات الملفات',
     pageDesc:
       'تحديد إلزامية الملفات والحد الأدنى والأقصى لكل نوع ملف ضمن قوالب مع حفظ لقطة تاريخية غير قابلة للتعديل عند كل إنشاء أو تحديث.',
     noViewTitle: 'صلاحية عرض قوالب المتطلبات غير متوفرة',
@@ -80,15 +82,20 @@ const COPY = {
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createBadge: 'إضافة قالب متطلبات · UI-23 / M05',
-    editBadge: 'تعديل قالب متطلبات · UI-23 / M05',
-    snapshotsBadge: 'اللقطات التاريخية للقالب · M05',
-    createTitle: 'إضافة قالب متطلبات ملفات جديد',
+    deleteBtn: 'حذف',
+    deleteTitle: 'تأكيد حذف قالب المتطلبات',
+    deleteConfirmMsg: 'هل أنت متأكد من حذف قالب المتطلبات؟ سيُمنع الحذف إذا كان مرتبطًا بوثائق API قائمة.',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف قالب متطلبات الملفات.',
+    createBadge: 'إضافة قالب متطلبات',
+    editBadge: 'تعديل قالب متطلبات',
+    snapshotsBadge: 'اللقطات التاريخية',
+    createTitle: 'إضافة قالب متطلبات ملفات',
     editTitle: 'تعديل قالب متطلبات الملفات',
     snapshotsTitle: 'السجل التاريخي للقطات القالب',
-    formSub: 'يتم حفظ لقطة تاريخية تلقائيًا عند الإنشاء وكل تحديث قبل ارتباط القالب بوثائق API نشطة.',
-    backBtn: 'العودة إلى القائمة',
-    saveCreateBtn: 'حفظ وإنشاء',
+    formSub: '',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
     cancelBtn: 'إلغاء',
     nameLabel: 'اسم القالب',
@@ -100,8 +107,8 @@ const COPY = {
     modeLabel: 'وضع الإلزامية',
     minLabel: 'الحد الأدنى',
     maxLabel: 'الحد الأقصى',
-    conditionLabel: 'شرط JSON (للوضع المشروط فقط)',
-    noActiveFileTypesNotice: 'لا توجد أنواع ملفات نشطة بعد؛ عرّف أنواع الملفات أولًا من UI-04.',
+    conditionLabel: 'شرط التفعيل (JSON)',
+    noActiveFileTypesNotice: 'لا توجد أنواع ملفات نشطة بعد؛ يرجى تعريف أنواع الملفات أولًا.',
     validationName: 'اسم القالب مطلوب ويجب ألا يقل عن حرفين.',
     validationRulesEmpty: 'يجب إضافة قاعدة نوع ملف واحدة على الأقل داخل القالب.',
     validationRuleFields: 'تأكد من اختيار نوع ملف صالح وعدم تكراره، وصحة الحدين الأدنى والأقصى.',
@@ -123,7 +130,7 @@ const COPY = {
     ofWord: 'من',
   },
   en: {
-    pageTitle: 'File Requirement Templates & Snapshots (UI-23)',
+    pageTitle: 'File Requirement Templates',
     pageDesc:
       'Configure file modes and min/max counts per template with immutable historical snapshots recorded on every creation or update.',
     noViewTitle: 'Missing requirement templates permission',
@@ -150,15 +157,20 @@ const COPY = {
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createBadge: 'Create Template · UI-23 / M05',
-    editBadge: 'Edit Template · UI-23 / M05',
-    snapshotsBadge: 'Historical Snapshots · M05',
-    createTitle: 'Create File Requirement Template',
-    editTitle: 'Edit File Requirement Template',
+    deleteBtn: 'Delete',
+    deleteTitle: 'Confirm Template Deletion',
+    deleteConfirmMsg: 'Are you sure you want to delete this requirement template? Blocked if referenced by existing API documents.',
+    deleteSuccessTitle: 'Deleted Successfully',
+    deleteSuccessMsg: 'Requirement template has been deleted.',
+    createBadge: 'Create Template',
+    editBadge: 'Edit Template',
+    snapshotsBadge: 'Historical Snapshots',
+    createTitle: 'Add Requirement Template',
+    editTitle: 'Edit Requirement Template',
     snapshotsTitle: 'Template Historical Snapshots',
-    formSub: 'An immutable snapshot is stored automatically upon creation and each pre-use update.',
-    backBtn: 'Back to List',
-    saveCreateBtn: 'Save & Create',
+    formSub: '',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
     cancelBtn: 'Cancel',
     nameLabel: 'Template Name',
@@ -170,8 +182,8 @@ const COPY = {
     modeLabel: 'Requirement Mode',
     minLabel: 'Min Count',
     maxLabel: 'Max Count',
-    conditionLabel: 'Condition JSON (Conditional mode)',
-    noActiveFileTypesNotice: 'No active file types found; define file types first in UI-04.',
+    conditionLabel: 'Condition (JSON)',
+    noActiveFileTypesNotice: 'No active file types found; please define file types first.',
     validationName: 'Template name is required (at least 2 characters).',
     validationRulesEmpty: 'At least one file requirement rule is required.',
     validationRuleFields: 'Select unique valid file types with valid min/max counts.',
@@ -201,9 +213,11 @@ export function RequirementTemplatesPage({
 }: RequirementTemplatesPageProps) {
   const c = COPY[lang];
   const commonStrings = UI_STRINGS[lang];
-  const permSet = useMemo(() => new Set(permissions), [permissions]);
+  const permSet = useMemo(() => new Set(permissions.map((p) => p.toLowerCase())), [permissions]);
   const canView = permSet.has('requirements.view');
-  const canManage = permSet.has('requirements.manage');
+  const canCreate = permSet.has('requirements.create');
+  const canEdit = permSet.has('requirements.edit');
+  const canDelete = permSet.has('requirements.delete');
 
   const [mode, setMode] = useState<PageMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -224,10 +238,6 @@ export function RequirementTemplatesPage({
   const [nameError, setNameError] = useState<string | undefined>();
   const [rulesError, setRulesError] = useState<string | undefined>();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
-
-  const [snapshotsTemplate, setSnapshotsTemplate] = useState<FileRequirementTemplateItem | null>(null);
-  const [snapshots, setSnapshots] = useState<RequirementTemplateSnapshotItem[]>([]);
-  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
 
   const handleApiError = useCallback(
     (err: unknown, fallbackTitle: string) => {
@@ -320,21 +330,6 @@ export function RequirementTemplatesPage({
     setNameError(undefined);
     setRulesError(undefined);
     setMode('edit');
-  };
-
-  const openSnapshots = async (tpl: FileRequirementTemplateItem) => {
-    setSnapshotsTemplate(tpl);
-    setSnapshots([]);
-    setMode('snapshots');
-    setSnapshotsLoading(true);
-    try {
-      const list = await listRequirementTemplateSnapshots(tpl.id, lang);
-      setSnapshots(list);
-    } catch (err) {
-      handleApiError(err, c.snapshotsTitle);
-    } finally {
-      setSnapshotsLoading(false);
-    }
   };
 
   const addRuleRow = () => {
@@ -462,6 +457,26 @@ export function RequirementTemplatesPage({
     }
   };
 
+  const handleDeleteTemplate = (tpl: FileRequirementTemplateItem) => {
+    setModal({
+      variant: 'confirm',
+      title: c.deleteTitle,
+      message: c.deleteConfirmMsg,
+      onConfirmAction: async () => {
+        setSubmitting(true);
+        try {
+          await deleteRequirementTemplate(tpl.id, lang);
+          setModal({ variant: 'success', title: c.deleteSuccessTitle, message: c.deleteSuccessMsg });
+          await loadTemplates();
+        } catch (err) {
+          handleApiError(err, c.deleteTitle);
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
+
   const formatModeLabel = (rawMode: string) => {
     switch (rawMode.toUpperCase()) {
       case 'REQUIRED':
@@ -473,6 +488,78 @@ export function RequirementTemplatesPage({
     }
   };
 
+  const columns: DataTableColumn<FileRequirementTemplateItem>[] = [
+    {
+      key: 'name',
+      header: c.colName,
+      render: (row) => <strong>{row.name}</strong>,
+    },
+    {
+      key: 'rules',
+      header: c.colRules,
+      render: (row) => (
+        <div className="badge-wrap-list">
+          {row.rules.map((r) => (
+            <StatusBadge
+              key={r.id}
+              variant={
+                r.requirementMode === 'REQUIRED'
+                  ? 'info'
+                  : r.requirementMode === 'OPTIONAL'
+                    ? 'neutral'
+                    : 'warning'
+              }
+            >
+              {`${r.fileTypeName}: ${formatModeLabel(r.requirementMode)} (${r.minCount}–${r.maxCount})`}
+            </StatusBadge>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: c.colStatus,
+      render: (row) => (
+        <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
+          {row.isActive ? c.activeBadge : c.inactiveBadge}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: c.colActions,
+      render: (row) =>
+        canEdit || canDelete ? (
+          <div className="row-actions">
+            {canEdit && (
+              <>
+                <RowActionButton
+                  icon="edit"
+                  label={row.documentsCount > 0 ? c.inUseLockedHint : c.editBtn}
+                  disabled={row.documentsCount > 0}
+                  onClick={() => openEdit(row)}
+                />
+                <RowActionButton
+                  icon="power"
+                  label={row.isActive ? c.deactivateBtn : c.activateBtn}
+                  variant={row.isActive ? 'warning' : 'success'}
+                  onClick={() => handleToggleStatus(row)}
+                />
+              </>
+            )}
+            {canDelete && (
+              <RowActionButton
+                icon="trash"
+                label={c.deleteBtn}
+                variant="danger"
+                onClick={() => handleDeleteTemplate(row)}
+              />
+            )}
+          </div>
+        ) : null,
+    },
+  ];
+
   if (!canView) {
     return (
       <section className="surface-card">
@@ -483,71 +570,7 @@ export function RequirementTemplatesPage({
 
   return (
     <>
-      {mode === 'snapshots' && snapshotsTemplate ? (
-        <section className="surface-card">
-          <div className="card-header-row">
-            <div>
-              <span className="mode-pill">{c.snapshotsBadge}</span>
-              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
-                {c.snapshotsTitle}: {snapshotsTemplate.name}
-              </h2>
-            </div>
-            <Button variant="outline" onClick={() => setMode('list')}>
-              {c.backBtn}
-            </Button>
-          </div>
-
-          {snapshotsLoading ? (
-            <p className="card-subtitle">{c.loadingText}</p>
-          ) : snapshots.length === 0 ? (
-            <p className="card-subtitle">{c.snapshotsEmpty}</p>
-          ) : (
-            <div className="table-scroll-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{c.snapshotVersion}</th>
-                    <th>{c.snapshotOp}</th>
-                    <th>{c.snapshotDate}</th>
-                    <th>{c.snapshotActor}</th>
-                    <th>{c.colRules}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snapshots.map((snap) => (
-                    <tr key={snap.auditEventId}>
-                      <td>
-                        <StatusBadge variant="info">{`v${snap.versionNumber}`}</StatusBadge>
-                      </td>
-                      <td>
-                        <code className="ltr-code">{snap.operation}</code>
-                      </td>
-                      <td>
-                        <code className="ltr-code">
-                          {new Date(snap.capturedAtUtc).toISOString()}
-                        </code>
-                      </td>
-                      <td>{snap.actorName}</td>
-                      <td>
-                        <div className="badge-wrap-list">
-                          {snap.rules.map((r) => (
-                            <StatusBadge
-                              key={`${snap.auditEventId}-${r.fileTypeId}`}
-                              variant="neutral"
-                            >
-                              {`${r.fileTypeName}: ${formatModeLabel(r.requirementMode)} (${r.minCount}–${r.maxCount})`}
-                            </StatusBadge>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      ) : mode === 'create' || mode === 'edit' ? (
+      {mode === 'create' || mode === 'edit' ? (
         <StandaloneFormPage
           modeBadgeLabel={mode === 'create' ? c.createBadge : c.editBadge}
           formTitle={mode === 'create' ? c.createTitle : c.editTitle}
@@ -562,26 +585,28 @@ export function RequirementTemplatesPage({
           {fileTypeOptions.length === 0 && (
             <p className="form-error-text">{c.noActiveFileTypesNotice}</p>
           )}
-          <FormField
-            id="req-template-name"
-            label={c.nameLabel}
-            required
-            error={nameError}
-          >
-            <TextInput
-              ref={nameInputRef}
+          <div style={{ maxWidth: 540 }}>
+            <FormField
               id="req-template-name"
-              value={templateName}
-              hasError={Boolean(nameError)}
-              onChange={(e) => setTemplateName(e.target.value)}
-            />
-          </FormField>
+              label={c.nameLabel}
+              required
+              error={nameError}
+            >
+              <TextInput
+                ref={nameInputRef}
+                id="req-template-name"
+                value={templateName}
+                hasError={Boolean(nameError)}
+                onChange={(e) => setTemplateName(e.target.value)}
+              />
+            </FormField>
+          </div>
 
-          <div style={{ marginTop: 18 }}>
-            <div className="card-header-row" style={{ marginBottom: 10 }}>
-              <h3 className="card-title heading-font">{c.rulesSectionTitle}</h3>
+          <div className="compact-builder-section" style={{ marginTop: 14 }}>
+            <div className="compact-builder-head">
+              <h3 className="card-title heading-font" style={{ fontSize: 14 }}>{c.rulesSectionTitle}</h3>
               <Button variant="outline" size="sm" onClick={addRuleRow}>
-                {c.addRuleBtn}
+                + {c.addRuleBtn}
               </Button>
             </div>
 
@@ -591,18 +616,23 @@ export function RequirementTemplatesPage({
               </p>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {ruleRows.map((row, idx) => (
-                <div key={row.key} className="surface-card" style={{ padding: 14 }}>
-                  <div className="form-grid-2">
-                    <FormField
-                      id={`rule-ft-${idx}`}
-                      label={c.fileTypeLabel}
-                      required
-                    >
+            <div className="compact-table-scroll">
+              <div className="compact-rule-grid">
+                <div className="compact-rule-head">
+                  <div>{c.fileTypeLabel}</div>
+                  <div>{c.modeLabel}</div>
+                  <div>{c.minLabel}</div>
+                  <div>{c.maxLabel}</div>
+                  <div></div>
+                </div>
+
+                {ruleRows.map((row, idx) => (
+                  <div key={row.key} className="compact-rule-item">
+                    <div className="compact-rule-item-main">
                       <SelectInput
                         id={`rule-ft-${idx}`}
                         value={row.fileTypeId}
+                        aria-label={c.fileTypeLabel}
                         onChange={(e) =>
                           updateRuleRow(row.key, { fileTypeId: e.target.value })
                         }
@@ -614,12 +644,11 @@ export function RequirementTemplatesPage({
                           })),
                         ]}
                       />
-                    </FormField>
 
-                    <FormField id={`rule-mode-${idx}`} label={c.modeLabel} required>
                       <SelectInput
                         id={`rule-mode-${idx}`}
                         value={row.requirementMode}
+                        aria-label={c.modeLabel}
                         onChange={(e) =>
                           updateRuleRow(row.key, {
                             requirementMode: e.target.value as RequirementRuleMode,
@@ -631,104 +660,80 @@ export function RequirementTemplatesPage({
                           { value: 'CONDITIONAL', label: c.modeConditional },
                         ]}
                       />
-                    </FormField>
 
-                    <FormField id={`rule-min-${idx}`} label={c.minLabel} required>
                       <TextInput
                         id={`rule-min-${idx}`}
                         ltrCode
                         type="number"
                         min={0}
                         max={100}
+                        aria-label={c.minLabel}
                         value={row.minCount}
                         onChange={(e) =>
                           updateRuleRow(row.key, { minCount: e.target.value })
                         }
                       />
-                    </FormField>
 
-                    <FormField id={`rule-max-${idx}`} label={c.maxLabel} required>
                       <TextInput
                         id={`rule-max-${idx}`}
                         ltrCode
                         type="number"
                         min={1}
                         max={100}
+                        aria-label={c.maxLabel}
                         value={row.maxCount}
                         onChange={(e) =>
                           updateRuleRow(row.key, { maxCount: e.target.value })
                         }
                       />
-                    </FormField>
-                  </div>
 
-                  {row.requirementMode === 'CONDITIONAL' && (
-                    <FormField id={`rule-cond-${idx}`} label={c.conditionLabel}>
-                      <TextareaInput
-                        id={`rule-cond-${idx}`}
-                        rows={2}
-                        value={row.conditionSpecJson}
-                        placeholder='{"whenExtension": ".pdf"}'
-                        onChange={(e) =>
-                          updateRuleRow(row.key, { conditionSpecJson: e.target.value })
-                        }
-                      />
-                    </FormField>
-                  )}
-
-                  {ruleRows.length > 1 && (
-                    <div className="button-row" style={{ marginTop: 8 }}>
-                      <Button
+                      <RowActionButton
+                        icon="trash"
+                        label={c.removeRuleBtn}
                         variant="danger"
-                        size="sm"
+                        disabled={ruleRows.length <= 1}
                         onClick={() => removeRuleRow(row.key)}
-                      >
-                        {c.removeRuleBtn}
-                      </Button>
+                      />
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {row.requirementMode === 'CONDITIONAL' && (
+                      <div className="compact-rule-cond-wrap">
+                        <label htmlFor={`rule-cond-${idx}`} style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                          {c.conditionLabel}
+                        </label>
+                        <TextareaInput
+                          id={`rule-cond-${idx}`}
+                          rows={2}
+                          value={row.conditionSpecJson}
+                          placeholder='{"whenExtension": ".pdf"}'
+                          onChange={(e) =>
+                            updateRuleRow(row.key, { conditionSpecJson: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </StandaloneFormPage>
       ) : (
-        <>
-          {canManage && (
-            <div className="page-actions">
-              <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                {c.addBtn}
-              </Button>
+        <section className="surface-card panel clean-table-panel">
+          {canCreate && (
+            <div className="compact-panel-top-actions">
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={c.addBtn}
+                aria-label={c.addBtn}
+                disabled={submitting}
+                onClick={openCreate}
+              >
+                <ReferenceIcon name="plus" size={18} />
+              </button>
             </div>
           )}
-          <section className="surface-card panel">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title heading-font">{c.pageTitle}</h2>
-                <p className="panel-desc">{c.pageDesc}</p>
-              </div>
-            </div>
-
-          <SearchFilterBar
-            searchValue={searchQuery}
-            searchPlaceholder={c.searchPlaceholder}
-            searchAriaLabel={c.searchAria}
-            onSearchChange={(val) => {
-              setSearchQuery(val);
-              setPage(1);
-            }}
-            filterValue={statusFilter}
-            filterAriaLabel={c.filterAria}
-            filterPlaceholder={c.filterAll}
-            filterOptions={[
-              { value: 'active', label: c.filterActive },
-              { value: 'inactive', label: c.filterInactive },
-            ]}
-            onFilterChange={(val) => {
-              setStatusFilter(val);
-              setPage(1);
-            }}
-          />
 
           {errorMsg ? (
             <ErrorState
@@ -737,85 +742,17 @@ export function RequirementTemplatesPage({
               retryLabel={commonStrings.tableRetryBtn}
               onRetry={() => void loadTemplates()}
             />
-          ) : loading ? (
-            <div className="state-box" role="status" aria-live="polite">
-              <div className="state-box-title">{c.loadingText}</div>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="empty-state-box empty" role="status">
-              <div className="state-box-title">{commonStrings.tableEmptyTitle}</div>
-              <p className="state-box-desc">{commonStrings.tableEmptyDesc}</p>
-            </div>
           ) : (
             <>
-              <div className="grid-2" style={{ marginTop: 14 }}>
-                {items.map((row) => (
-                  <div key={row.id} className="panel">
-                    <div className="panel-head">
-                      <div>
-                        <div className="row wrap">
-                          <div className="panel-title">
-                            <strong>{row.name}</strong>
-                          </div>
-                          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-                            {row.isActive ? c.activeBadge : c.inactiveBadge}
-                          </StatusBadge>
-                          <span className="tag">
-                            {row.snapshotCount} {c.snapshotCountLabel}
-                          </span>
-                          <span className="tag ltr-code">{row.documentsCount}</span>
-                        </div>
-                        <div className="panel-desc">{c.colRules}</div>
-                      </div>
-                      <div className="button-row">
-                        <Button variant="outline" size="sm" onClick={() => void openSnapshots(row)}>
-                          {c.snapshotsBtn}
-                        </Button>
-                        {canManage && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={row.documentsCount > 0}
-                              title={row.documentsCount > 0 ? c.inUseLockedHint : undefined}
-                              onClick={() => openEdit(row)}
-                            >
-                              {c.editBtn}
-                            </Button>
-                            <Button
-                              variant={row.isActive ? 'danger' : 'secondary'}
-                              size="sm"
-                              onClick={() => handleToggleStatus(row)}
-                            >
-                              {row.isActive ? c.deactivateBtn : c.activateBtn}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="stack">
-                      {row.rules.map((r) => (
-                        <div key={r.id} className="item-card" style={{ padding: '10px 12px' }}>
-                          <div className="row between wrap">
-                            <strong>{r.fileTypeName}</strong>
-                            <StatusBadge
-                              variant={
-                                r.requirementMode === 'REQUIRED'
-                                  ? 'info'
-                                  : r.requirementMode === 'OPTIONAL'
-                                    ? 'neutral'
-                                    : 'warning'
-                              }
-                            >
-                              {`${formatModeLabel(r.requirementMode)} (${r.minCount}–${r.maxCount})`}
-                            </StatusBadge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <DataTable<FileRequirementTemplateItem>
+                columns={columns}
+                rows={items}
+                getRowKey={(row) => row.id}
+                isLoading={loading}
+                loadingTitle={c.loadingText}
+                emptyTitle={commonStrings.tableEmptyTitle}
+                emptyDescription={commonStrings.tableEmptyDesc}
+              />
 
               {totalCount > 0 && (
                 <PaginationBar
@@ -830,8 +767,7 @@ export function RequirementTemplatesPage({
               )}
             </>
           )}
-          </section>
-        </>
+        </section>
       )}
 
       <CentralModalDialog

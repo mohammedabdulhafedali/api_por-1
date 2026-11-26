@@ -8,6 +8,7 @@ import {
 } from '../../api/documentsAndIntegrationsApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
+  BackIconButton,
   Button,
   CentralModalDialog,
   ErrorState,
@@ -33,17 +34,17 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    badge: 'مصفوفة صلاحيات الوثيقة · UI-21A / U02 / I07',
+    badge: 'مصفوفة صلاحيات الوثيقة',
     titlePrefix: 'صلاحيات الوصول للوثيقة:',
     subtitle:
-      'الوثائق مقيدة افتراضيًا: الأولوية المعتمدة هي سحب المستخدم > منح المستخدم > سحب أي دور > منح دور > المنع الافتراضي. تعيين المطور مستقل عن هذه المصفوفة.',
+      'الوثائق مقيدة افتراضيًا: الأولوية المعتمدة هي سحب المستخدم > منح المستخدم > سحب أي دور > منح دور > المنع الافتراضي.',
     backBtn: 'العودة إلى قائمة الوثائق',
     saveBtn: 'حفظ صلاحيات الوثيقة',
     savingBtn: 'جارٍ الحفظ...',
     creatorLabel: 'منشئ الوثيقة:',
     groupLabel: 'مجموعة API:',
-    rolesSectionTitle: '1. صلاحيات الأدوار على هذه الوثيقة (GRANT / REVOKE / بدون تحديد)',
-    usersSectionTitle: '2. مصفوفة المستخدمين الكاملة والنتيجة الفعلية (U02 — جميع الإجراءات)',
+    rolesSectionTitle: '1. صلاحيات الأدوار على هذه الوثيقة',
+    usersSectionTitle: '2. مصفوفة المستخدمين والنتيجة الفعلية',
     roleCol: 'الدور التنظيمي',
     userCol: 'المستخدم والأدوار والتكليف',
     optInherit: '— (افتراضي)',
@@ -67,17 +68,17 @@ const COPY = {
     loadErrTitle: 'تعذر تحميل مصفوفة صلاحيات الوثيقة',
   },
   en: {
-    badge: 'Document Access Matrix · UI-21A / U02 / I07',
+    badge: 'Document Access Matrix',
     titlePrefix: 'Document Access Control:',
     subtitle:
-      'Restricted by default. ADR-01 precedence: User REVOKE > User GRANT > Role REVOKE > Role GRANT > Default Deny. Developer assignment is independent of ACL permissions.',
+      'Restricted by default. Precedence: User REVOKE > User GRANT > Role REVOKE > Role GRANT > Default Deny.',
     backBtn: 'Back to API Documents',
     saveBtn: 'Save Document ACL',
     savingBtn: 'Saving...',
     creatorLabel: 'Creator:',
     groupLabel: 'API Group:',
-    rolesSectionTitle: '1. Role Permissions on This Document (GRANT / REVOKE / Default)',
-    usersSectionTitle: '2. Full User x Document Action Matrix (U02 — All Actions)',
+    rolesSectionTitle: '1. Role Permissions on This Document',
+    usersSectionTitle: '2. User x Document Action Matrix',
     roleCol: 'Role',
     userCol: 'User, Roles & Assignment',
     optInherit: '— (Default)',
@@ -304,9 +305,7 @@ export function DocumentAccessMatrixPage({
     return (
       <section className="surface-card">
         <div className="button-row" style={{ marginBottom: 12 }}>
-          <Button variant="outline" onClick={onBack}>
-            {c.backBtn}
-          </Button>
+          <BackIconButton label={c.backBtn} onClick={onBack} />
         </div>
         <ErrorState
           title={c.loadErrTitle}
@@ -323,22 +322,16 @@ export function DocumentAccessMatrixPage({
       <section className="surface-card">
         <div className="card-header-row">
           <div>
-            <span className="mode-pill">{c.badge}</span>
-            <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+            <h2 className="card-title heading-font">
               {c.titlePrefix} {matrix.derivedTitle}
             </h2>
             <p className="card-subtitle">
               {c.groupLabel} <strong>{matrix.apiGroupName}</strong> · {c.creatorLabel}{' '}
               <strong>{matrix.createdByName}</strong>
             </p>
-            <p className="card-subtitle" style={{ marginTop: 4 }}>
-              {c.subtitle}
-            </p>
           </div>
           <div className="button-row">
-            <Button variant="outline" onClick={onBack}>
-              {c.backBtn}
-            </Button>
+            <BackIconButton label={c.backBtn} onClick={onBack} />
             {canManageAcl && (
               <Button
                 variant="primary"
@@ -370,7 +363,6 @@ export function DocumentAccessMatrixPage({
                 {matrix.permissions.map((col) => (
                   <th key={`rh-${col.code}`}>
                     <div>{lang === 'ar' ? col.labelAr : col.labelEn}</div>
-                    <code className="ltr-code" style={{ fontSize: 11 }}>{col.code}</code>
                   </th>
                 ))}
               </tr>
@@ -437,7 +429,6 @@ export function DocumentAccessMatrixPage({
                 {matrix.permissions.map((col) => (
                   <th key={`uh-${col.code}`}>
                     <div>{lang === 'ar' ? col.labelAr : col.labelEn}</div>
-                    <code className="ltr-code" style={{ fontSize: 11 }}>{col.code}</code>
                   </th>
                 ))}
               </tr>

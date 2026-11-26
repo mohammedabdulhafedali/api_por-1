@@ -106,14 +106,14 @@ public static class PlatformPermissionCatalog
     public static readonly IReadOnlyList<MatrixActionColumnDto> ActionColumns =
     [
         new("view", "عرض", "View"),
-        new("create", "إضافة / رفع", "Create / Upload"),
+        new("create", "إضافة", "Create"),
         new("edit", "تعديل", "Edit"),
         new("delete", "حذف", "Delete"),
-        new("manage", "إدارة / تهيئة", "Manage"),
-        new("assign", "إسناد / تعيين", "Assign"),
-        new("reset_password", "تفعيل / كلمة المرور", "Activation / Reset"),
+        new("manage", "إدارة", "Manage"),
+        new("assign", "تعيين", "Assign"),
+        new("reset_password", "إعادة تعيين كلمة المرور", "Reset Password"),
         new("submit", "إرسال", "Submit"),
-        new("decide", "اعتماد / قرار", "Decide"),
+        new("decide", "اعتماد", "Decide"),
         new("withdraw", "إيقاف نشر", "Withdraw"),
         new("download", "تنزيل", "Download")
     ];
@@ -122,32 +122,31 @@ public static class PlatformPermissionCatalog
     [
         // 1. Navigation & Monitoring
         new("UI-17", "navigation", "التنقل العام والمراقبة", "Global Navigation & Monitoring", "لوحة التحكم", "Dashboard", "/api/v1/dashboard", ["view"]),
-        new("UI-18", "navigation", "التنقل العام والمراقبة", "Global Navigation & Monitoring", "البحث والاستعراض", "Search & Browse", "/api/v1/search", ["view"]),
 
         // 2. Administration & Identity
-        new("UI-15", "administration", "الإدارة والهوية", "Administration & Identity", "المستخدمون", "Users", "/api/v1/users", ["view", "create", "edit", "assign", "reset_password"]),
+        new("UI-15", "administration", "الإدارة والهوية", "Administration & Identity", "المستخدمون", "Users", "/api/v1/users", ["view", "create", "edit", "delete", "assign", "reset_password"]),
         new("UI-25-ROLES", "administration", "الإدارة والهوية", "Administration & Identity", "الأدوار التنظيمية", "Roles Management", "/api/v1/roles", ["view", "create", "edit", "delete"]),
         new("UI-25-PERMS", "administration", "الإدارة والهوية", "Administration & Identity", "مصفوفة الصلاحيات والاستثناءات", "Permissions & Overrides", "/api/v1/permissions", ["view", "manage"]),
         new("UI-16", "administration", "الإدارة والهوية", "Administration & Identity", "سجل التدقيق", "Audit Log", "/api/v1/audit-events", ["view"]),
 
         // 3. Systems & Entities
-        new("UI-01", "systems", "الأنظمة والجهات", "Systems & Entities", "أنظمة الشركة", "Company Systems", "/api/v1/company-systems", ["view", "create", "edit"]),
-        new("UI-03", "systems", "الأنظمة والجهات", "Systems & Entities", "الأنظمة المزودة (الداخلية والخارجية)", "Provider Systems", "/api/v1/internal-providers", ["view", "create", "edit"]),
-        new("UI-02", "systems", "الأنظمة والجهات", "Systems & Entities", "الجهات المستهلكة وتصنيفاتها", "Consumer Entities", "/api/v1/consumers", ["view", "manage"]),
-        new("UI-GROUPS", "systems", "الأنظمة والجهات", "Systems & Entities", "مجموعات API", "API Groups", "/api/v1/api-groups", ["view", "manage"]),
+        new("UI-01", "systems", "الأنظمة والجهات", "Systems & Entities", "أنظمة الشركة", "Company Systems", "/api/v1/company-systems", ["view", "create", "edit", "delete"]),
+        new("UI-03", "systems", "الأنظمة والجهات", "Systems & Entities", "الأنظمة المزودة (الداخلية والخارجية)", "Provider Systems", "/api/v1/internal-providers", ["view", "create", "edit", "delete"]),
+        new("UI-02", "systems", "الأنظمة والجهات", "Systems & Entities", "الجهات المستهلكة وتصنيفاتها", "Consumer Entities", "/api/v1/consumers", ["view", "create", "edit", "delete"]),
+        new("UI-GROUPS", "systems", "الأنظمة والجهات", "Systems & Entities", "مجموعات API", "API Groups", "/api/v1/api-groups", ["view", "create", "edit", "delete"]),
 
         // 4. Settings & Governance Config
-        new("UI-04", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "أنواع الملفات", "File Types", "/api/v1/file-types", ["view", "manage"]),
-        new("UI-23", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "قوالب متطلبات الملفات", "Requirement Templates", "/api/v1/requirement-templates", ["view", "manage"]),
-        new("UI-05", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "مسارات الاعتماد ومراحلها", "Approval Routes", "/api/v1/approval-routes", ["view", "manage"]),
-        new("UI-06", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "أنواع التغيير وسياساتها", "Change Types & Policies", "/api/v1/change-types", ["view", "manage"]),
+        new("UI-04", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "أنواع الملفات", "File Types", "/api/v1/file-types", ["view", "create", "edit", "delete"]),
+        new("UI-23", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "قوالب متطلبات الملفات", "Requirement Templates", "/api/v1/requirement-templates", ["view", "create", "edit", "delete"]),
+        new("UI-05", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "مسارات الاعتماد ومراحلها", "Approval Routes", "/api/v1/approval-routes", ["view", "create", "edit", "delete"]),
+        new("UI-06", "settings", "الإعدادات والتهيئة", "Settings & Configuration", "أنواع التغيير وسياساتها", "Change Types & Policies", "/api/v1/change-types", ["view", "create", "edit", "delete"]),
 
         // 5. API Documents & Document ACL
         new("UI-21", "documents", "وثائق API والتفويض", "API Documents & ACL", "وثائق API", "API Documents", "/api/v1/api-documents", ["view", "create", "edit", "delete", "assign"]),
         new("UI-21A", "documents", "وثائق API والتفويض", "API Documents & ACL", "صلاحيات كل وثيقة", "Document Access Control", "/api/v1/api-documents/{documentId}/access", ["view", "manage"]),
 
         // 6. Integrations, Versions, Files, Workflows & Publishing
-        new("UI-22", "integrations", "التكاملات ودورة الاعتماد والنشر", "Integrations, Workflows & Publishing", "التكاملات", "Integrations", "/api/v1/integrations", ["view", "create", "assign"]),
+        new("UI-22", "integrations", "التكاملات ودورة الاعتماد والنشر", "Integrations, Workflows & Publishing", "التكاملات", "Integrations", "/api/v1/integrations", ["view", "create", "delete", "assign"]),
         new("UI-12", "integrations", "التكاملات ودورة الاعتماد والنشر", "Integrations, Workflows & Publishing", "إصدارات API", "API Versions", "/api/v1/integrations/{integrationId}/versions", ["view", "create"]),
         new("UI-12-USAGE", "integrations", "التكاملات ودورة الاعتماد والنشر", "Integrations, Workflows & Publishing", "تعيين الإصدار المستخدم", "Consumer Version Usage", "/api/v1/integrations/{integrationId}/consumer-version", ["view", "manage"]),
         new("UI-10-REV", "integrations", "التكاملات ودورة الاعتماد والنشر", "Integrations, Workflows & Publishing", "مراجعات حزمة التوثيق", "Document Revisions", "/api/v1/versions/{versionId}/revisions", ["view", "create", "submit"]),
@@ -167,6 +166,7 @@ public static class PlatformPermissionCatalog
         new(UserPermissionCodes.UsersView, "users", "view", "UI-15", "administration", "view"),
         new(UserPermissionCodes.UsersCreate, "users", "create", "UI-15", "administration", "create"),
         new(UserPermissionCodes.UsersEdit, "users", "edit", "UI-15", "administration", "edit"),
+        new(UserPermissionCodes.UsersDelete, "users", "delete", "UI-15", "administration", "delete"),
         new(UserPermissionCodes.UsersAssignRoles, "users", "assign_roles", "UI-15", "administration", "assign"),
         new(UserPermissionCodes.UsersPasswordReset, "users", "password.reset", "UI-15", "administration", "reset_password"),
 
@@ -184,29 +184,49 @@ public static class PlatformPermissionCatalog
         new("company_systems.view", "company_systems", "view", "UI-01", "systems", "view"),
         new("company_systems.create", "company_systems", "create", "UI-01", "systems", "create"),
         new("company_systems.edit", "company_systems", "edit", "UI-01", "systems", "edit"),
+        new("company_systems.delete", "company_systems", "delete", "UI-01", "systems", "delete"),
 
         new("providers.view", "providers", "view", "UI-03", "systems", "view"),
         new("providers.create", "providers", "create", "UI-03", "systems", "create"),
         new("providers.edit", "providers", "edit", "UI-03", "systems", "edit"),
+        new("providers.delete", "providers", "delete", "UI-03", "systems", "delete"),
 
         new("consumers.view", "consumers", "view", "UI-02", "systems", "view"),
-        new("consumers.manage", "consumers", "manage", "UI-02", "systems", "manage"),
+        new("consumers.create", "consumers", "create", "UI-02", "systems", "create"),
+        new("consumers.edit", "consumers", "edit", "UI-02", "systems", "edit"),
+        new("consumers.delete", "consumers", "delete", "UI-02", "systems", "delete"),
+        new("consumers.manage", "consumers", "manage", "LEGACY_COMPOUND", "legacy", "manage"),
 
         new("api_groups.view", "api_groups", "view", "UI-GROUPS", "systems", "view"),
-        new("api_groups.manage", "api_groups", "manage", "UI-GROUPS", "systems", "manage"),
+        new("api_groups.create", "api_groups", "create", "UI-GROUPS", "systems", "create"),
+        new("api_groups.edit", "api_groups", "edit", "UI-GROUPS", "systems", "edit"),
+        new("api_groups.delete", "api_groups", "delete", "UI-GROUPS", "systems", "delete"),
+        new("api_groups.manage", "api_groups", "manage", "LEGACY_COMPOUND", "legacy", "manage"),
 
         // Settings
         new("file_types.view", "file_types", "view", "UI-04", "settings", "view"),
-        new("file_types.manage", "file_types", "manage", "UI-04", "settings", "manage"),
+        new("file_types.create", "file_types", "create", "UI-04", "settings", "create"),
+        new("file_types.edit", "file_types", "edit", "UI-04", "settings", "edit"),
+        new("file_types.delete", "file_types", "delete", "UI-04", "settings", "delete"),
+        new("file_types.manage", "file_types", "manage", "LEGACY_COMPOUND", "legacy", "manage"),
 
         new("requirements.view", "requirements", "view", "UI-23", "settings", "view"),
-        new("requirements.manage", "requirements", "manage", "UI-23", "settings", "manage"),
+        new("requirements.create", "requirements", "create", "UI-23", "settings", "create"),
+        new("requirements.edit", "requirements", "edit", "UI-23", "settings", "edit"),
+        new("requirements.delete", "requirements", "delete", "UI-23", "settings", "delete"),
+        new("requirements.manage", "requirements", "manage", "LEGACY_COMPOUND", "legacy", "manage"),
 
         new("routes.view", "routes", "view", "UI-05", "settings", "view"),
-        new("routes.manage", "routes", "manage", "UI-05", "settings", "manage"),
+        new("routes.create", "routes", "create", "UI-05", "settings", "create"),
+        new("routes.edit", "routes", "edit", "UI-05", "settings", "edit"),
+        new("routes.delete", "routes", "delete", "UI-05", "settings", "delete"),
+        new("routes.manage", "routes", "manage", "LEGACY_COMPOUND", "legacy", "manage"),
 
         new("changes.config.view", "changes.config", "view", "UI-06", "settings", "view"),
-        new("changes.config.manage", "changes.config", "manage", "UI-06", "settings", "manage"),
+        new("changes.config.create", "changes.config", "create", "UI-06", "settings", "create"),
+        new("changes.config.edit", "changes.config", "edit", "UI-06", "settings", "edit"),
+        new("changes.config.delete", "changes.config", "delete", "UI-06", "settings", "delete"),
+        new("changes.config.manage", "changes.config", "manage", "LEGACY_COMPOUND", "legacy", "manage"),
 
         // API Documents & ACL
         new("api_documents.view", "api_documents", "view", "UI-21", "documents", "view"),
@@ -221,6 +241,7 @@ public static class PlatformPermissionCatalog
         // Integrations, Versions, Files, Workflows & Publishing
         new("integrations.view", "integrations", "view", "UI-22", "integrations", "view"),
         new("integrations.create", "integrations", "create", "UI-22", "integrations", "create"),
+        new("integrations.delete", "integrations", "delete", "UI-22", "integrations", "delete"),
         new("integrations.assign_developer", "integrations", "assign_developer", "UI-22", "integrations", "assign"),
 
         new("versions.view", "versions", "view", "UI-12", "integrations", "view"),
@@ -250,6 +271,33 @@ public static class PlatformPermissionCatalog
         new("publications.create", "publications", "create", "UI-14", "integrations", "create"),
         new("publications.withdraw", "publications", "withdraw", "UI-14", "integrations", "withdraw")
     ];
+
+    public static readonly IReadOnlyDictionary<string, string> SplitPermissionToLegacyParent =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["consumers.create"] = "consumers.manage",
+            ["consumers.edit"] = "consumers.manage",
+            ["consumers.delete"] = "consumers.manage",
+            ["api_groups.create"] = "api_groups.manage",
+            ["api_groups.edit"] = "api_groups.manage",
+            ["api_groups.delete"] = "api_groups.manage",
+            ["file_types.create"] = "file_types.manage",
+            ["file_types.edit"] = "file_types.manage",
+            ["file_types.delete"] = "file_types.manage",
+            ["requirements.create"] = "requirements.manage",
+            ["requirements.edit"] = "requirements.manage",
+            ["requirements.delete"] = "requirements.manage",
+            ["routes.create"] = "routes.manage",
+            ["routes.edit"] = "routes.manage",
+            ["routes.delete"] = "routes.manage",
+            ["changes.config.create"] = "changes.config.manage",
+            ["changes.config.edit"] = "changes.config.manage",
+            ["changes.config.delete"] = "changes.config.manage",
+            ["company_systems.delete"] = "company_systems.edit",
+            ["providers.delete"] = "providers.edit",
+            ["users.delete"] = UserPermissionCodes.UsersEdit,
+            ["integrations.delete"] = "integrations.create"
+        };
 
     private static readonly Dictionary<string, PermissionCatalogMetadataEntry> ByCode =
         CanonicalEntries.ToDictionary(e => e.Code, StringComparer.OrdinalIgnoreCase);

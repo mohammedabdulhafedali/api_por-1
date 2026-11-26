@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiProblemError } from '../../api/authApi';
 import {
   OverrideDecision,
@@ -8,7 +8,18 @@ import {
   replaceUserPermissionOverrides,
 } from '../../api/permissionsApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
-import { Button, CentralModalDialog, ErrorState, StandaloneFormPage, StatusBadge } from '../ui';
+import { resolveBulkColumnLabel, resolvePermissionChipLabel } from '../../utils/permissionLabels';
+import {
+  BackIconButton,
+  Button,
+  CentralModalDialog,
+  ErrorState,
+  PermissionBoardItem,
+  PermissionBoardScreen,
+  PermissionsCardsBoard,
+  StandaloneFormPage,
+  StatusBadge,
+} from '../ui';
 
 export interface UserPermissionsMatrixPageProps {
   userId: string;
@@ -26,83 +37,73 @@ interface ModalState {
   onConfirmAction?: () => Promise<void>;
 }
 
+const REMOVED_SCREEN_IDS = new Set(['UI-18', 'UI-19', 'LEGACY_COMPOUND']);
+const REMOVED_PERM_CODES = new Set([
+  'search.view',
+  'portal.view',
+  'consumers.manage',
+  'api_groups.manage',
+  'file_types.manage',
+  'requirements.manage',
+  'routes.manage',
+  'changes.config.manage',
+]);
+
 const COPY = {
   ar: {
-    badge: 'صلاحيات المستخدم والاستثناءات · UI-15A / I04',
-    title: 'مصفوفة الصلاحيات الفردية للمستخدم',
-    subtitle:
-      'عرض الصلاحيات الموروثة من الأدوار النشطة وتطبيق منح (GRANT) أو سحب (REVOKE) فردي أو الإعادة إلى الموروث وفق قاعدة: السحب الفردي يغلب المنح الفردي ثم اتحاد الأدوار.',
-    backBtn: 'العودة إلى قائمة المستخدمين',
-    saveBtn: 'حفظ الصلاحيات الفردية',
+    badge: 'صلاحيات المستخدم',
+    title: 'صلاحيات المستخدم الفردية',
+    subtitle: '',
+    backBtn: 'العودة',
+    saveBtn: 'حفظ',
     cancelBtn: 'إلغاء',
     resetAllBtn: 'إعادة الكل إلى الموروث',
-    resetRowBtn: 'إرجاع الصف للموروث',
     activeRolesLabel: 'الأدوار النشطة المسندة:',
     noRolesLabel: 'بلا أدوار نشطة مسندة',
-    precedenceBanner:
-      'أولوية الاحتساب المعتمدة (ADR-01): السحب الفردي (REVOKE) يغلب دائمًا، يليه المنح الفردي (GRANT)، ثم اتحاد جميع الأدوار النشطة المسندة.',
     readOnlyNotice: 'وضع القراءة فقط: لا تملك صلاحية permissions.manage لتعديل الاستثناءات.',
     statInherited: 'موروثة من الأدوار:',
     statGrant: 'منح فردي (GRANT):',
     statRevoke: 'سحب فردي (REVOKE):',
     statEffective: 'الفعّالة النهائية:',
-    screenColHeader: 'الشاشة / المسار',
     sourceInherited: 'موروث',
-    sourceGrant: 'منح فردي (GRANT)',
-    sourceRevoke: 'سحب فردي (REVOKE)',
     sourceDenied: 'غير ممنوح',
-    effectiveAllowed: 'مسموح',
-    effectiveDenied: 'ممنوع',
-    optInheritAllowed: 'موروث (مسموح)',
-    optInheritDenied: 'موروث (ممنوع)',
-    optGrant: 'منح فردي (GRANT)',
-    optRevoke: 'سحب فردي (REVOKE)',
+    grantTag: 'منح فردي',
+    revokeTag: 'سحب فردي',
     confirmSaveTitle: 'تأكيد حفظ الصلاحيات الفردية',
     confirmSaveMsg:
       'سيتم حفظ استثناءات المنح والسحب الفردي في قاعدة البيانات وتطبيقها فورًا على جلسات المستخدم وتسجيلها في سجل التدقيق. هل تؤكد الحفظ؟',
     saveSuccessTitle: 'تم حفظ الصلاحيات الفردية',
     saveSuccessMsg: 'تم تحديث استثناءات صلاحيات المستخدم وتسجيل التغيير في سجل التدقيق بنجاح.',
-    loadErrorTitle: 'تعذر تحميل مصفوفة صلاحيات المستخدم',
+    loadErrorTitle: 'تعذر تحميل صلاحيات المستخدم',
     saveErrorTitle: 'تعذر حفظ الاستثناءات الفردية',
-    loadingText: 'جارٍ تحميل مصفوفة الصلاحيات الفعالة والموروثة...',
+    loadingText: 'جارٍ تحميل الصلاحيات الفعالة والموروثة...',
     retryBtn: 'إعادة المحاولة',
   },
   en: {
-    badge: 'User Effective Permissions & Overrides · UI-15A / I04',
-    title: 'User Individual Permissions Matrix',
-    subtitle:
-      'Inspect active role-inherited permissions and apply individual GRANT, REVOKE, or Inherit decisions (Precedence: User REVOKE > User GRANT > Active Roles Union).',
-    backBtn: 'Back to Users Directory',
-    saveBtn: 'Save User Overrides',
+    badge: 'User Permissions',
+    title: 'User Individual Permissions',
+    subtitle: '',
+    backBtn: 'Back',
+    saveBtn: 'Save',
     cancelBtn: 'Cancel',
     resetAllBtn: 'Reset All to Inherited',
-    resetRowBtn: 'Reset Row to Inherited',
     activeRolesLabel: 'Assigned Active Roles:',
     noRolesLabel: 'No active roles assigned',
-    precedenceBanner:
-      'Approved Precedence (ADR-01): Explicit REVOKE overrides everything, then explicit GRANT, then union of active assigned roles.',
     readOnlyNotice: 'Read-only view: permissions.manage is required to modify individual overrides.',
     statInherited: 'Inherited:',
     statGrant: 'Individual GRANT:',
     statRevoke: 'Individual REVOKE:',
     statEffective: 'Effective Allowed:',
-    screenColHeader: 'Screen / Endpoint',
     sourceInherited: 'Inherited',
-    sourceGrant: 'User GRANT',
-    sourceRevoke: 'User REVOKE',
     sourceDenied: 'Not Granted',
-    effectiveAllowed: 'Allowed',
-    effectiveDenied: 'Denied',
-    optInheritAllowed: 'Inherit (Allowed)',
-    optInheritDenied: 'Inherit (Denied)',
-    optGrant: 'Explicit GRANT',
-    optRevoke: 'Explicit REVOKE',
+    grantTag: 'Grant',
+    revokeTag: 'Revoke',
     confirmSaveTitle: 'Confirm Saving Individual Overrides',
     confirmSaveMsg:
       'Individual GRANT/REVOKE overrides will be persisted to the database, applied immediately on the server, and logged in the audit trail. Continue?',
     saveSuccessTitle: 'User Overrides Saved',
     saveSuccessMsg: 'Individual user permission overrides were updated and recorded in the audit trail.',
-    loadErrorTitle: 'Failed to Load User Permissions Matrix',
+    loadErrorTitle: 'Failed to Load User Permissions',
     saveErrorTitle: 'Failed to Save User Overrides',
     loadingText: 'Loading user inherited & override permissions...',
     retryBtn: 'Retry',
@@ -158,24 +159,43 @@ export function UserPermissionsMatrixPage({
     void loadMatrix();
   }, [loadMatrix]);
 
-  const entryByCell = useMemo(() => {
-    const map = new Map<string, UserPermissionEntry>();
-    if (!matrix) return map;
-    for (const perm of matrix.permissions) {
-      map.set(`${perm.screenId}::${perm.columnId}`, perm);
-    }
-    return map;
+  const activePermissions = useMemo(() => {
+    if (!matrix) return [];
+    return matrix.permissions.filter(
+      (p) =>
+        !REMOVED_SCREEN_IDS.has(p.screenId) &&
+        !REMOVED_PERM_CODES.has(p.code.toLowerCase())
+    );
   }, [matrix]);
 
-  const summaryStats = useMemo(() => {
-    if (!matrix) {
-      return { inherited: 0, grants: 0, revokes: 0, effective: 0 };
+  const activeScreens = useMemo(() => {
+    if (!matrix) return [];
+    return matrix.screens.filter((s) => !REMOVED_SCREEN_IDS.has(s.id));
+  }, [matrix]);
+
+  const permById = useMemo(() => {
+    const map = new Map<string, UserPermissionEntry>();
+    for (const p of activePermissions) {
+      map.set(p.permissionId, p);
     }
+    return map;
+  }, [activePermissions]);
+
+  const colLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!matrix) return map;
+    for (const col of matrix.columns) {
+      map.set(col.id, lang === 'ar' ? col.labelAr : col.labelEn);
+    }
+    return map;
+  }, [matrix, lang]);
+
+  const summaryStats = useMemo(() => {
     let inherited = 0;
     let grants = 0;
     let revokes = 0;
     let effective = 0;
-    for (const perm of matrix.permissions) {
+    for (const perm of activePermissions) {
       if (perm.isInherited) inherited++;
       const state = draftOverrides[perm.permissionId] ?? 'INHERIT';
       if (state === 'GRANT') grants++;
@@ -185,26 +205,7 @@ export function UserPermissionsMatrixPage({
       if (isAllowed) effective++;
     }
     return { inherited, grants, revokes, effective };
-  }, [matrix, draftOverrides]);
-
-  const groups = useMemo(() => {
-    if (!matrix) return [];
-    const list: Array<{
-      groupId: string;
-      groupLabel: string;
-      screens: UserPermissionsMatrixResult['screens'];
-    }> = [];
-    for (const scr of matrix.screens) {
-      const label = lang === 'ar' ? scr.groupLabelAr : scr.groupLabelEn;
-      let existing = list.find((g) => g.groupId === scr.groupId);
-      if (!existing) {
-        existing = { groupId: scr.groupId, groupLabel: label, screens: [] };
-        list.push(existing);
-      }
-      existing.screens.push(scr);
-    }
-    return list;
-  }, [matrix, lang]);
+  }, [activePermissions, draftOverrides]);
 
   const setPermissionsChecked = (perms: UserPermissionEntry[], checked: boolean) => {
     setDraftOverrides((prev) => {
@@ -220,9 +221,11 @@ export function UserPermissionsMatrixPage({
     });
   };
 
-  const isPermEffectiveAllowed = (perm: UserPermissionEntry) => {
-    const state = draftOverrides[perm.permissionId] ?? 'INHERIT';
-    return state === 'REVOKE' ? false : state === 'GRANT' ? true : perm.isInherited;
+  const handleResetItemToInherited = (permissionId: string) => {
+    setDraftOverrides((prev) => ({
+      ...prev,
+      [permissionId]: 'INHERIT',
+    }));
   };
 
   const handleResetAllToInherited = () => {
@@ -235,10 +238,9 @@ export function UserPermissionsMatrixPage({
   };
 
   const handleResetRowToInherited = (screenId: string) => {
-    if (!matrix) return;
     setDraftOverrides((prev) => {
       const next = { ...prev };
-      for (const perm of matrix.permissions) {
+      for (const perm of activePermissions) {
         if (perm.screenId === screenId) {
           next[perm.permissionId] = 'INHERIT';
         }
@@ -246,6 +248,86 @@ export function UserPermissionsMatrixPage({
       return next;
     });
   };
+
+  const boardScreens: PermissionBoardScreen[] = useMemo(() => {
+    return activeScreens
+      .map((scr) => {
+        const rowPerms = activePermissions.filter((p) => p.screenId === scr.id);
+        const items: PermissionBoardItem[] = rowPerms.map((entry) => {
+          const state = draftOverrides[entry.permissionId] ?? 'INHERIT';
+          const effectiveAllowed =
+            state === 'REVOKE' ? false : state === 'GRANT' ? true : entry.isInherited;
+          const label = resolvePermissionChipLabel(
+            entry.code,
+            entry.columnId,
+            colLabelById.get(entry.columnId) ?? entry.action,
+            lang
+          );
+
+          if (state === 'GRANT') {
+            return {
+              id: entry.permissionId,
+              columnId: entry.columnId,
+              label,
+              checked: effectiveAllowed,
+              mode: 'grant',
+              statusTag: copy.grantTag,
+              title: copy.grantTag,
+              canReset: true,
+            };
+          }
+
+          if (state === 'REVOKE') {
+            return {
+              id: entry.permissionId,
+              columnId: entry.columnId,
+              label,
+              checked: effectiveAllowed,
+              mode: 'revoke',
+              statusTag: copy.revokeTag,
+              title: copy.revokeTag,
+              canReset: true,
+            };
+          }
+
+          return {
+            id: entry.permissionId,
+            columnId: entry.columnId,
+            label,
+            checked: effectiveAllowed,
+            mode: 'inherited',
+            statusTag: entry.isInherited ? copy.sourceInherited : undefined,
+            title: entry.isInherited ? copy.sourceInherited : copy.sourceDenied,
+            canReset: false,
+          };
+        });
+
+        const hasOverrides = rowPerms.some(
+          (p) => (draftOverrides[p.permissionId] ?? 'INHERIT') !== 'INHERIT'
+        );
+
+        return {
+          id: scr.id,
+          groupId: scr.groupId,
+          groupLabel: lang === 'ar' ? scr.groupLabelAr : scr.groupLabelEn,
+          title: lang === 'ar' ? scr.titleAr : scr.titleEn,
+          items,
+          hasOverrides,
+        };
+      })
+      .filter((s) => s.items.length > 0);
+  }, [activeScreens, activePermissions, draftOverrides, colLabelById, lang, copy]);
+
+  const boardActionColumns = useMemo(() => {
+    if (!matrix) return [];
+    const usedColIds = new Set(activePermissions.map((p) => p.columnId));
+    return matrix.columns
+      .filter((c) => usedColIds.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        label: resolveBulkColumnLabel(c.id, lang === 'ar' ? c.labelAr : c.labelEn, lang),
+      }));
+  }, [matrix, activePermissions, lang]);
 
   const executeSave = async () => {
     if (!matrix) return;
@@ -304,9 +386,7 @@ export function UserPermissionsMatrixPage({
           onRetry={() => void loadMatrix()}
         />
         <div style={{ marginTop: 12 }}>
-          <Button variant="outline" onClick={onBack}>
-            {copy.backBtn}
-          </Button>
+          <BackIconButton label={copy.backBtn} onClick={onBack} />
         </div>
       </section>
     );
@@ -336,11 +416,11 @@ export function UserPermissionsMatrixPage({
           });
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
           <div
             style={{
               padding: 12,
-              borderRadius: 8,
+              borderRadius: 10,
               border: '1px solid var(--border-color)',
               background: 'var(--bg-subtle)',
               display: 'flex',
@@ -351,13 +431,15 @@ export function UserPermissionsMatrixPage({
             }}
           >
             <div>
-              <div style={{ fontWeight: 600 }}>{matrix.fullName}</div>
+              <div style={{ fontWeight: 700 }}>{matrix.fullName}</div>
               <div className="ltr-code" style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
                 {matrix.email}
               </div>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{copy.activeRolesLabel}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                {copy.activeRolesLabel}
+              </span>
               {matrix.activeRoles.length > 0 ? (
                 matrix.activeRoles.map((r) => (
                   <StatusBadge key={r.id} variant="info">
@@ -370,10 +452,11 @@ export function UserPermissionsMatrixPage({
             </div>
           </div>
 
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-            {copy.precedenceBanner}
-            {!canManage ? ` — ${copy.readOnlyNotice}` : ''}
-          </p>
+          {!canManage && (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+              {copy.readOnlyNotice}
+            </p>
+          )}
 
           <div
             style={{
@@ -398,184 +481,48 @@ export function UserPermissionsMatrixPage({
                 {copy.statEffective} {summaryStats.effective}
               </StatusBadge>
             </div>
-            {canManage && (
-              <Button variant="outline" size="sm" onClick={handleResetAllToInherited}>
-                {copy.resetAllBtn}
-              </Button>
-            )}
           </div>
 
-          <div className="permission-matrix-scroll matrix-scroll-container">
-            <table className="permission-matrix selection-matrix">
-              <thead>
-                <tr>
-                  <th className="perm-screen matrix-sticky-col matrix-corner-header">
-                    <label className="check-everything">
-                      <input
-                        type="checkbox"
-                        className="perm-check"
-                        disabled={!canManage}
-                        checked={
-                          matrix.permissions.length > 0 &&
-                          matrix.permissions.every((p) => isPermEffectiveAllowed(p))
-                        }
-                        onChange={(e) => setPermissionsChecked(matrix.permissions, e.target.checked)}
-                      />
-                      <span>{copy.screenColHeader}</span>
-                    </label>
-                  </th>
-                  {matrix.columns.map((col) => {
-                    const colPerms = matrix.permissions.filter((p) => p.columnId === col.id);
-                    const colAllChecked =
-                      colPerms.length > 0 && colPerms.every((p) => isPermEffectiveAllowed(p));
-                    const colLabel = lang === 'ar' ? col.labelAr : col.labelEn;
-                    return (
-                      <th key={col.id} className="matrix-col-header">
-                        <span className="col-title matrix-col-title">{colLabel}</span>
-                        <input
-                          type="checkbox"
-                          className="perm-check"
-                          disabled={!canManage || colPerms.length === 0}
-                          aria-label={`${lang === 'ar' ? 'تحديد عمود' : 'Select column'} ${colLabel}`}
-                          checked={colAllChecked}
-                          onChange={(e) => setPermissionsChecked(colPerms, e.target.checked)}
-                        />
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((group) => {
-                  const groupScreenIds = new Set(group.screens.map((s) => s.id));
-                  const groupPerms = matrix.permissions.filter((p) => groupScreenIds.has(p.screenId));
-                  const groupAllChecked =
-                    groupPerms.length > 0 && groupPerms.every((p) => isPermEffectiveAllowed(p));
-                  return (
-                    <Fragment key={group.groupId}>
-                      <tr className="perm-group matrix-group-row">
-                        <td colSpan={matrix.columns.length + 1}>
-                          <span className="section-name heading-font">{group.groupLabel}</span>
-                          <label className="group-choice">
-                            <input
-                              type="checkbox"
-                              className="perm-check"
-                              disabled={!canManage || groupPerms.length === 0}
-                              checked={groupAllChecked}
-                              onChange={(e) => setPermissionsChecked(groupPerms, e.target.checked)}
-                            />
-                            <span>
-                              {lang === 'ar' ? 'تحديد القسم بالكامل' : 'Select Entire Section'}
-                            </span>
-                          </label>
-                        </td>
-                      </tr>
-                      {group.screens.map((screenRow) => {
-                        const screenTitle = lang === 'ar' ? screenRow.titleAr : screenRow.titleEn;
-                        const rowPerms = matrix.permissions.filter((p) => p.screenId === screenRow.id);
-                        const rowAllChecked =
-                          rowPerms.length > 0 && rowPerms.every((p) => isPermEffectiveAllowed(p));
-                        const rowHasOverrides = rowPerms.some(
-                          (p) => (draftOverrides[p.permissionId] ?? 'INHERIT') !== 'INHERIT'
-                        );
-                        return (
-                          <tr key={screenRow.id}>
-                            <td className="perm-screen matrix-sticky-col matrix-row-header">
-                              <div className="all-row-toggle matrix-header-row-between" style={{ gap: 8 }}>
-                                <div className="row-title">
-                                  <b className="matrix-row-title">{screenTitle}</b>
-                                  <span className="perm-path matrix-row-path ltr-code">
-                                    {screenRow.technicalPath}
-                                  </span>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="perm-check"
-                                  disabled={!canManage || rowPerms.length === 0}
-                                  aria-label={`${lang === 'ar' ? 'تحديد جميع صلاحيات' : 'Select all for'} ${screenTitle}`}
-                                  checked={rowAllChecked}
-                                  onChange={(e) => setPermissionsChecked(rowPerms, e.target.checked)}
-                                />
-                              </div>
-                              {canManage && rowHasOverrides && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleResetRowToInherited(screenRow.id)}
-                                >
-                                  {copy.resetRowBtn}
-                                </Button>
-                              )}
-                            </td>
-                            {matrix.columns.map((col) => {
-                              const entry = entryByCell.get(`${screenRow.id}::${col.id}`);
-                              if (!entry) {
-                                return (
-                                  <td key={col.id} className="not-applicable matrix-cell-na" aria-disabled="true">
-                                    —
-                                  </td>
-                                );
-                              }
-
-                              const state = draftOverrides[entry.permissionId] ?? 'INHERIT';
-                              const effectiveAllowed =
-                                state === 'REVOKE'
-                                  ? false
-                                  : state === 'GRANT'
-                                    ? true
-                                    : entry.isInherited;
-
-                              const isOverridden = state !== 'INHERIT';
-                              const overrideShortLabel =
-                                state === 'GRANT'
-                                  ? lang === 'ar'
-                                    ? 'منح فردي'
-                                    : 'Individual Grant'
-                                  : state === 'REVOKE'
-                                    ? lang === 'ar'
-                                      ? 'سحب فردي'
-                                      : 'Individual Revocation'
-                                    : '';
-
-                              const colLabel = lang === 'ar' ? col.labelAr : col.labelEn;
-
-                              return (
-                                <td
-                                  key={col.id}
-                                  className={`matrix-cell ${isOverridden ? 'perm-override' : 'perm-inherited'}`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="perm-check"
-                                    aria-label={`${screenTitle} - ${colLabel}`}
-                                    disabled={!canManage}
-                                    checked={effectiveAllowed}
-                                    title={
-                                      isOverridden
-                                        ? overrideShortLabel
-                                        : entry.isInherited
-                                          ? copy.sourceInherited
-                                          : copy.sourceDenied
-                                    }
-                                    onChange={(e) => setPermissionsChecked([entry], e.target.checked)}
-                                  />
-                                  {isOverridden && (
-                                    <span className="perm-key" style={{ display: 'block', fontSize: 10, marginTop: 4 }}>
-                                      {overrideShortLabel}
-                                    </span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <PermissionsCardsBoard
+            lang={lang}
+            disabled={!canManage}
+            screens={boardScreens}
+            actionColumns={boardActionColumns}
+            showOverridesFilter
+            onToggleItem={(permId, checked) => {
+              const entry = permById.get(permId);
+              if (entry) setPermissionsChecked([entry], checked);
+            }}
+            onResetItem={handleResetItemToInherited}
+            onToggleScreen={(screenId, checked) => {
+              setPermissionsChecked(
+                activePermissions.filter((p) => p.screenId === screenId),
+                checked
+              );
+            }}
+            onResetScreen={handleResetRowToInherited}
+            onToggleGroup={(groupId, checked) => {
+              setPermissionsChecked(
+                activePermissions.filter((p) => p.groupId === groupId),
+                checked
+              );
+            }}
+            onToggleAll={(checked) => {
+              setPermissionsChecked(activePermissions, checked);
+            }}
+            extraToolbarActions={
+              canManage ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetAllToInherited}
+                >
+                  {copy.resetAllBtn}
+                </Button>
+              ) : undefined
+            }
+          />
         </div>
       </StandaloneFormPage>
 
@@ -601,4 +548,3 @@ export function UserPermissionsMatrixPage({
     </>
   );
 }
-

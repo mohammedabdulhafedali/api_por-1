@@ -8,6 +8,7 @@ export interface RoleSummary {
 export interface AuthenticatedUser {
   id: string;
   fullName: string;
+  username?: string;
   email: string;
   isActive: boolean;
   consumerEntityId?: string | null;
@@ -124,7 +125,7 @@ export async function fetchCurrentIdentity(lang: AppLanguage): Promise<Authentic
 }
 
 export async function loginWithLocalIdentity(
-  email: string,
+  username: string,
   password: string,
   lang: AppLanguage
 ): Promise<AuthenticatedUser> {
@@ -138,7 +139,7 @@ export async function loginWithLocalIdentity(
       'Accept-Language': lang,
       [csrf.headerName]: csrf.token,
     },
-    body: JSON.stringify({ email: email.trim(), password }),
+    body: JSON.stringify({ username: username.trim(), password }),
   });
 
   if (!response.ok) {

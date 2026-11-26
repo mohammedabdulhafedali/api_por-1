@@ -171,6 +171,20 @@ static string? ReadCliArg(string[] cliArgs, string flagName)
     return null;
 }
 
+// Ensure canonical permission dictionary & split-permission backfills are synchronized on startup
+{
+    try
+    {
+        await using var dictScope = app.Services.CreateAsyncScope();
+        var dictBootstrap = dictScope.ServiceProvider.GetRequiredService<IInitialAdminBootstrapService>();
+        await dictBootstrap.EnsureGovernanceDictionaryAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Startup permission dictionary sync skipped.");
+    }
+}
+
 // Guarded non-Git auto-bootstrap when explicitly enabled via User Secrets / Environment Variables on an empty DB
 {
     var bootstrapSection = app.Configuration.GetSection(BootstrapAdminOptions.SectionName).Get<BootstrapAdminOptions>();

@@ -4,6 +4,7 @@ import { RoleSummary, fetchCsrfToken, parseProblemError } from './authApi';
 export interface UserSummary {
   id: string;
   fullName: string;
+  username?: string;
   email: string;
   isActive: boolean;
   isActivated: boolean;
@@ -26,6 +27,7 @@ export interface PagedUsersResult {
 
 export interface CreateUserPayload {
   fullName: string;
+  username?: string;
   email: string;
   consumerEntityId?: string | null;
   triggerActivationToken: boolean;
@@ -34,6 +36,7 @@ export interface CreateUserPayload {
 
 export interface UpdateUserPayload {
   fullName?: string;
+  username?: string;
   isActive?: boolean;
   consumerEntityId?: string | null;
   clearConsumerEntity?: boolean;
@@ -85,6 +88,7 @@ export async function createUserAccount(
     },
     body: JSON.stringify({
       fullName: payload.fullName.trim(),
+      username: payload.username?.trim() || undefined,
       email: payload.email.trim(),
       consumerEntityId: payload.consumerEntityId?.trim() || null,
       triggerActivationToken: payload.triggerActivationToken,
@@ -143,4 +147,25 @@ export async function triggerUserActivationOrReset(
     throw await parseProblemError(response, lang);
   }
 }
+
+export async function deleteUserAccount(
+  userId: string,
+  lang: AppLanguage
+): Promise<void> {
+  const csrf = await fetchCsrfToken(lang);
+
+  const response = await fetch(`/api/v1/users/${userId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      'Accept-Language': lang,
+      [csrf.headerName]: csrf.token,
+    },
+  });
+
+  if (!response.ok) {
+    throw await parseProblemError(response, lang);
+  }
+}
+
 

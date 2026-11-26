@@ -5,6 +5,8 @@ import {
   ConsumerItem,
   createConsumer,
   createConsumerCategory,
+  deleteConsumer,
+  deleteConsumerCategory,
   listConsumerCategories,
   listConsumers,
   updateConsumer,
@@ -19,7 +21,8 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
-  SearchFilterBar,
+  ReferenceIcon,
+  RowActionButton,
   SelectInput,
   StandaloneFormPage,
   StatusBadge,
@@ -32,7 +35,7 @@ interface ConsumersManagementPageProps {
   onSessionExpired: () => void;
 }
 
-type ActiveTab = 'consumers' | 'categories';
+type FormTarget = 'consumer' | 'category';
 type PageMode = 'list' | 'create' | 'edit';
 
 interface ModalState {
@@ -44,28 +47,18 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    tabConsumers: 'الجهات المستهلكة',
-    tabCategories: 'تصنيفات الجهات (مستوى واحد)',
-    consTitle: 'الجهات المستهلكة (UI-02 · M03)',
-    consDesc: 'إدارة الجهات المستهلكة وربط كل جهة بتصنيف واحد دون هيكل تنظيمي متعدد المستويات.',
-    catTitle: 'تصنيفات الجهات المستهلكة (UI-02 · M03)',
-    catDesc: 'تصنيفات مستقلة مسطحة للجهات (مثل البنوك وأنظمة التجار) مع حماية المراجع عند التعطيل.',
+    categoriesSidebarTitle: 'التصنيفات',
     noViewTitle: 'صلاحية عرض الجهات المستهلكة غير متوفرة',
-    noViewDesc: 'يتطلب عرض الجهات المستهلكة وتصنيفاتها توفر صلاحية consumers.view.',
-    addConsBtn: 'إضافة جهة مستهلكة',
-    addCatBtn: 'إضافة تصنيف جهات',
-    searchPlaceholder: 'ابحث بالاسم...',
-    searchAria: 'البحث في القائمة',
-    filterAria: 'تصفية حسب التصنيف أو الحالة',
+    noViewDesc: 'يتطلب عرض الجهات المستهلكة وتصنيفاتها توفر صلاحية العرض على حسابك.',
+    addConsAria: 'إضافة جهة مستهلكة',
+    addCatAria: 'إضافة تصنيف جهات',
+    editCatAria: 'تعديل التصنيف',
+    deleteCatAria: 'حذف التصنيف',
     filterAll: 'كل التصنيفات',
-    filterAllStatus: 'كل الحالات',
-    filterActive: 'الفعّالة فقط',
-    filterInactive: 'المعطلة فقط',
     colName: 'الاسم',
     colCategory: 'التصنيف',
     colUsers: 'المستخدمون',
     colDocs: 'الوثائق',
-    colConsumersCount: 'الجهات المسجلة',
     colStatus: 'الحالة',
     colActions: 'الإجراءات',
     activeBadge: 'فعّال',
@@ -73,16 +66,15 @@ const COPY = {
     editBtn: 'تعديل',
     deactivateBtn: 'تعطيل',
     activateBtn: 'تفعيل',
-    createConsBadge: 'إضافة جهة مستهلكة · UI-02 / M03',
-    editConsBadge: 'تعديل جهة مستهلكة · UI-02 / M03',
-    createCatBadge: 'إضافة تصنيف جهات · UI-02 / M03',
-    editCatBadge: 'تعديل تصنيف جهات · UI-02 / M03',
+    deleteBtn: 'حذف',
+    createConsBadge: 'إضافة جهة مستهلكة',
+    editConsBadge: 'تعديل جهة مستهلكة',
+    createCatBadge: 'إضافة تصنيف جهات',
+    editCatBadge: 'تعديل تصنيف جهات',
     createConsTitle: 'إضافة جهة مستهلكة جديدة',
     editConsTitle: 'تعديل بيانات الجهة المستهلكة',
     createCatTitle: 'إضافة تصنيف جهات جديد',
     editCatTitle: 'تعديل تصنيف الجهات',
-    consFormSub: 'اختر التصنيف الفعّال ثم أدخل اسم الجهة المستهلكة.',
-    catFormSub: 'تصنيف مستقل من مستوى واحد فقط.',
     categoryLabel: 'التصنيف',
     categoryPlaceholder: 'اختر تصنيفًا فعّالًا...',
     nameLabel: 'الاسم',
@@ -92,19 +84,23 @@ const COPY = {
     validationTitle: 'تعذر الحفظ',
     validationMsg: 'يرجى مراجعة الحقول المطلوبة.',
     createSuccessTitle: 'تمت الإضافة بنجاح',
-    createSuccessMsg: 'تم حفظ البيانات في قاعدة البيانات وتسجيل العملية في سجل التدقيق.',
+    createSuccessMsg: 'تم حفظ السجل بنجاح.',
     editSuccessTitle: 'تم التحديث بنجاح',
-    editSuccessMsg: 'تم حفظ التعديلات وتحديث سجل التدقيق.',
+    editSuccessMsg: 'تم حفظ التعديلات بنجاح.',
     toggleTitle: 'تأكيد تغيير الحالة',
-    deactivateMsg: 'سيتم التحقق من عدم وجود مستخدمين فعّالين أو جهات/وثائق نشطة مرتبطة قبل التعطيل. هل تؤكد؟',
+    deactivateMsg: 'هل تؤكد تعطيل هذا السجل؟',
     activateMsg: 'هل تريد إعادة تفعيل هذا السجل؟',
+    deleteTitle: 'تأكيد الحذف',
+    deleteMsg: 'هل تؤكد حذف هذا السجل نهائيًا؟',
+    deleteSuccessTitle: 'تم الحذف بنجاح',
+    deleteSuccessMsg: 'تم حذف السجل من النظام بنجاح.',
     backBtn: 'العودة إلى القائمة',
     saveCreateBtn: 'حفظ وإنشاء',
     saveEditBtn: 'حفظ التعديلات',
     cancelBtn: 'إلغاء',
     loadingText: 'جارٍ تحميل البيانات...',
-    emptyTitle: 'لا توجد سجلات مطابقة',
-    emptyDesc: 'عدّل معايير البحث أو أضف سجلًا جديدًا.',
+    emptyTitle: 'لا توجد جهات مسجلة',
+    emptyDesc: 'اضغط على زر (+) لإضافة جهة مستهلكة جديدة.',
     errorTitle: 'تعذر تحميل البيانات',
     retryBtn: 'إعادة المحاولة',
     pagePrefix: 'الصفحة',
@@ -113,28 +109,18 @@ const COPY = {
     nextBtn: 'التالي',
   },
   en: {
-    tabConsumers: 'Consumer Entities',
-    tabCategories: 'Consumer Categories (Flat)',
-    consTitle: 'Consumer Entities (UI-02 · M03)',
-    consDesc: 'Manage consumer organizations linked to a single flat category level.',
-    catTitle: 'Consumer Categories (UI-02 · M03)',
-    catDesc: 'Flat independent consumer categories (e.g., Banks, Merchants) with reference protection.',
+    categoriesSidebarTitle: 'Categories',
     noViewTitle: 'Consumers View Unavailable',
-    noViewDesc: 'consumers.view permission is required to view consumers and categories.',
-    addConsBtn: 'Add Consumer Entity',
-    addCatBtn: 'Add Consumer Category',
-    searchPlaceholder: 'Search by name...',
-    searchAria: 'Search records',
-    filterAria: 'Filter by category or status',
+    noViewDesc: 'View permission is required to view consumers and categories.',
+    addConsAria: 'Add Consumer Entity',
+    addCatAria: 'Add Consumer Category',
+    editCatAria: 'Edit Category',
+    deleteCatAria: 'Delete Category',
     filterAll: 'All Categories',
-    filterAllStatus: 'All Statuses',
-    filterActive: 'Active Only',
-    filterInactive: 'Inactive Only',
     colName: 'Name',
     colCategory: 'Category',
     colUsers: 'Users',
     colDocs: 'Docs',
-    colConsumersCount: 'Consumers',
     colStatus: 'Status',
     colActions: 'Actions',
     activeBadge: 'Active',
@@ -142,16 +128,15 @@ const COPY = {
     editBtn: 'Edit',
     deactivateBtn: 'Deactivate',
     activateBtn: 'Activate',
-    createConsBadge: 'Create Consumer Entity · UI-02 / M03',
-    editConsBadge: 'Edit Consumer Entity · UI-02 / M03',
-    createCatBadge: 'Create Consumer Category · UI-02 / M03',
-    editCatBadge: 'Edit Consumer Category · UI-02 / M03',
+    deleteBtn: 'Delete',
+    createConsBadge: 'Create Consumer Entity',
+    editConsBadge: 'Edit Consumer Entity',
+    createCatBadge: 'Create Consumer Category',
+    editCatBadge: 'Edit Consumer Category',
     createConsTitle: 'Create Consumer Entity',
     editConsTitle: 'Edit Consumer Entity',
     createCatTitle: 'Create Consumer Category',
     editCatTitle: 'Edit Consumer Category',
-    consFormSub: 'Select an active category and enter the consumer entity name.',
-    catFormSub: 'Single-level flat classification.',
     categoryLabel: 'Category',
     categoryPlaceholder: 'Select active category...',
     nameLabel: 'Name',
@@ -161,19 +146,23 @@ const COPY = {
     validationTitle: 'Unable to Save',
     validationMsg: 'Please review required fields.',
     createSuccessTitle: 'Record Created',
-    createSuccessMsg: 'Record saved and logged in the audit trail.',
+    createSuccessMsg: 'Record saved successfully.',
     editSuccessTitle: 'Record Updated',
-    editSuccessMsg: 'Changes saved and logged in the audit trail.',
+    editSuccessMsg: 'Changes saved successfully.',
     toggleTitle: 'Confirm Status Change',
-    deactivateMsg: 'Deactivation checks that no active users, entities, or API documents depend on this record. Continue?',
+    deactivateMsg: 'Are you sure you want to deactivate this record?',
     activateMsg: 'Re-activate this record?',
+    deleteTitle: 'Confirm Deletion',
+    deleteMsg: 'Are you sure you want to permanently delete this record?',
+    deleteSuccessTitle: 'Record Deleted',
+    deleteSuccessMsg: 'Record has been permanently deleted.',
     backBtn: 'Back to List',
     saveCreateBtn: 'Save & Create',
     saveEditBtn: 'Save Changes',
     cancelBtn: 'Cancel',
     loadingText: 'Loading records...',
-    emptyTitle: 'No matching records found',
-    emptyDesc: 'Adjust filters or add a new record.',
+    emptyTitle: 'No consumer entities found',
+    emptyDesc: 'Click the (+) button to add a new consumer entity.',
     errorTitle: 'Failed to Load Records',
     retryBtn: 'Retry',
     pagePrefix: 'Page',
@@ -183,26 +172,30 @@ const COPY = {
   },
 } as const;
 
-export function ConsumersManagementPage({ lang, permissions, onSessionExpired }: ConsumersManagementPageProps) {
+export function ConsumersManagementPage({
+  lang,
+  permissions,
+  onSessionExpired,
+}: ConsumersManagementPageProps) {
   const copy = COPY[lang];
   const t = UI_STRINGS[lang];
+  const hasPerm = (code: string) => permissions.some((p) => p.toLowerCase() === code.toLowerCase());
 
-  const canView = permissions.some((p) => p.toLowerCase() === 'consumers.view');
-  const canManage = permissions.some((p) => p.toLowerCase() === 'consumers.manage');
+  const canView = hasPerm('consumers.view');
+  const canCreate = hasPerm('consumers.create');
+  const canEdit = hasPerm('consumers.edit');
+  const canDelete = hasPerm('consumers.delete');
 
-  const [tab, setTab] = useState<ActiveTab>('consumers');
+  const [formTarget, setFormTarget] = useState<FormTarget>('consumer');
   const [mode, setMode] = useState<PageMode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [consumers, setConsumers] = useState<ConsumerItem[]>([]);
-  const [categories, setCategories] = useState<ConsumerCategoryItem[]>([]);
   const [allCategories, setAllCategories] = useState<ConsumerCategoryItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'' | 'true' | 'false'>('');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<{ message: string; traceId?: string } | null>(null);
 
@@ -211,52 +204,53 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
   const [formActive, setFormActive] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [modal, setModal] = useState<ModalState | null>(null);
-
   const nameRef = useRef<HTMLInputElement | null>(null);
+
+  const loadAllCategoriesForSelect = useCallback(async () => {
+    if (!canView) return;
+    try {
+      const res = await listConsumerCategories({ page: 1, pageSize: 100, lang });
+      setAllCategories(res.items);
+    } catch {
+      // Handled by main loader
+    }
+  }, [canView, lang]);
 
   const loadData = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
     setLoadError(null);
     try {
-      const catCatalogRes = await listConsumerCategories({ page: 1, pageSize: 100, lang });
-      setAllCategories(catCatalogRes.items);
-
-      if (tab === 'consumers') {
-        const res = await listConsumers({
-          page,
-          pageSize: 10,
-          search,
-          categoryId: categoryFilter || undefined,
-          isActive: activeFilter,
-          lang,
-        });
-        setConsumers(res.items);
-        setTotalPages(res.totalPages);
-        setTotalCount(res.totalCount);
-      } else {
-        const res = await listConsumerCategories({ page, pageSize: 10, search, isActive: activeFilter, lang });
-        setCategories(res.items);
-        setTotalPages(res.totalPages);
-        setTotalCount(res.totalCount);
-      }
+      await loadAllCategoriesForSelect();
+      const res = await listConsumers({
+        page,
+        pageSize: 10,
+        categoryId: categoryFilter || undefined,
+        lang,
+      });
+      setConsumers(res.items);
+      setTotalPages(res.totalPages);
+      setTotalCount(res.totalCount);
     } catch (err) {
       if (err instanceof ApiProblemError && err.status === 401) {
         onSessionExpired();
         return;
       }
       const apiErr = err instanceof ApiProblemError ? err : null;
-      setLoadError({ message: apiErr?.message ?? copy.errorTitle, traceId: apiErr?.traceId });
+      setLoadError({
+        message: apiErr?.message ?? copy.errorTitle,
+        traceId: apiErr?.traceId,
+      });
     } finally {
       setLoading(false);
     }
-  }, [canView, tab, page, search, categoryFilter, activeFilter, lang, onSessionExpired, copy.errorTitle]);
+  }, [canView, page, categoryFilter, lang, onSessionExpired, copy.errorTitle, loadAllCategoriesForSelect]);
 
   useEffect(() => {
-    if (mode === 'list') {
+    if (mode === 'list' && canView) {
       void loadData();
     }
-  }, [mode, loadData]);
+  }, [mode, canView, loadData]);
 
   const handleApiError = (err: unknown) => {
     if (err instanceof ApiProblemError && err.status === 401) {
@@ -271,40 +265,55 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
     });
   };
 
-  const handleSave = async () => {
+  const handleSaveForm = async () => {
     const errs: Record<string, string> = {};
-    if (formName.trim().length < 2) errs.name = copy.requiredNameError;
-    if (tab === 'consumers' && !formCategoryId) errs.categoryId = copy.requiredCatError;
+    if (formTarget === 'consumer' && !formCategoryId) {
+      errs.categoryId = copy.requiredCatError;
+    }
+    if (formName.trim().length < 2) {
+      errs.name = copy.requiredNameError;
+    }
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
-      setModal({ variant: 'error', title: copy.validationTitle, message: copy.validationMsg });
+      setModal({
+        variant: 'error',
+        title: copy.validationTitle,
+        message: copy.validationMsg,
+      });
       return;
     }
 
     try {
-      if (tab === 'consumers') {
+      if (formTarget === 'consumer') {
         if (mode === 'create') {
           await createConsumer({ categoryId: formCategoryId, name: formName.trim() }, lang);
-          setModal({ variant: 'success', title: copy.createSuccessTitle, message: copy.createSuccessMsg });
         } else if (editingId) {
           await updateConsumer(
             editingId,
             { categoryId: formCategoryId, name: formName.trim(), isActive: formActive },
             lang
           );
-          setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
         }
       } else {
         if (mode === 'create') {
           await createConsumerCategory(formName.trim(), lang);
-          setModal({ variant: 'success', title: copy.createSuccessTitle, message: copy.createSuccessMsg });
         } else if (editingId) {
-          await updateConsumerCategory(editingId, { name: formName.trim(), isActive: formActive }, lang);
-          setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+          await updateConsumerCategory(
+            editingId,
+            { name: formName.trim(), isActive: formActive },
+            lang
+          );
         }
       }
+
+      const wasCreate = mode === 'create';
       setMode('list');
+      setModal({
+        variant: 'success',
+        title: wasCreate ? copy.createSuccessTitle : copy.editSuccessTitle,
+        message: wasCreate ? copy.createSuccessMsg : copy.editSuccessMsg,
+      });
       await loadData();
     } catch (err) {
       handleApiError(err);
@@ -314,75 +323,14 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
   const consumerColumns: DataTableColumn<ConsumerItem>[] = useMemo(
     () => [
       { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
-      { key: 'cat', header: copy.colCategory, render: (row) => <StatusBadge variant="info">{row.categoryName}</StatusBadge> },
-      { key: 'users', header: copy.colUsers, render: (row) => <code className="ltr-code">{row.assignedUsersCount}</code> },
-      { key: 'docs', header: copy.colDocs, render: (row) => <code className="ltr-code">{row.documentsCount}</code> },
       {
-        key: 'status',
-        header: copy.colStatus,
+        key: 'category',
+        header: copy.colCategory,
         render: (row) => (
-          <StatusBadge variant={row.isActive ? 'success' : 'danger'}>
-            {row.isActive ? copy.activeBadge : copy.inactiveBadge}
+          <StatusBadge variant={row.categoryIsActive ? 'info' : 'warning'}>
+            {row.categoryName}
           </StatusBadge>
         ),
-      },
-      {
-        key: 'actions',
-        header: copy.colActions,
-        render: (row) =>
-          canManage ? (
-            <div className="button-row" style={{ gap: 6 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingId(row.id);
-                  setFormCategoryId(row.categoryId);
-                  setFormName(row.name);
-                  setFormActive(row.isActive);
-                  setFieldErrors({});
-                  setMode('edit');
-                }}
-              >
-                {copy.editBtn}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModal({
-                    variant: 'confirm',
-                    title: copy.toggleTitle,
-                    message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
-                    onConfirmAction: async () => {
-                      try {
-                        await updateConsumer(row.id, { isActive: !row.isActive }, lang);
-                        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                        await loadData();
-                      } catch (err) {
-                        handleApiError(err);
-                      }
-                    },
-                  })
-                }
-              >
-                {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-              </Button>
-            </div>
-          ) : null,
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canManage, lang]
-  );
-
-  const categoryColumns: DataTableColumn<ConsumerCategoryItem>[] = useMemo(
-    () => [
-      { key: 'name', header: copy.colName, render: (row) => <strong>{row.name}</strong> },
-      {
-        key: 'consumers',
-        header: copy.colConsumersCount,
-        render: (row) => <code className="ltr-code">{row.consumersCount}</code>,
       },
       {
         key: 'status',
@@ -397,49 +345,79 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
         key: 'actions',
         header: copy.colActions,
         render: (row) =>
-          canManage ? (
-            <div className="button-row" style={{ gap: 6 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingId(row.id);
-                  setFormName(row.name);
-                  setFormActive(row.isActive);
-                  setFieldErrors({});
-                  setMode('edit');
-                }}
-              >
-                {copy.editBtn}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setModal({
-                    variant: 'confirm',
-                    title: copy.toggleTitle,
-                    message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
-                    onConfirmAction: async () => {
-                      try {
-                        await updateConsumerCategory(row.id, { isActive: !row.isActive }, lang);
-                        setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
-                        await loadData();
-                      } catch (err) {
-                        handleApiError(err);
-                      }
-                    },
-                  })
-                }
-              >
-                {row.isActive ? copy.deactivateBtn : copy.activateBtn}
-              </Button>
+          canEdit || canDelete ? (
+            <div className="row-actions">
+              {canEdit && (
+                <>
+                  <RowActionButton
+                    icon="edit"
+                    label={copy.editBtn}
+                    onClick={() => {
+                      setFormTarget('consumer');
+                      setEditingId(row.id);
+                      setFormCategoryId(row.categoryId);
+                      setFormName(row.name);
+                      setFormActive(row.isActive);
+                      setFieldErrors({});
+                      setMode('edit');
+                    }}
+                  />
+                  <RowActionButton
+                    icon="power"
+                    label={row.isActive ? copy.deactivateBtn : copy.activateBtn}
+                    variant={row.isActive ? 'warning' : 'success'}
+                    onClick={() =>
+                      setModal({
+                        variant: 'confirm',
+                        title: copy.toggleTitle,
+                        message: row.isActive ? copy.deactivateMsg : copy.activateMsg,
+                        onConfirmAction: async () => {
+                          try {
+                            await updateConsumer(row.id, { isActive: !row.isActive }, lang);
+                            setModal({ variant: 'success', title: copy.editSuccessTitle, message: copy.editSuccessMsg });
+                            await loadData();
+                          } catch (err) {
+                            handleApiError(err);
+                          }
+                        },
+                      })
+                    }
+                  />
+                </>
+              )}
+              {canDelete && (
+                <RowActionButton
+                  icon="trash"
+                  label={copy.deleteBtn}
+                  variant="danger"
+                  onClick={() =>
+                    setModal({
+                      variant: 'confirm',
+                      title: copy.deleteTitle,
+                      message: copy.deleteMsg,
+                      onConfirmAction: async () => {
+                        try {
+                          await deleteConsumer(row.id, lang);
+                          setModal({
+                            variant: 'success',
+                            title: copy.deleteSuccessTitle,
+                            message: copy.deleteSuccessMsg,
+                          });
+                          await loadData();
+                        } catch (err) {
+                          handleApiError(err);
+                        }
+                      },
+                    })
+                  }
+                />
+              )}
             </div>
           ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copy, canManage, lang]
+    [copy, canEdit, canDelete, lang]
   );
 
   if (!canView) {
@@ -450,15 +428,139 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
     );
   }
 
+  const totalAllConsumers = allCategories.reduce((sum, c) => sum + c.consumersCount, 0) || totalCount;
+
   return (
     <>
       {mode === 'list' ? (
-        <>
-          {canManage && (
-            <div className="page-actions">
-              <Button
-                variant="primary"
+        <div className="consumers-cols">
+          <section className="surface-card panel clean-categories-panel">
+            <div className="panel-head" style={{ marginBottom: 12 }}>
+              <h3 className="panel-title">{copy.categoriesSidebarTitle}</h3>
+              {canCreate && (
+                <button
+                  type="button"
+                  className="compact-inline-add-btn"
+                  aria-label={copy.addCatAria}
+                  title={copy.addCatAria}
+                  onClick={() => {
+                    setFormTarget('category');
+                    setEditingId(null);
+                    setFormName('');
+                    setFormActive(true);
+                    setFieldErrors({});
+                    setMode('create');
+                  }}
+                >
+                  <ReferenceIcon name="plus" size={16} />
+                </button>
+              )}
+            </div>
+
+            <div className="stack">
+              <button
+                type="button"
+                className={`pager-link consumer-category ${!categoryFilter ? 'is-active' : ''}`}
                 onClick={() => {
+                  setCategoryFilter('');
+                  setPage(1);
+                }}
+              >
+                <b>{copy.filterAll}</b>
+                <span className="tag">{totalAllConsumers}</span>
+              </button>
+
+              {allCategories.map((c) => (
+                <div
+                  key={c.id}
+                  className={`pager-link consumer-category category-item-row ${
+                    categoryFilter === c.id ? 'is-active' : ''
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="category-select-main-btn"
+                    aria-pressed={categoryFilter === c.id}
+                    onClick={() => {
+                      setCategoryFilter(c.id);
+                      setPage(1);
+                    }}
+                  >
+                    <b>{c.name}</b>
+                  </button>
+
+                  <div className="category-item-end">
+                    <span className="tag">{c.consumersCount}</span>
+                    {(canEdit || canDelete) && (
+                      <div className="category-mini-actions">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="category-mini-icon-btn"
+                            title={copy.editCatAria}
+                            aria-label={`${copy.editCatAria} ${c.name}`}
+                            onClick={() => {
+                              setFormTarget('category');
+                              setEditingId(c.id);
+                              setFormName(c.name);
+                              setFormActive(c.isActive);
+                              setFieldErrors({});
+                              setMode('edit');
+                            }}
+                          >
+                            <ReferenceIcon name="edit" size={13} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="category-mini-icon-btn danger"
+                            title={copy.deleteCatAria}
+                            aria-label={`${copy.deleteCatAria} ${c.name}`}
+                            onClick={() =>
+                              setModal({
+                                variant: 'confirm',
+                                title: copy.deleteTitle,
+                                message: copy.deleteMsg,
+                                onConfirmAction: async () => {
+                                  try {
+                                    await deleteConsumerCategory(c.id, lang);
+                                    if (categoryFilter === c.id) {
+                                      setCategoryFilter('');
+                                    }
+                                    setModal({
+                                      variant: 'success',
+                                      title: copy.deleteSuccessTitle,
+                                      message: copy.deleteSuccessMsg,
+                                    });
+                                    await loadData();
+                                  } catch (err) {
+                                    handleApiError(err);
+                                  }
+                                },
+                              })
+                            }
+                          >
+                            <ReferenceIcon name="trash" size={13} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="surface-card panel clean-table-panel">
+            {canCreate && (
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                aria-label={copy.addConsAria}
+                title={copy.addConsAria}
+                onClick={() => {
+                  setFormTarget('consumer');
                   setEditingId(null);
                   setFormCategoryId(
                     categoryFilter || (allCategories.find((c) => c.isActive)?.id ?? '')
@@ -469,137 +571,19 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
                   setMode('create');
                 }}
               >
-                {tab === 'consumers' ? copy.addConsBtn : copy.addCatBtn}
-              </Button>
-            </div>
-          )}
-          <div className={tab === 'consumers' ? 'consumers-cols' : ''}>
-          {tab === 'consumers' && (
-            <section className="surface-card panel">
-              <div className="panel-head">
-                <h3 className="panel-title">{lang === 'ar' ? 'التصنيفات' : 'Categories'}</h3>
-                {canManage && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setTab('categories');
-                      setEditingId(null);
-                      setFormName('');
-                      setFormActive(true);
-                      setFieldErrors({});
-                      setMode('create');
-                    }}
-                  >
-                    + {lang === 'ar' ? 'تصنيف' : 'Category'}
-                  </Button>
-                )}
-              </div>
-              <div className="stack">
-                <button
-                  type="button"
-                  className={`pager-link consumer-category ${!categoryFilter ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setCategoryFilter('');
-                    setPage(1);
-                  }}
-                >
-                  <b>{copy.filterAll}</b>
-                  <span className="tag">{totalCount}</span>
-                </button>
-                {allCategories.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`pager-link consumer-category ${categoryFilter === c.id ? 'is-active' : ''}`}
-                    aria-pressed={categoryFilter === c.id}
-                    onClick={() => {
-                      setCategoryFilter(c.id);
-                      setPage(1);
-                    }}
-                  >
-                    <b>{c.name}</b>
-                    <span className="tag">{c.consumersCount}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="surface-card panel">
-            <div className="tabs">
-              <button
-                type="button"
-                className={`tab ${tab === 'consumers' ? 'active' : ''}`}
-                onClick={() => {
-                  setTab('consumers');
-                  setPage(1);
-                  setSearch('');
-                }}
-              >
-                {copy.tabConsumers}
+                <ReferenceIcon name="plus" size={18} />
               </button>
-              <button
-                type="button"
-                className={`tab ${tab === 'categories' ? 'active' : ''}`}
-                onClick={() => {
-                  setTab('categories');
-                  setPage(1);
-                  setSearch('');
-                }}
-              >
-                {copy.tabCategories}
-              </button>
-            </div>
+            )}
 
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title heading-font">
-                  {tab === 'consumers' ? copy.consTitle : copy.catTitle}
-                </h2>
-                <p className="panel-desc">
-                  {tab === 'consumers' ? copy.consDesc : copy.catDesc}
-                </p>
-              </div>
-            </div>
-
-          <SearchFilterBar
-            searchValue={search}
-            searchPlaceholder={copy.searchPlaceholder}
-            searchAriaLabel={copy.searchAria}
-            onSearchChange={(val) => {
-              setSearch(val);
-              setPage(1);
-            }}
-            filterValue={tab === 'consumers' ? categoryFilter : activeFilter}
-            filterAriaLabel={copy.filterAria}
-            filterPlaceholder={tab === 'consumers' ? copy.filterAll : copy.filterAllStatus}
-            filterOptions={
-              tab === 'consumers'
-                ? allCategories.map((c) => ({ value: c.id, label: c.name }))
-                : [
-                    { value: 'true', label: copy.filterActive },
-                    { value: 'false', label: copy.filterInactive },
-                  ]
-            }
-            onFilterChange={(val) => {
-              if (tab === 'consumers') setCategoryFilter(val);
-              else setActiveFilter((val as '' | 'true' | 'false') || '');
-              setPage(1);
-            }}
-          />
-
-          {loadError ? (
-            <ErrorState
-              title={copy.errorTitle}
-              message={loadError.message}
-              traceId={loadError.traceId}
-              retryLabel={copy.retryBtn}
-              onRetry={() => void loadData()}
-            />
-          ) : (
-            <>
-              {tab === 'consumers' ? (
+            {loadError ? (
+              <ErrorState
+                title={copy.errorTitle}
+                message={loadError.message}
+                retryLabel={copy.retryBtn}
+                onRetry={() => void loadData()}
+              />
+            ) : (
+              <>
                 <DataTable
                   columns={consumerColumns}
                   rows={consumers}
@@ -609,37 +593,25 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
                   emptyTitle={copy.emptyTitle}
                   emptyDescription={copy.emptyDesc}
                 />
-              ) : (
-                <DataTable
-                  columns={categoryColumns}
-                  rows={categories}
-                  getRowKey={(r) => r.id}
-                  isLoading={loading}
-                  loadingTitle={copy.loadingText}
-                  emptyTitle={copy.emptyTitle}
-                  emptyDescription={copy.emptyDesc}
-                />
-              )}
-              {totalCount > 0 && (
-                <PaginationBar
-                  currentPage={page}
-                  totalPages={totalPages}
-                  totalItems={totalCount}
-                  pageLabel={`${copy.pagePrefix} ${page} ${copy.ofWord} ${totalPages}`}
-                  previousLabel={copy.prevBtn}
-                  nextLabel={copy.nextBtn}
-                  onPageChange={setPage}
-                />
-              )}
-            </>
-          )}
+                {totalCount > 0 && (
+                  <PaginationBar
+                    currentPage={page}
+                    totalPages={totalPages}
+                    totalItems={totalCount}
+                    pageLabel={`${copy.pagePrefix} ${page} ${copy.ofWord} ${totalPages}`}
+                    previousLabel={copy.prevBtn}
+                    nextLabel={copy.nextBtn}
+                    onPageChange={setPage}
+                  />
+                )}
+              </>
+            )}
           </section>
-          </div>
-        </>
+        </div>
       ) : (
         <StandaloneFormPage
           modeBadgeLabel={
-            tab === 'consumers'
+            formTarget === 'consumer'
               ? mode === 'create'
                 ? copy.createConsBadge
                 : copy.editConsBadge
@@ -648,7 +620,7 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
                 : copy.editCatBadge
           }
           formTitle={
-            tab === 'consumers'
+            formTarget === 'consumer'
               ? mode === 'create'
                 ? copy.createConsTitle
                 : copy.editConsTitle
@@ -656,42 +628,47 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
                 ? copy.createCatTitle
                 : copy.editCatTitle
           }
-          formSubtitle={tab === 'consumers' ? copy.consFormSub : copy.catFormSub}
+          formSubtitle=""
           backButtonLabel={copy.backBtn}
           submitButtonLabel={mode === 'create' ? copy.saveCreateBtn : copy.saveEditBtn}
           cancelButtonLabel={copy.cancelBtn}
           onBack={() => setMode('list')}
           onCancel={() => setMode('list')}
-          onSubmit={() => void handleSave()}
+          onSubmit={() => void handleSaveForm()}
         >
           <div className="form-grid-2">
-            {tab === 'consumers' && (
+            {formTarget === 'consumer' && (
               <FormField
-                id="consumer-category-select"
+                id="m03-category"
                 label={copy.categoryLabel}
                 required
                 error={fieldErrors.categoryId}
               >
                 <SelectInput
-                  id="consumer-category-select"
-                  placeholder={copy.categoryPlaceholder}
+                  id="m03-category"
                   value={formCategoryId}
                   hasError={Boolean(fieldErrors.categoryId)}
-                  options={allCategories
-                    .filter((c) => c.isActive || c.id === formCategoryId)
-                    .map((c) => ({ value: c.id, label: c.name }))}
                   onChange={(e) => {
                     setFormCategoryId(e.target.value);
                     setFieldErrors((prev) => ({ ...prev, categoryId: '' }));
                   }}
-                />
+                >
+                  <option value="">{copy.categoryPlaceholder}</option>
+                  {allCategories
+                    .filter((c) => c.isActive || c.id === formCategoryId)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </SelectInput>
               </FormField>
             )}
 
-            <FormField id="consumer-name-input" label={copy.nameLabel} required error={fieldErrors.name}>
+            <FormField id="m03-name" label={copy.nameLabel} required error={fieldErrors.name}>
               <TextInput
                 ref={nameRef}
-                id="consumer-name-input"
+                id="m03-name"
                 value={formName}
                 hasError={Boolean(fieldErrors.name)}
                 onChange={(e) => {
@@ -702,15 +679,15 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
             </FormField>
 
             {mode === 'edit' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 24 }}>
-                <input
-                  id="consumer-active-input"
-                  type="checkbox"
-                  checked={formActive}
-                  onChange={(e) => setFormActive(e.target.checked)}
-                />
-                <label htmlFor="consumer-active-input" style={{ fontSize: 13.5 }}>
-                  {copy.activeLabel}
+              <div className="form-field" style={{ justifyContent: 'center' }}>
+                <label className="matrix-inline-check">
+                  <input
+                    type="checkbox"
+                    className="matrix-checkbox"
+                    checked={formActive}
+                    onChange={(e) => setFormActive(e.target.checked)}
+                  />
+                  <span>{copy.activeLabel}</span>
                 </label>
               </div>
             )}
@@ -724,7 +701,7 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
         title={modal?.title ?? ''}
         message={modal?.message ?? ''}
         confirmLabel={t.modalConfirmBtn}
-        cancelLabel={modal?.variant === 'confirm' ? t.modalCancelBtn : undefined}
+        cancelLabel={t.modalCancelBtn}
         closeAriaLabel={t.modalCloseAria}
         onConfirm={() => {
           const active = modal;
@@ -734,13 +711,12 @@ export function ConsumersManagementPage({ lang, permissions, onSessionExpired }:
             return;
           }
           setModal(null);
-          if (active.variant === 'error') {
+          if (active.variant === 'error' && fieldErrors.name) {
             nameRef.current?.focus();
           }
         }}
-        onCancel={modal?.variant === 'confirm' ? () => setModal(null) : undefined}
+        onCancel={() => setModal(null)}
       />
     </>
   );
 }
-

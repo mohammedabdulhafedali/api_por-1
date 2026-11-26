@@ -157,13 +157,6 @@ describe('Sprint S13 • Task P05 (Dashboard, Global Search, Audit Log, Notifica
       expect(screen.getByText('REVISION_PUBLISHED')).toBeInTheDocument();
     });
 
-    // Open UI-18 Global Search via sidebar button
-    fireEvent.click(screen.getByRole('button', { name: /البحث والاستعراض/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId('search-browse-page')).toBeInTheDocument();
-      expect(screen.getByText('Payments API')).toBeInTheDocument();
-    });
-
     // Open UI-16 Audit Log via collapsible Administration group
     fireEvent.click(screen.getByRole('button', { name: 'الإدارة' }));
     fireEvent.click(screen.getByRole('button', { name: /سجل التدقيق/i }));
@@ -221,15 +214,7 @@ describe('Sprint S13 • Task P05 (Dashboard, Global Search, Audit Log, Notifica
     expect(document.documentElement.dir).toBe('ltr');
     expect(document.documentElement.lang).toBe('en');
 
-    fireEvent.click(screen.getByRole('button', { name: /Search & Browse/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId('search-browse-page')).toBeInTheDocument();
-    });
-    const searchBox = screen.getByPlaceholderText(/Search provider, consumer/i) as HTMLInputElement;
-    fireEvent.change(searchBox, { target: { value: 'KEEP_INPUT_ACROSS_DRAWER' } });
-
     const mobileBtn = screen.getByRole('button', { name: /Toggle sidebar menu/i });
     fireEvent.click(mobileBtn);
-    expect(searchBox.value).toBe('KEEP_INPUT_ACROSS_DRAWER');
   });
 });

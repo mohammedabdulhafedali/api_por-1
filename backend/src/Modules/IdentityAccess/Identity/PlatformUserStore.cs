@@ -24,20 +24,26 @@ public sealed class PlatformUserStore(ApiGovernanceDbContext dbContext) :
         => Task.FromResult(user.Id.ToString());
 
     public Task<string?> GetUserNameAsync(UserEntity user, CancellationToken cancellationToken)
-        => Task.FromResult<string?>(user.Email);
+    {
+        var name = !string.IsNullOrWhiteSpace(user.Username) ? user.Username : user.Email;
+        return Task.FromResult<string?>(name);
+    }
 
     public Task SetUserNameAsync(UserEntity user, string? userName, CancellationToken cancellationToken)
     {
-        user.Email = userName ?? string.Empty;
+        user.Username = userName ?? string.Empty;
         return Task.CompletedTask;
     }
 
     public Task<string?> GetNormalizedUserNameAsync(UserEntity user, CancellationToken cancellationToken)
-        => Task.FromResult<string?>(user.NormalizedEmail);
+    {
+        var normalized = !string.IsNullOrWhiteSpace(user.NormalizedUsername) ? user.NormalizedUsername : user.NormalizedEmail;
+        return Task.FromResult<string?>(normalized);
+    }
 
     public Task SetNormalizedUserNameAsync(UserEntity user, string? normalizedName, CancellationToken cancellationToken)
     {
-        user.NormalizedEmail = normalizedName ?? string.Empty;
+        user.NormalizedUsername = normalizedName ?? string.Empty;
         return Task.CompletedTask;
     }
 
@@ -47,6 +53,18 @@ public sealed class PlatformUserStore(ApiGovernanceDbContext dbContext) :
         if (user.Id == Guid.Empty)
         {
             user.Id = Guid.NewGuid();
+        }
+        if (string.IsNullOrWhiteSpace(user.Username))
+        {
+            user.Username = DeriveDefaultUsername(user.Email, user.Id);
+        }
+        if (string.IsNullOrWhiteSpace(user.NormalizedUsername))
+        {
+            user.NormalizedUsername = user.Username.ToUpperInvariant();
+        }
+        if (string.IsNullOrWhiteSpace(user.NormalizedEmail) && !string.IsNullOrWhiteSpace(user.Email))
+        {
+            user.NormalizedEmail = user.Email.ToUpperInvariant();
         }
         if (string.IsNullOrWhiteSpace(user.SecurityStamp))
         {
@@ -64,6 +82,22 @@ public sealed class PlatformUserStore(ApiGovernanceDbContext dbContext) :
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(cancellationToken);
         return IdentityResult.Success;
+    }
+
+    public static string DeriveDefaultUsername(string? email, Guid userId)
+    {
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var trimmed = email.Trim();
+            var atIndex = trimmed.IndexOf('@');
+            var localPart = atIndex > 0 ? trimmed[..atIndex] : trimmed;
+            if (!string.IsNullOrWhiteSpace(localPart))
+            {
+                return localPart.Length <= 100 ? localPart : localPart[..100];
+            }
+        }
+
+        return $"user-{userId:N}"[..24];
     }
 
     public async Task<IdentityResult> UpdateAsync(UserEntity user, CancellationToken cancellationToken)
@@ -123,7 +157,7 @@ public sealed class PlatformUserStore(ApiGovernanceDbContext dbContext) :
         }
 
         return await dbContext.Users.FirstOrDefaultAsync(
-            u => u.NormalizedEmail == normalizedUserName,
+            u => u.NormalizedUsername == normalizedUserName || u.NormalizedEmail == normalizedUserName,
             cancellationToken);
     }
 

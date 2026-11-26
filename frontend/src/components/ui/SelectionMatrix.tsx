@@ -175,9 +175,6 @@ export function SelectionMatrix({
                         <div className="all-row-toggle matrix-header-row-between">
                           <div className="row-title">
                             <b className="matrix-row-title">{row.title}</b>
-                            {row.technicalPath && (
-                              <span className="perm-path matrix-row-path ltr-code">{row.technicalPath}</span>
-                            )}
                           </div>
                           <input
                             type="checkbox"

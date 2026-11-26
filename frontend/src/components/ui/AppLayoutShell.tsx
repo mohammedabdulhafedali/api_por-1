@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { AppLanguage, AppTheme, NavGroupSpec, NavItemSpec } from '../../constants/uiBaseline';
 
 const ICON_PATHS: Record<string, ReactNode> = {
@@ -24,6 +24,24 @@ const ICON_PATHS: Record<string, ReactNode> = {
       <path d="M5.5 9v4h6.5v2M18.5 9v4H12" />
     </>
   ),
+  link: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </>
+  ),
+  building: (
+    <>
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </>
+  ),
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -34,6 +52,12 @@ const ICON_PATHS: Record<string, ReactNode> = {
     <>
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.9" />
       <circle cx="9" cy="7" r="4" />
+    </>
+  ),
+  user: (
+    <>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </>
   ),
   shield: (
@@ -57,6 +81,7 @@ const ICON_PATHS: Record<string, ReactNode> = {
       <path d="M12 7v5l3 2" />
     </>
   ),
+  up: <path d="m17 14-5-5-5 5" />,
   down: <path d="m7 10 5 5 5-5" />,
   left: <path d="m15 5-7 7 7 7" />,
   right: <path d="m9 5 7 7-7 7" />,
@@ -65,10 +90,23 @@ const ICON_PATHS: Record<string, ReactNode> = {
   download: <path d="M12 4v13m0 0-5-5m5 5 5-5M3 20h18" />,
   edit: <path d="m3 21 4-.8L20 7a2.1 2.1 0 0 0-3-3L4 17z" />,
   trash: <path d="M4 7h16M10 3h4M6 7l1 14h10l1-14M10 11v7M14 11v7" />,
+  power: (
+    <>
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" />
+    </>
+  ),
   layers: (
     <>
-      <rect x="3" y="3" width="18" height="7" rx="2" />
-      <rect x="3" y="14" width="18" height="7" rx="2" />
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
     </>
   ),
   external: (
@@ -93,6 +131,59 @@ const ICON_PATHS: Record<string, ReactNode> = {
     </>
   ),
   menu: <path d="M3 6h18M3 12h18M3 18h18" />,
+  eye: (
+    <>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  'eye-off': (
+    <>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </>
+  ),
+  moon: (
+    <>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      <path d="M17.5 4.5v3M16 6h3" strokeWidth="1.5" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4.5" />
+      <line x1="12" y1="2" x2="12" y2="4.5" />
+      <line x1="12" y1="19.5" x2="12" y2="22" />
+      <line x1="4.93" y1="4.93" x2="6.7" y2="6.7" />
+      <line x1="17.3" y1="17.3" x2="19.07" y2="19.07" />
+      <line x1="2" y1="12" x2="4.5" y2="12" />
+      <line x1="19.5" y1="12" x2="22" y2="12" />
+      <line x1="4.93" y1="19.07" x2="6.7" y2="17.3" />
+      <line x1="17.3" y1="6.7" x2="19.07" y2="4.93" />
+    </>
+  ),
+  cube: (
+    <>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M12 17v5" />
+      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1 1 1 0 0 1 1 1z" />
+    </>
+  ),
 };
 
 export function ReferenceIcon({ name, size = 17 }: { name: string; size?: number }) {
@@ -114,27 +205,27 @@ export function ReferenceIcon({ name, size = 17 }: { name: string; size?: number
 }
 
 const NAV_ICON_BY_ID: Record<string, string> = {
-  'UI-17': 'grid',
-  'UI-18': 'search',
-  'UI-19': 'external',
+  'UI-17': 'clock',
   systems: 'server',
   settings: 'settings',
   administration: 'shield',
   'api-documents': 'file',
   integrations: 'network',
-  'UI-01': 'server',
-  'UI-02': 'users',
-  'UI-03': 'network',
+  'UI-01': 'layers',
+  'UI-02': 'building',
+  'UI-03': 'server',
   'UI-04': 'file',
   'UI-23': 'list',
   'UI-05': 'check',
   'UI-06': 'repeat',
+  'UI-06P': 'shield',
   'UI-15': 'users',
   'UI-25': 'shield',
   'UI-16': 'clock',
   'UI-21': 'file',
   'UI-07': 'plus',
-  'UI-22': 'network',
+  'UI-04G': 'layers',
+  'UI-22': 'link',
   'UI-08': 'plus',
   'UI-09': 'layers',
 };
@@ -158,6 +249,8 @@ export interface AppLayoutShellProps {
   openGroupId: string;
   activeNavItem: NavItemSpec;
   mobileSidebarOpen: boolean;
+  desktopSidebarCollapsed?: boolean;
+  onToggleDesktopSidebar?: () => void;
   onToggleGroup: (groupId: string) => void;
   onSelectNavItem: (item: NavItemSpec) => void;
   onToggleMobileSidebar: () => void;
@@ -168,13 +261,6 @@ export interface AppLayoutShellProps {
   children: ReactNode;
 }
 
-/**
- * Shared application shell (Sidebar + Topbar + Workspace Main Content).
- * Enforces:
- * - Single open collapsible group in the sidebar in the approved sequence.
- * - Page title in the topbar without duplicating a hero header block in the workspace content (PRD-06).
- * - Responsive mobile drawer and theme synchronization across all surfaces.
- */
 export function AppLayoutShell({
   lang,
   theme,
@@ -194,6 +280,8 @@ export function AppLayoutShell({
   openGroupId,
   activeNavItem,
   mobileSidebarOpen,
+  desktopSidebarCollapsed = false,
+  onToggleDesktopSidebar,
   onToggleGroup,
   onSelectNavItem,
   onToggleMobileSidebar,
@@ -203,8 +291,39 @@ export function AppLayoutShell({
   userActions,
   children,
 }: AppLayoutShellProps) {
+  const [isPinned, setIsPinned] = useState<boolean>(true);
+  const [isMiniRail, setIsMiniRail] = useState<boolean>(false);
+
+  const visibleStandaloneItems = standaloneNavItems;
+
+  const handleNavClick = (item: NavItemSpec) => {
+    onSelectNavItem(item);
+    if (!isPinned && !desktopSidebarCollapsed) {
+      onToggleDesktopSidebar?.();
+    }
+  };
+
+  const handleGroupToggle = (groupId: string) => {
+    if (isMiniRail) {
+      setIsMiniRail(false);
+    }
+    onToggleGroup(groupId);
+  };
+
+  const collapseChevronIcon = isMiniRail
+    ? lang === 'ar'
+      ? 'left'
+      : 'right'
+    : lang === 'ar'
+      ? 'right'
+      : 'left';
+
   return (
-    <div className="app-shell app">
+    <div
+      className={`app-shell app ${desktopSidebarCollapsed ? 'sidebar-collapsed' : ''} ${
+        isMiniRail ? 'sidebar-mini-rail' : ''
+      }`}
+    >
       <div
         className={`mobile-backdrop mobile-curtain ${mobileSidebarOpen ? 'open' : ''}`}
         onClick={onCloseMobileSidebar}
@@ -212,36 +331,92 @@ export function AppLayoutShell({
       />
 
       <aside
-        className={`app-sidebar sidebar ${mobileSidebarOpen ? 'mobile-open open' : ''}`}
+        className={`app-sidebar sidebar ref-sidebar ${mobileSidebarOpen ? 'mobile-open open' : ''} ${
+          desktopSidebarCollapsed ? 'collapsed' : ''
+        } ${isMiniRail ? 'mini-rail' : ''}`}
         aria-label="Sidebar Navigation"
       >
-        <div className="brand-header brand">
-          <div className="brand-mark" aria-hidden="true">
-            <ReferenceIcon name="network" size={22} />
-            <span className="sr-only">AG</span>
+        <div className="ref-brand-header brand-header brand">
+          <div className="ref-brand-main">
+            <div className="brand-mark brand-mark-cube" aria-hidden="true">
+              <ReferenceIcon name="cube" size={22} />
+              <span className="sr-only">AG</span>
+            </div>
+            {!isMiniRail && (
+              <div className="ref-brand-titles">
+                <div className="brand-title brand-name heading-font">
+                  {lang === 'ar' ? (
+                    <>
+                      إدارة توثيق
+                      <br />
+                      وحوكمة API
+                    </>
+                  ) : (
+                    brandTitle
+                  )}
+                </div>
+                <div className="brand-subtitle brand-sub sr-only">{brandSubtitle}</div>
+              </div>
+            )}
           </div>
-          <div>
-            <div className="brand-title brand-name heading-font">{brandTitle}</div>
-            <div className="brand-subtitle brand-sub">{brandSubtitle}</div>
+
+          <div className="brand-header-tools">
+            <button
+              type="button"
+              className={`sidebar-pin-badge ${isPinned ? 'pinned' : 'unpinned'}`}
+              onClick={() => setIsPinned((prev) => !prev)}
+              aria-pressed={isPinned}
+              title={
+                lang === 'ar'
+                  ? isPinned
+                    ? 'القائمة مثبّتة (اضغط لإلغاء التثبيت والطي التلقائي)'
+                    : 'تثبيت القائمة الجانبية'
+                  : isPinned
+                    ? 'Sidebar pinned (click to auto-hide on select)'
+                    : 'Pin sidebar'
+              }
+            >
+              <ReferenceIcon name="pin" size={13} />
+            </button>
+            <button
+              type="button"
+              className={`sidebar-collapse-mini-btn ${isMiniRail ? 'active' : ''}`}
+              onClick={() => setIsMiniRail((prev) => !prev)}
+              aria-pressed={isMiniRail}
+              title={
+                lang === 'ar'
+                  ? isMiniRail
+                    ? 'توسيع القائمة الجانبية'
+                    : 'تصغير القائمة إلى شريط أيقونات'
+                  : isMiniRail
+                    ? 'Expand sidebar'
+                    : 'Collapse to icon rail'
+              }
+            >
+              <ReferenceIcon name={collapseChevronIcon} size={13} />
+            </button>
           </div>
         </div>
 
         <div className="nav-section-caption sr-only">{standaloneSectionTitle}</div>
-        <div className="nav-standalone-list nav-direct">
-          {standaloneNavItems.map((item) => {
+        <div className="nav-standalone-list nav-direct ref-sidebar-list">
+          {visibleStandaloneItems.map((item) => {
             const isActive = activeNavItem.id === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
                 data-screen-id={item.id}
-                className={`nav-item-btn nav-item ${isActive ? 'active' : ''}`}
+                title={item.label[lang]}
+                className={`ref-sidebar-item nav-item-btn nav-item ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
-                onClick={() => onSelectNavItem(item)}
+                onClick={() => handleNavClick(item)}
               >
                 <span className="nav-item-main">
-                  <ReferenceIcon name={NAV_ICON_BY_ID[item.id] ?? 'file'} size={16} />
-                  <span>{item.label[lang]}</span>
+                  <span className="ref-sidebar-icon">
+                    <ReferenceIcon name={NAV_ICON_BY_ID[item.id] ?? 'file'} size={17} />
+                  </span>
+                  {!isMiniRail && <span className="ref-sidebar-label">{item.label[lang]}</span>}
                 </span>
                 <span className="nav-item-code ltr-code sr-only">{item.id}</span>
               </button>
@@ -250,7 +425,7 @@ export function AppLayoutShell({
         </div>
 
         <div className="nav-section-caption sr-only">{collapsibleSectionTitle}</div>
-        <nav id="sidebar-navigation" className="nav-accordion-list" aria-label={collapsibleSectionTitle}>
+        <nav id="sidebar-navigation" className="nav-accordion-list ref-sidebar-nav" aria-label={collapsibleSectionTitle}>
           {sidebarGroups.map((group) => {
             const isExpanded = openGroupId === group.id;
             const hasActiveChild = group.items.some((it) => it.id === activeNavItem.id);
@@ -259,19 +434,26 @@ export function AppLayoutShell({
                 <button
                   type="button"
                   data-nav-group={group.id}
-                  className={`nav-group-toggle nav-toggle heading-font ${isExpanded ? 'expanded' : ''} ${hasActiveChild ? 'active-section' : ''}`}
+                  title={group.label[lang]}
+                  className={`nav-group-toggle nav-toggle heading-font ${isExpanded ? 'expanded' : ''} ${
+                    hasActiveChild ? 'active-section' : ''
+                  }`}
                   aria-expanded={isExpanded}
-                  onClick={() => onToggleGroup(group.id)}
+                  onClick={() => handleGroupToggle(group.id)}
                 >
                   <span className="nav-item-main">
-                    <ReferenceIcon name={NAV_ICON_BY_ID[group.id] ?? 'layers'} size={17} />
-                    <span className="nav-group-label">{group.label[lang]}</span>
+                    <span className="ref-sidebar-icon">
+                      <ReferenceIcon name={NAV_ICON_BY_ID[group.id] ?? 'layers'} size={17} />
+                    </span>
+                    {!isMiniRail && <span className="nav-group-label">{group.label[lang]}</span>}
                   </span>
-                  <span className="nav-chevron" aria-hidden="true">
-                    <ReferenceIcon name="down" size={15} />
-                  </span>
+                  {!isMiniRail && (
+                    <span className="nav-chevron" aria-hidden="true">
+                      <ReferenceIcon name="down" size={15} />
+                    </span>
+                  )}
                 </button>
-                {isExpanded && (
+                {isExpanded && !isMiniRail && (
                   <div className="nav-group-items nav-children">
                     {group.items.map((item) => {
                       const isActive = activeNavItem.id === item.id;
@@ -280,13 +462,16 @@ export function AppLayoutShell({
                           key={item.id}
                           type="button"
                           data-screen-id={item.id}
-                          className={`nav-item-btn nav-item ${isActive ? 'active' : ''}`}
+                          title={item.label[lang]}
+                          className={`ref-sidebar-item nav-item-btn nav-item ${isActive ? 'active' : ''}`}
                           aria-current={isActive ? 'page' : undefined}
-                          onClick={() => onSelectNavItem(item)}
+                          onClick={() => handleNavClick(item)}
                         >
                           <span className="nav-item-main">
-                            <ReferenceIcon name={NAV_ICON_BY_ID[item.id] ?? 'file'} size={15} />
-                            <span>{item.label[lang]}</span>
+                            <span className="ref-sidebar-icon">
+                              <ReferenceIcon name={NAV_ICON_BY_ID[item.id] ?? 'file'} size={15} />
+                            </span>
+                            <span className="ref-sidebar-label">{item.label[lang]}</span>
                           </span>
                           <span className="nav-item-code ltr-code sr-only">{item.id}</span>
                         </button>
@@ -301,18 +486,26 @@ export function AppLayoutShell({
       </aside>
 
       <div className="app-main main-area">
-        <header className="app-topbar topbar">
+        <header className="app-topbar topbar ref-topbar">
           <div className="topbar-start top-right">
             <button
               type="button"
-              className="mobile-menu-btn icon-btn mobile-menu"
+              className="mobile-menu-btn icon-btn mobile-menu topbar-hamburger-btn"
               aria-label={mobileMenuAriaLabel}
-              aria-expanded={mobileSidebarOpen}
-              onClick={onToggleMobileSidebar}
+              aria-expanded={!desktopSidebarCollapsed}
+              onClick={() => {
+                if (window.innerWidth <= 960) {
+                  onToggleMobileSidebar();
+                } else if (isMiniRail) {
+                  setIsMiniRail(false);
+                } else {
+                  onToggleDesktopSidebar?.();
+                }
+              }}
             >
-              <ReferenceIcon name="menu" size={17} />
+              <ReferenceIcon name="menu" size={18} />
             </button>
-            <div className="topbar-titles">
+            <div className="topbar-titles sr-only">
               <div className="topbar-crumb crumb">
                 {topbarBreadcrumb.replace(/\s*·\s*UI-\d+[A-Z]?/g, '')}
                 <span className="sr-only"> · <span className="ltr-code">{activeNavItem.id}</span></span>
@@ -321,35 +514,29 @@ export function AppLayoutShell({
             </div>
           </div>
 
-          <div className="topbar-actions top-actions">
-            <div className="preference-controls">
-              <div className="lang-switch-group language-switch" role="group" aria-label={langToggleAriaLabel}>
-                <button
-                  type="button"
-                  className={`lang-switch-btn language-choice ${lang === 'ar' ? 'active' : ''}`}
-                  onClick={() => onChangeLanguage('ar')}
-                  aria-pressed={lang === 'ar'}
-                >
-                  AR
-                </button>
-                <button
-                  type="button"
-                  className={`lang-switch-btn language-choice ${lang === 'en' ? 'active' : ''}`}
-                  onClick={() => onChangeLanguage('en')}
-                  aria-pressed={lang === 'en'}
-                >
-                  EN
-                </button>
-              </div>
-
+          <div className="topbar-actions top-actions ref-topbar-actions">
+            <div className="preference-controls ref-pref-controls">
               <button
                 type="button"
-                className="theme-toggle-btn icon-btn theme-switch"
+                className="ref-theme-btn theme-toggle-btn icon-btn theme-switch"
                 aria-label={themeToggleAriaLabel}
                 onClick={onToggleTheme}
               >
-                <span aria-hidden="true">{theme === 'light' ? '🌙' : '☀️'}</span>
+                <ReferenceIcon name="moon" size={17} />
                 <span className="sr-only">{theme === 'light' ? themeDarkLabel : themeLightLabel}</span>
+              </button>
+
+              <button
+                type="button"
+                className="ref-lang-dropdown-btn"
+                aria-label={langToggleAriaLabel}
+                onClick={() => onChangeLanguage(lang === 'ar' ? 'en' : 'ar')}
+              >
+                <span className="ref-lang-globe">
+                  <ReferenceIcon name="globe" size={15} />
+                </span>
+                <span>{lang === 'ar' ? 'العربية' : 'English'}</span>
+                <span className="ref-lang-caret">⌄</span>
               </button>
             </div>
             {userActions}
@@ -361,4 +548,3 @@ export function AppLayoutShell({
     </div>
   );
 }
-

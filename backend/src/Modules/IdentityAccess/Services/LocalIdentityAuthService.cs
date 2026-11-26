@@ -32,10 +32,23 @@ public sealed class LocalIdentityAuthService(
         string traceId,
         CancellationToken cancellationToken = default)
     {
-        var normalizedEmail = userManager.NormalizeEmail(request.Email.Trim());
-        var user = string.IsNullOrWhiteSpace(normalizedEmail)
-            ? null
-            : await userManager.FindByEmailAsync(normalizedEmail);
+        var rawLoginId = request.GetEffectiveLoginIdentifier();
+        var normalizedInput = userManager.NormalizeName(rawLoginId) ?? rawLoginId.ToUpperInvariant();
+        UserEntity? user = null;
+        if (!string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            user = await dbContext.Users.FirstOrDefaultAsync(
+                u => u.NormalizedUsername == normalizedInput,
+                cancellationToken);
+
+            if (user is null)
+            {
+                var normalizedEmail = userManager.NormalizeEmail(rawLoginId) ?? normalizedInput;
+                user = await dbContext.Users.FirstOrDefaultAsync(
+                    u => u.NormalizedEmail == normalizedEmail,
+                    cancellationToken);
+            }
+        }
 
         if (user is null || !user.IsActive || string.IsNullOrEmpty(user.PasswordHash))
         {
@@ -119,7 +132,8 @@ public sealed class LocalIdentityAuthService(
             AuthProvider: ProviderName,
             Roles: roles,
             Permissions: permissions,
-            TraceId: traceId);
+            TraceId: traceId,
+            Username: user.Username);
 
         return new LoginResult(summaryDto, principal);
     }
@@ -164,7 +178,8 @@ public sealed class LocalIdentityAuthService(
             AuthProvider: ProviderName,
             Roles: roles,
             Permissions: permissions,
-            TraceId: traceId);
+            TraceId: traceId,
+            Username: user.Username);
     }
 
     public async Task ChangePasswordAsync(
@@ -354,8 +369,8 @@ public sealed class LocalIdentityAuthService(
 
     private static ApiContractException CreateUnifiedLoginUnauthorized() =>
         ApiContractException.Unauthorized(
-            messageAr: "البريد الإلكتروني أو كلمة المرور غير صحيحة أو الحساب غير مفعل.",
-            messageEn: "Invalid email or password, or account is not active.");
+            messageAr: "اسم المستخدم أو كلمة المرور غير صحيحة أو الحساب غير مفعل.",
+            messageEn: "Invalid username or password, or account is not active.");
 
     private static ApiContractException CreateGenericResetFailureException() =>
         ApiContractException.BadRequest(

@@ -80,7 +80,7 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Created($"/api/v1/file-types/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("file_types.manage", "FILE_TYPE_CREATE_DENIED", "FILE_TYPE")
+            .RequireGeneralPermission("file_types.create", "FILE_TYPE_CREATE_DENIED", "FILE_TYPE")
             .WithRequestValidation<CreateFileTypeRequest>()
             .WithName("CreateFileType")
             .Produces<FileTypeDto>(StatusCodes.Status201Created);
@@ -97,10 +97,24 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("file_types.manage", "FILE_TYPE_EDIT_DENIED", "FILE_TYPE")
+            .RequireGeneralPermission("file_types.edit", "FILE_TYPE_EDIT_DENIED", "FILE_TYPE")
             .WithRequestValidation<UpdateFileTypeRequest>()
             .WithName("UpdateFileType")
             .Produces<FileTypeDto>(StatusCodes.Status200OK);
+
+        fileTypes.MapDelete("/{fileTypeId:guid}", async (
+                Guid fileTypeId,
+                HttpContext httpContext,
+                IFileTypeManagementService service,
+                CancellationToken cancellationToken) =>
+            {
+                await service.DeleteFileTypeAsync(httpContext.User, fileTypeId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("file_types.delete", "FILE_TYPE_DELETE_DENIED", "FILE_TYPE")
+            .WithName("DeleteFileType")
+            .Produces(StatusCodes.Status204NoContent);
     }
 
     private static void MapRequirementTemplatesEndpoints(IEndpointRouteBuilder endpoints)
@@ -174,7 +188,7 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Created($"/api/v1/requirement-templates/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("requirements.manage", "REQUIREMENT_TEMPLATE_CREATE_DENIED", "FILE_REQUIREMENT_TEMPLATE")
+            .RequireGeneralPermission("requirements.create", "REQUIREMENT_TEMPLATE_CREATE_DENIED", "FILE_REQUIREMENT_TEMPLATE")
             .WithRequestValidation<CreateRequirementTemplateRequest>()
             .WithName("CreateRequirementTemplate")
             .Produces<FileRequirementTemplateDto>(StatusCodes.Status201Created);
@@ -191,10 +205,24 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("requirements.manage", "REQUIREMENT_TEMPLATE_EDIT_DENIED", "FILE_REQUIREMENT_TEMPLATE")
+            .RequireGeneralPermission("requirements.edit", "REQUIREMENT_TEMPLATE_EDIT_DENIED", "FILE_REQUIREMENT_TEMPLATE")
             .WithRequestValidation<UpdateRequirementTemplateRequest>()
             .WithName("UpdateRequirementTemplate")
             .Produces<FileRequirementTemplateDto>(StatusCodes.Status200OK);
+
+        templates.MapDelete("/{templateId:guid}", async (
+                Guid templateId,
+                HttpContext httpContext,
+                IRequirementTemplateService service,
+                CancellationToken cancellationToken) =>
+            {
+                await service.DeleteRequirementTemplateAsync(httpContext.User, templateId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("requirements.delete", "REQUIREMENT_TEMPLATE_DELETE_DENIED", "FILE_REQUIREMENT_TEMPLATE")
+            .WithName("DeleteRequirementTemplate")
+            .Produces(StatusCodes.Status204NoContent);
     }
 
     private static void MapApprovalRoutesEndpoints(IEndpointRouteBuilder endpoints)
@@ -242,7 +270,7 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Created($"/api/v1/approval-routes/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("routes.manage", "APPROVAL_ROUTE_CREATE_DENIED", "APPROVAL_ROUTE")
+            .RequireGeneralPermission("routes.create", "APPROVAL_ROUTE_CREATE_DENIED", "APPROVAL_ROUTE")
             .WithRequestValidation<CreateApprovalRouteRequest>()
             .WithName("CreateApprovalRoute")
             .Produces<ApprovalRouteDto>(StatusCodes.Status201Created);
@@ -259,7 +287,7 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("routes.manage", "APPROVAL_ROUTE_EDIT_DENIED", "APPROVAL_ROUTE")
+            .RequireGeneralPermission("routes.edit", "APPROVAL_ROUTE_EDIT_DENIED", "APPROVAL_ROUTE")
             .WithRequestValidation<UpdateApprovalRouteRequest>()
             .WithName("UpdateApprovalRoute")
             .Produces<ApprovalRouteDto>(StatusCodes.Status200OK);
@@ -276,10 +304,24 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("routes.manage", "APPROVAL_ROUTE_STAGES_DENIED", "APPROVAL_ROUTE")
+            .RequireGeneralPermission("routes.edit", "APPROVAL_ROUTE_STAGES_DENIED", "APPROVAL_ROUTE")
             .WithRequestValidation<ReplaceApprovalRouteStagesRequest>()
             .WithName("ReplaceApprovalRouteStages")
             .Produces<ApprovalRouteDto>(StatusCodes.Status200OK);
+
+        routes.MapDelete("/{routeId:guid}", async (
+                Guid routeId,
+                HttpContext httpContext,
+                IApprovalRouteAndChangeConfigService service,
+                CancellationToken cancellationToken) =>
+            {
+                await service.DeleteApprovalRouteAsync(httpContext.User, routeId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("routes.delete", "APPROVAL_ROUTE_DELETE_DENIED", "APPROVAL_ROUTE")
+            .WithName("DeleteApprovalRoute")
+            .Produces(StatusCodes.Status204NoContent);
     }
 
     private static void MapChangeTypesAndPoliciesEndpoints(IEndpointRouteBuilder endpoints)
@@ -327,7 +369,7 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Created($"/api/v1/change-types/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("changes.config.manage", "CHANGE_TYPE_CREATE_DENIED", "CHANGE_TYPE")
+            .RequireGeneralPermission("changes.config.create", "CHANGE_TYPE_CREATE_DENIED", "CHANGE_TYPE")
             .WithRequestValidation<CreateChangeTypeRequest>()
             .WithName("CreateChangeType")
             .Produces<ChangeTypeDto>(StatusCodes.Status201Created);
@@ -344,10 +386,24 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("changes.config.manage", "CHANGE_TYPE_EDIT_DENIED", "CHANGE_TYPE")
+            .RequireGeneralPermission("changes.config.edit", "CHANGE_TYPE_EDIT_DENIED", "CHANGE_TYPE")
             .WithRequestValidation<UpdateChangeTypeRequest>()
             .WithName("UpdateChangeType")
             .Produces<ChangeTypeDto>(StatusCodes.Status200OK);
+
+        changeTypes.MapDelete("/{typeId:guid}", async (
+                Guid typeId,
+                HttpContext httpContext,
+                IApprovalRouteAndChangeConfigService service,
+                CancellationToken cancellationToken) =>
+            {
+                await service.DeleteChangeTypeAsync(httpContext.User, typeId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("changes.config.delete", "CHANGE_TYPE_DELETE_DENIED", "CHANGE_TYPE")
+            .WithName("DeleteChangeType")
+            .Produces(StatusCodes.Status204NoContent);
 
         var policies = endpoints.MapGroup("/change-policies")
             .WithTags("Configuration - Change Policies (M07)")
@@ -381,7 +437,7 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Created($"/api/v1/change-policies/{created.Id}", created);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("changes.config.manage", "CHANGE_POLICY_CREATE_DENIED", "CHANGE_POLICY")
+            .RequireGeneralPermission("changes.config.create", "CHANGE_POLICY_CREATE_DENIED", "CHANGE_POLICY")
             .WithRequestValidation<CreateChangePolicyRequest>()
             .WithName("CreateChangePolicy")
             .Produces<ChangePolicyDto>(StatusCodes.Status201Created);
@@ -398,9 +454,23 @@ public sealed class ConfigurationModule : IBackendModule
                 return Results.Ok(updated);
             })
             .WithCsrfValidation()
-            .RequireGeneralPermission("changes.config.manage", "CHANGE_POLICY_EDIT_DENIED", "CHANGE_POLICY")
+            .RequireGeneralPermission("changes.config.edit", "CHANGE_POLICY_EDIT_DENIED", "CHANGE_POLICY")
             .WithRequestValidation<UpdateChangePolicyRequest>()
             .WithName("UpdateChangePolicy")
             .Produces<ChangePolicyDto>(StatusCodes.Status200OK);
+
+        policies.MapDelete("/{policyId:guid}", async (
+                Guid policyId,
+                HttpContext httpContext,
+                IApprovalRouteAndChangeConfigService service,
+                CancellationToken cancellationToken) =>
+            {
+                await service.DeleteChangePolicyAsync(httpContext.User, policyId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithCsrfValidation()
+            .RequireGeneralPermission("changes.config.delete", "CHANGE_POLICY_DELETE_DENIED", "CHANGE_POLICY")
+            .WithName("DeleteChangePolicy")
+            .Produces(StatusCodes.Status204NoContent);
     }
 }

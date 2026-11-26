@@ -1,12 +1,65 @@
 import { FormEvent, ReactNode } from 'react';
 import { ReferenceIcon } from './AppLayoutShell';
 import { Button } from './FormControls';
-import { StatusBadge } from './StateViews';
+
+export interface BackIconButtonProps {
+  label: string;
+  onClick: () => void;
+}
+
+/**
+ * Compact icon-only back button used consistently across all secondary views and standalone forms.
+ */
+export function BackIconButton({ label, onClick }: BackIconButtonProps) {
+  return (
+    <button
+      type="button"
+      className="editor-back"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    >
+      <ReferenceIcon name="right" size={16} />
+    </button>
+  );
+}
+
+export interface RowActionButtonProps {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  variant?: 'default' | 'danger' | 'warning' | 'success';
+  disabled?: boolean;
+}
+
+/**
+ * Compact icon-only action button for table rows with accessible label and tooltip.
+ */
+export function RowActionButton({
+  icon,
+  label,
+  onClick,
+  variant = 'default',
+  disabled = false,
+}: RowActionButtonProps) {
+  return (
+    <button
+      type="button"
+      className={`action-icon-btn action-icon-btn--${variant}`}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+    >
+      <ReferenceIcon name={icon} size={15} />
+    </button>
+  );
+}
 
 export interface StandaloneFormPageProps {
-  modeBadgeLabel: string;
+  modeBadgeLabel?: string;
   formTitle: string;
-  formSubtitle: string;
+  formSubtitle?: string;
   backButtonLabel: string;
   submitButtonLabel: string;
   cancelButtonLabel: string;
@@ -18,21 +71,10 @@ export interface StandaloneFormPageProps {
 }
 
 /**
- * Reusable standalone full-page layout for Create and Edit forms.
- * Reconstructed directly from viewEditor() in UX_reference_only(2).html:
- * <div class="editor-page">
- *   <div class="editor-toolbar"><button class="editor-back">...</button></div>
- *   <section class="editor-card">
- *     <div class="editor-card-top"><b>...</b><span class="tag">...</span></div>
- *     <div class="editor-card-content">...</div>
- *     <div class="editor-card-actions">...</div>
- *   </section>
- * </div>
+ * Reusable compact full-page layout for Create and Edit forms.
  */
 export function StandaloneFormPage({
-  modeBadgeLabel,
   formTitle,
-  formSubtitle,
   backButtonLabel,
   submitButtonLabel,
   cancelButtonLabel,
@@ -47,32 +89,16 @@ export function StandaloneFormPage({
     onSubmit();
   };
 
-  const cleanTagLabel = modeBadgeLabel
-    .replace(/·?\s*UI-\d+[A-Z]?/g, '')
-    .replace(/·?\s*[A-Z]\d{2}/g, '')
-    .trim();
-
   return (
     <section className="standalone-editor-page editor-page" aria-labelledby="standalone-form-heading">
-      <div className="editor-top-bar editor-toolbar">
-        <button type="button" className="editor-back" onClick={onBack}>
-          <ReferenceIcon name="right" size={15} />
-          <span>{backButtonLabel}</span>
-        </button>
-        <span className="sr-only">
-          <StatusBadge variant="info">{modeBadgeLabel}</StatusBadge>
-        </span>
-      </div>
-
       <form className="surface-card editor-form-card editor-card" onSubmit={handleFormSubmit} noValidate>
         <div className="editor-card-header editor-card-top">
-          <div>
+          <div className="editor-header-main">
+            <BackIconButton label={backButtonLabel} onClick={onBack} />
             <h2 id="standalone-form-heading" className="card-title heading-font">
               <b>{formTitle}</b>
             </h2>
-            {formSubtitle && <p className="card-subtitle">{formSubtitle}</p>}
           </div>
-          {cleanTagLabel && <span className="tag">{cleanTagLabel}</span>}
         </div>
 
         <div className="editor-card-body editor-card-content">{children}</div>

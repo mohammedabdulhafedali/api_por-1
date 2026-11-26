@@ -32,6 +32,11 @@ public interface IMasterDataService
         string traceId,
         CancellationToken cancellationToken = default);
 
+    Task DeleteCompanySystemAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid systemId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<InternalProviderDto>> GetInternalProvidersAsync(
         int? page,
         int? pageSize,
@@ -51,6 +56,11 @@ public interface IMasterDataService
         Guid providerId,
         UpdateInternalProviderRequest request,
         string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteInternalProviderAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid providerId,
         CancellationToken cancellationToken = default);
 
     Task<PagedResult<ExternalProviderDto>> GetExternalProvidersAsync(
@@ -74,6 +84,11 @@ public interface IMasterDataService
         string traceId,
         CancellationToken cancellationToken = default);
 
+    Task DeleteExternalProviderAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid providerId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<ConsumerCategoryDto>> GetConsumerCategoriesAsync(
         int? page,
         int? pageSize,
@@ -93,6 +108,11 @@ public interface IMasterDataService
         Guid categoryId,
         UpdateConsumerCategoryRequest request,
         string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteConsumerCategoryAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid categoryId,
         CancellationToken cancellationToken = default);
 
     Task<PagedResult<ConsumerDto>> GetConsumersAsync(
@@ -117,6 +137,11 @@ public interface IMasterDataService
         string traceId,
         CancellationToken cancellationToken = default);
 
+    Task DeleteConsumerAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid consumerId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<ApiGroupDto>> GetApiGroupsAsync(
         int? page,
         int? pageSize,
@@ -136,6 +161,11 @@ public interface IMasterDataService
         Guid groupId,
         UpdateApiGroupRequest request,
         string traceId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteApiGroupAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid groupId,
         CancellationToken cancellationToken = default);
 }
 
@@ -1214,6 +1244,237 @@ public sealed class MasterDataService(
             cancellationToken);
 
         return new ApiGroupDto(entity.Id, entity.Name, entity.Description, entity.IsActive, docCount, traceId);
+    }
+
+    public async Task DeleteCompanySystemAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid systemId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.CompanySystems.FirstOrDefaultAsync(s => s.Id == systemId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "نظام الشركة المطلوب غير موجود.",
+                messageEn: "The requested company system was not found.");
+        }
+
+        var hasDocuments = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(
+                d => d.ConsumerCompanySystemId == systemId || d.ProviderInternalSystemId == systemId,
+                cancellationToken);
+
+        if (hasDocuments)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف نظام شركة مرتبط بوثائق API قائمة.",
+                messageEn: "Cannot delete a company system linked to existing API documents.");
+        }
+
+        var internalProviders = await dbContext.InternalProviderSystems
+            .Where(p => p.CompanySystemId == systemId)
+            .ToListAsync(cancellationToken);
+        if (internalProviders.Count > 0)
+        {
+            dbContext.InternalProviderSystems.RemoveRange(internalProviders);
+        }
+
+        dbContext.CompanySystems.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "COMPANY_SYSTEM_DELETED",
+            "COMPANY_SYSTEM",
+            systemId,
+            "SUCCESS",
+            new { entity.Name },
+            cancellationToken);
+    }
+
+    public async Task DeleteApiGroupAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.ApiGroups.FirstOrDefaultAsync(g => g.Id == groupId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "مجموعة واجهات API المطلوبة غير موجودة.",
+                messageEn: "The requested API group was not found.");
+        }
+
+        var hasDocuments = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.ApiGroupId == groupId, cancellationToken);
+
+        if (hasDocuments)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف مجموعة واجهات API مرتبطة بوثائق API قائمة.",
+                messageEn: "Cannot delete an API group linked to existing API documents.");
+        }
+
+        dbContext.ApiGroups.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "API_GROUP_DELETED",
+            "API_GROUP",
+            groupId,
+            "SUCCESS",
+            new { entity.Name },
+            cancellationToken);
+    }
+
+    public async Task DeleteConsumerCategoryAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid categoryId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.ConsumerCategories.FirstOrDefaultAsync(c => c.Id == categoryId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "تصنيف الجهات المطلوب غير موجود.",
+                messageEn: "The requested consumer category was not found.");
+        }
+
+        var hasConsumers = await dbContext.ConsumerEntities.AsNoTracking()
+            .AnyAsync(ce => ce.CategoryId == categoryId, cancellationToken);
+        if (hasConsumers)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف تصنيف يضم جهات مستهلكة مرتبطة به.",
+                messageEn: "Cannot delete a consumer category containing linked consumer entities.");
+        }
+
+        dbContext.ConsumerCategories.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "CONSUMER_CATEGORY_DELETED",
+            "CONSUMER_CATEGORY",
+            categoryId,
+            "SUCCESS",
+            new { entity.Name },
+            cancellationToken);
+    }
+
+    public async Task DeleteConsumerAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid consumerId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.ConsumerEntities.FirstOrDefaultAsync(c => c.Id == consumerId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "الجهة المستهلكة المطلوبة غير موجودة.",
+                messageEn: "The requested consumer entity was not found.");
+        }
+
+        var hasDocuments = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.ConsumerEntityId == consumerId, cancellationToken);
+        var hasUsers = await dbContext.Users.AsNoTracking()
+            .AnyAsync(u => u.ConsumerEntityId == consumerId, cancellationToken);
+
+        if (hasDocuments || hasUsers)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف جهة مستهلكة مرتبطة بوثائق API أو مستخدمين.",
+                messageEn: "Cannot delete a consumer entity linked to API documents or user accounts.");
+        }
+
+        dbContext.ConsumerEntities.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "CONSUMER_DELETED",
+            "CONSUMER_ENTITY",
+            consumerId,
+            "SUCCESS",
+            new { entity.Name },
+            cancellationToken);
+    }
+
+    public async Task DeleteInternalProviderAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid providerId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.InternalProviderSystems.FirstOrDefaultAsync(p => p.Id == providerId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "سجل المزوّد الداخلي غير موجود.",
+                messageEn: "The requested internal provider record was not found.");
+        }
+
+        var hasDocuments = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.ProviderInternalSystemId == entity.CompanySystemId, cancellationToken);
+        if (hasDocuments)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف مزوّد داخلي مرتبط بوثائق API قائمة.",
+                messageEn: "Cannot delete an internal provider linked to existing API documents.");
+        }
+
+        dbContext.InternalProviderSystems.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "INTERNAL_PROVIDER_DELETED",
+            "INTERNAL_PROVIDER",
+            providerId,
+            "SUCCESS",
+            new { entity.CompanySystemId },
+            cancellationToken);
+    }
+
+    public async Task DeleteExternalProviderAsync(
+        ClaimsPrincipal actorPrincipal,
+        Guid providerId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await serverAuthorization.RequireActiveAuthenticatedUserAsync(actorPrincipal, cancellationToken);
+        var entity = await dbContext.ExternalProviderSystems.FirstOrDefaultAsync(p => p.Id == providerId, cancellationToken);
+        if (entity is null)
+        {
+            throw ApiContractException.NotFound(
+                messageAr: "سجل المزوّد الخارجي غير موجود.",
+                messageEn: "The requested external provider record was not found.");
+        }
+
+        var hasDocuments = await dbContext.ApiDocuments.AsNoTracking()
+            .AnyAsync(d => d.ProviderExternalSystemId == providerId, cancellationToken);
+        if (hasDocuments)
+        {
+            throw ApiContractException.UnprocessableEntity(
+                messageAr: "لا يمكن حذف مزوّد خارجي مرتبط بوثائق API قائمة.",
+                messageEn: "Cannot delete an external provider linked to existing API documents.");
+        }
+
+        dbContext.ExternalProviderSystems.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await serverAuthorization.WriteAuditEventAsync(
+            actor.Id,
+            "EXTERNAL_PROVIDER_DELETED",
+            "EXTERNAL_PROVIDER",
+            providerId,
+            "SUCCESS",
+            new { entity.Name },
+            cancellationToken);
     }
 
     // ========================================================================

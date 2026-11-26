@@ -16,6 +16,7 @@ import {
 } from '../../api/documentsAndIntegrationsApi';
 import { AppLanguage, UI_STRINGS } from '../../constants/uiBaseline';
 import {
+  BackIconButton,
   Button,
   CentralModalDialog,
   DataTable,
@@ -23,6 +24,8 @@ import {
   ErrorState,
   FormField,
   PaginationBar,
+  ReferenceIcon,
+  RowActionButton,
   SearchFilterBar,
   SelectInput,
   StandaloneFormPage,
@@ -49,7 +52,7 @@ interface ModalState {
 
 const COPY = {
   ar: {
-    pageTitle: 'قائمة وثائق API وعلاقاتها (UI-21)',
+    pageTitle: 'وثائق API',
     pageDesc:
       'الوثائق مقيدة افتراضيًا وفق صلاحيات كل وثيقة؛ العنوان يُشتق تلقائيًا من المزوّد والمستهلك ولا تُرفع الملفات هنا بل داخل التكامل.',
     noViewTitle: 'صلاحية عرض وثائق API غير متوفرة',
@@ -65,9 +68,9 @@ const COPY = {
     filterDraft: 'مسودة (DRAFT)',
     filterArchived: 'مؤرشفة (ARCHIVED)',
     colTitle: 'العنوان المشتق والأطراف',
-    colGroup: 'مجموعة API والتهيئة',
-    colDevs: 'المطورون المكلّفون',
-    colIntegration: 'التكامل (1:1)',
+    colGroup: 'مجموعة API',
+    colDevs: 'المطورون',
+    colIntegration: 'التكامل',
     colState: 'الحالة',
     colActions: 'الإجراءات',
     linkedBadge: 'مرتبطة بتكامل',
@@ -78,24 +81,22 @@ const COPY = {
     devsBtn: 'المطورون',
     accessBtn: 'الصلاحيات',
     deleteBtn: 'حذف',
-    createBadge: 'إضافة وثيقة API · UI-07 / D01-D02',
-    editBadge: 'تعديل وثيقة API · D03',
-    devsBadge: 'تعيين مطوري الوثيقة · D02',
-    detailsBadge: 'تفاصيل وثيقة API · D03',
-    createTitle: 'إضافة وثيقة API جديدة',
-    editTitle: 'تعديل إعدادات وثيقة API',
-    devsTitle: 'تعيين المطورين المسؤولين عن الوثيقة',
+    createBadge: 'إضافة وثيقة API',
+    editBadge: 'تعديل وثيقة API',
+    devsBadge: 'تعيين مطوري الوثيقة',
+    detailsBadge: 'تفاصيل وثيقة API',
+    createTitle: 'إضافة وثيقة API',
+    editTitle: 'تعديل وثيقة API',
+    devsTitle: 'تعيين المطورين',
     detailsTitle: 'تفاصيل وثيقة API',
-    formSub:
-      'يُشتق عنوان الوثيقة تلقائيًا ولا يقبل النظام اختيار النظام نفسه مزودًا ومستهلكًا. إدارة الملفات تتم لاحقًا من داخل التكامل.',
-    devsFormSub:
-      'الفصل المعتمد: تعيين المطور في الوثيقة يحدد مسؤوليته التقنية ولا يمنح تلقائيًا صلاحيات الوصول (تُضبط من شاشة الصلاحيات UI-21A).',
-    backBtn: 'العودة إلى القائمة',
-    saveCreateBtn: 'حفظ وإنشاء الوثيقة',
+    formSub: '',
+    devsFormSub: '',
+    backBtn: 'العودة',
+    saveCreateBtn: 'حفظ',
     saveEditBtn: 'حفظ التعديلات',
-    saveDevsBtn: 'حفظ تعيين المطورين',
+    saveDevsBtn: 'حفظ',
     cancelBtn: 'إلغاء',
-    derivedPreviewLabel: 'عنوان الوثيقة المشتق تلقائيًا (للقراءة فقط):',
+    derivedPreviewLabel: 'عنوان الوثيقة:',
     providerKindLabel: 'نوع المزوّد',
     providerKindInternal: 'نظام شركة داخلي (مزوّد)',
     providerKindExternal: 'مزوّد خارجي مستقل',
@@ -113,10 +114,10 @@ const COPY = {
     pubManual: 'يدوي منضبط (MANUAL)',
     pubPostApproval: 'مهيأ بعد الاعتماد (POST_APPROVAL)',
     stateLabel: 'حالة الوثيقة',
-    developersLabel: 'المطورون المكلّفون (D02 — منفصل عن الصلاحيات)',
+    developersLabel: 'المطورون المكلّفون',
     lockedPartiesHint:
-      'هذه الوثيقة مرتبطة بتكامل (1:1): الأطراف ومجموعة API مقفولة، ويمكن تعديل القالب/المسار/السياسة/الحالة فقط.',
-    noUploadNote: 'ملاحظة: لا توجد عملية رفع ملفات داخل الوثيقة؛ تُرفع الملفات وتُدار داخل التكامل في S08.',
+      'هذه الوثيقة مرتبطة بتكامل: الأطراف ومجموعة API مقفولة، ويمكن تعديل القالب/المسار/السياسة/الحالة فقط.',
+    noUploadNote: '',
     validationRequired: 'يرجى استكمال جميع حقول الأطراف والإعدادات المطلوبة.',
     validationSameParty: 'لا يمكن اختيار نظام الشركة نفسه مزودًا ومستهلكًا للوثيقة ذاتها.',
     createdTitle: 'تم إنشاء وثيقة API',
@@ -132,7 +133,7 @@ const COPY = {
     ofWord: 'من',
   },
   en: {
-    pageTitle: 'API Documents Directory (UI-21)',
+    pageTitle: 'API Documents',
     pageDesc:
       'Documents are restricted by default via Document ACL. Title is auto-derived from provider & consumer; documentation files are managed inside Integrations.',
     noViewTitle: 'Missing API documents view permission',
@@ -148,9 +149,9 @@ const COPY = {
     filterDraft: 'Draft (DRAFT)',
     filterArchived: 'Archived (ARCHIVED)',
     colTitle: 'Derived Title & Parties',
-    colGroup: 'API Group & Governance',
-    colDevs: 'Assigned Developers',
-    colIntegration: 'Integration (1:1)',
+    colGroup: 'API Group',
+    colDevs: 'Developers',
+    colIntegration: 'Integration',
     colState: 'State',
     colActions: 'Actions',
     linkedBadge: 'Linked',
@@ -161,24 +162,22 @@ const COPY = {
     devsBtn: 'Developers',
     accessBtn: 'Access Control',
     deleteBtn: 'Delete',
-    createBadge: 'Create API Document · UI-07 / D01-D02',
-    editBadge: 'Edit API Document · D03',
-    devsBadge: 'Assign Developers · D02',
-    detailsBadge: 'API Document Details · D03',
+    createBadge: 'Create API Document',
+    editBadge: 'Edit API Document',
+    devsBadge: 'Assign Developers',
+    detailsBadge: 'API Document Details',
     createTitle: 'Create New API Document',
-    editTitle: 'Edit API Document Settings',
-    devsTitle: 'Assign Document Developers',
+    editTitle: 'Edit API Document',
+    devsTitle: 'Assign Developers',
     detailsTitle: 'API Document Details',
-    formSub:
-      'Derived title is generated automatically; same internal system cannot be both provider and consumer. Files are managed later inside Integrations.',
-    devsFormSub:
-      'Separation guarantee: assigning developers sets responsibility only and never grants Document ACL permissions automatically.',
-    backBtn: 'Back to List',
-    saveCreateBtn: 'Save & Create Document',
+    formSub: '',
+    devsFormSub: '',
+    backBtn: 'Back',
+    saveCreateBtn: 'Save',
     saveEditBtn: 'Save Changes',
-    saveDevsBtn: 'Save Assigned Developers',
+    saveDevsBtn: 'Save',
     cancelBtn: 'Cancel',
-    derivedPreviewLabel: 'Auto-Derived Document Title (Read-Only):',
+    derivedPreviewLabel: 'Derived Document Title:',
     providerKindLabel: 'Provider Kind',
     providerKindInternal: 'Internal Company Provider',
     providerKindExternal: 'External Provider',
@@ -196,10 +195,10 @@ const COPY = {
     pubManual: 'Manual Controlled (MANUAL)',
     pubPostApproval: 'Post-Approval (POST_APPROVAL)',
     stateLabel: 'Document State',
-    developersLabel: 'Assigned Developers (D02 — Separate from ACL)',
+    developersLabel: 'Assigned Developers',
     lockedPartiesHint:
-      'Document is linked 1:1 to an Integration: provider, consumer, and API group are locked.',
-    noUploadNote: 'Note: File uploads are intentionally omitted here and belong inside Integrations (S08).',
+      'Document is linked to an Integration: provider, consumer, and API group are locked.',
+    noUploadNote: '',
     validationRequired: 'Please complete all required provider, consumer, and governance selections.',
     validationSameParty: 'The same internal company system cannot be both provider and consumer.',
     createdTitle: 'API Document Created',
@@ -574,48 +573,46 @@ export function ApiDocumentsPage({
       render: (row) => {
         const myDocPerms = new Set(row.myDocumentPermissions);
         return (
-          <div className="row wrap button-row">
-            <Button
-              variant="outline"
-              size="sm"
+          <div className="row-actions">
+            <RowActionButton
+              icon="eye"
+              label={c.detailsBtn}
               onClick={() => {
                 setSelectedDoc(row);
                 setMode('details');
               }}
-            >
-              {c.detailsBtn}
-            </Button>
+            />
             {canEditGlobal && myDocPerms.has('doc.edit') && (
-              <Button variant="secondary" size="sm" onClick={() => openEdit(row)}>
-                {c.editBtn}
-              </Button>
+              <RowActionButton
+                icon="edit"
+                label={c.editBtn}
+                onClick={() => openEdit(row)}
+              />
             )}
             {canAssignGlobal && myDocPerms.has('doc.assign') && (
-              <Button variant="outline" size="sm" onClick={() => openDevelopers(row)}>
-                {c.devsBtn}
-              </Button>
+              <RowActionButton
+                icon="users"
+                label={c.devsBtn}
+                onClick={() => openDevelopers(row)}
+              />
             )}
             {canViewAclGlobal && myDocPerms.has('doc.access.manage') && (
-              <Button
-                variant="secondary"
-                size="sm"
+              <RowActionButton
+                icon="shield"
+                label={c.accessBtn}
                 onClick={() => {
                   setSelectedDoc(row);
                   setMode('access');
                 }}
-              >
-                {c.accessBtn}
-              </Button>
+              />
             )}
             {canDeleteGlobal && myDocPerms.has('doc.delete') && (
-              <Button
+              <RowActionButton
+                icon="trash"
+                label={c.deleteBtn}
                 variant="danger"
-                size="sm"
-                disabled={row.hasIntegration}
                 onClick={() => handleDelete(row)}
-              >
-                {c.deleteBtn}
-              </Button>
+              />
             )}
           </div>
         );
@@ -631,15 +628,11 @@ export function ApiDocumentsPage({
         <section className="surface-card">
           <div className="card-header-row">
             <div>
-              <span className="mode-pill">{c.detailsBadge}</span>
-              <h2 className="card-title heading-font" style={{ marginTop: 8 }}>
+              <h2 className="card-title heading-font">
                 {selectedDoc.derivedTitle}
               </h2>
-              <p className="card-subtitle">{c.noUploadNote}</p>
             </div>
-            <Button variant="outline" onClick={() => setMode('list')}>
-              {c.backBtn}
-            </Button>
+            <BackIconButton label={c.backBtn} onClick={() => setMode('list')} />
           </div>
 
           <div className="slot-grid-3">
@@ -899,51 +892,46 @@ export function ApiDocumentsPage({
               </FormField>
             </div>
           )}
-
-          <p className="card-subtitle" style={{ marginTop: 12 }}>
-            {c.noUploadNote}
-          </p>
         </StandaloneFormPage>
       ) : (
-        <>
-          {canCreateGlobal && (
-            <div className="page-actions">
-              <Button variant="primary" disabled={submitting} onClick={openCreate}>
-                {c.addBtn}
-              </Button>
+        <section className="surface-card panel clean-table-panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <SearchFilterBar
+                searchValue={searchQuery}
+                searchPlaceholder={c.searchPlaceholder}
+                searchAriaLabel={c.searchAria}
+                onSearchChange={(val) => {
+                  setSearchQuery(val);
+                  setPage(1);
+                }}
+                filterValue={stateFilter}
+                filterAriaLabel={c.filterAria}
+                filterPlaceholder={c.filterAll}
+                filterOptions={[
+                  { value: 'ACTIVE', label: c.filterActive },
+                  { value: 'DRAFT', label: c.filterDraft },
+                  { value: 'ARCHIVED', label: c.filterArchived },
+                ]}
+                onFilterChange={(val) => {
+                  setStateFilter(val);
+                  setPage(1);
+                }}
+              />
             </div>
-          )}
-          <section className="surface-card panel">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title heading-font">
-                  {lang === 'ar' ? 'الوثائق المتاحة' : 'Accessible Documents'}
-                </h2>
-                <span className="sr-only">{c.pageTitle}</span>
-              </div>
-            </div>
-
-          <SearchFilterBar
-            searchValue={searchQuery}
-            searchPlaceholder={c.searchPlaceholder}
-            searchAriaLabel={c.searchAria}
-            onSearchChange={(val) => {
-              setSearchQuery(val);
-              setPage(1);
-            }}
-            filterValue={stateFilter}
-            filterAriaLabel={c.filterAria}
-            filterPlaceholder={c.filterAll}
-            filterOptions={[
-              { value: 'ACTIVE', label: c.filterActive },
-              { value: 'DRAFT', label: c.filterDraft },
-              { value: 'ARCHIVED', label: c.filterArchived },
-            ]}
-            onFilterChange={(val) => {
-              setStateFilter(val);
-              setPage(1);
-            }}
-          />
+            {canCreateGlobal && (
+              <button
+                type="button"
+                className="compact-add-icon-btn"
+                title={c.addBtn}
+                aria-label={c.addBtn}
+                disabled={submitting}
+                onClick={openCreate}
+              >
+                <ReferenceIcon name="plus" size={18} />
+              </button>
+            )}
+          </div>
 
           {errorMsg ? (
             <ErrorState
@@ -977,8 +965,7 @@ export function ApiDocumentsPage({
               )}
             </>
           )}
-          </section>
-        </>
+        </section>
       )}
 
       <CentralModalDialog

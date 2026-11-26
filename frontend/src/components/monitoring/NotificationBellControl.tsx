@@ -80,7 +80,7 @@ export function NotificationBellControl({
           data-testid="notifications-popover"
         >
           <div className="notification-popover-header">
-            <strong>{lang === 'ar' ? 'الإشعارات الداخلية (UI-20)' : 'Notifications (UI-20)'}</strong>
+            <strong>{lang === 'ar' ? 'الإشعارات الداخلية' : 'Notifications'}</strong>
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
               {lang === 'ar' ? 'إغلاق' : 'Close'}
             </Button>

@@ -1,8 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiProblemError } from '../../api/authApi';
-import { DashboardSummaryResponse, getDashboardSummary } from '../../api/monitoringApi';
+import {
+  IntegrationItem,
+  listApiDocuments,
+  listIntegrations,
+} from '../../api/documentsAndIntegrationsApi';
+import {
+  CompanySystemItem,
+  listCompanySystems,
+  listConsumerCategories,
+  listConsumers,
+  listExternalProviders,
+  listInternalProviders,
+} from '../../api/masterDataApi';
+import { getDashboardSummary } from '../../api/monitoringApi';
+import { getIntegrationPublications } from '../../api/publishingPortalApi';
+import { listIntegrationVersions } from '../../api/versionsFilesApi';
 import { AppLanguage } from '../../constants/uiBaseline';
-import { Button, ErrorState, LoadingState, ReferenceIcon, StatusBadge } from '../ui';
+import { ErrorState, LoadingState } from '../ui';
 
 interface DashboardPageProps {
   lang: AppLanguage;
@@ -11,103 +26,192 @@ interface DashboardPageProps {
   onNavigateToScreen: (navId: string) => void;
 }
 
-const DASH_TEXT = {
-  ar: {
-    badge: 'لوحة القيادة التكيّفية · UI-17 / P05',
-    welcome: (name: string) => `مرحبًا، ${name}`,
-    subtitle:
-      'تعرض هذه اللوحة المؤشرات والمهام المعلّقة المصرح لك بالوصول إليها فقط وفق صلاحياتك العامة وصلاحيات الوثائق.',
-    refreshBtn: 'تحديث اللوحة',
-    kpiDocs: 'وثائق API المصرح بها',
-    kpiIntegs: 'التكاملات النشطة المصرح بها',
-    kpiPendingStages: 'مراحل اعتماد بانتظار قراري',
-    kpiOpenChanges: 'طلبات تغيير مفتوحة',
-    kpiPublished: 'حزم منشورة نشطة',
-    kpiUnreadNotifs: 'إشعارات غير مقروءة',
-    pendingTitle: 'مراحل الاعتماد النشطة لدوري وصلاحياتي',
-    pendingEmpty: 'لا توجد مراحل اعتماد معلّقة لدورك على وثائق مصرح لك بمراجعتها.',
-    recentAuditTitle: 'أحدث أحداث التدقيق المسجلة',
-    openSearchBtn: 'البحث الشامل',
-    openDocsBtn: 'وثائق API',
-    openIntegsBtn: 'التكاملات',
-    openPortalBtn: 'بوابة المستهلك',
-    openAuditBtn: 'سجل التدقيق',
-    colTarget: 'التكامل / المستند',
-    colStage: 'المرحلة والدور',
-    colType: 'المسار',
-    colAction: 'الإجراء',
-    goReviewBtn: 'متابعة في التكاملات',
-    loadingText: 'جارٍ تحميل لوحة القيادة...',
-    loadErrorTitle: 'تعذر تحميل لوحة القيادة',
-    retryLabel: 'إعادة المحاولة',
-  },
-  en: {
-    badge: 'Permission-Adaptive Dashboard · UI-17 / P05',
-    welcome: (name: string) => `Welcome, ${name}`,
-    subtitle:
-      'Metrics and action queues below reflect only resources permitted by your active roles, permission overrides, and Document ACL.',
-    refreshBtn: 'Refresh Dashboard',
-    kpiDocs: 'Authorized API Documents',
-    kpiIntegs: 'Authorized Integrations',
-    kpiPendingStages: 'Pending Stages For My Role',
-    kpiOpenChanges: 'Open Change Requests',
-    kpiPublished: 'Active Published Packages',
-    kpiUnreadNotifs: 'Unread Notifications',
-    pendingTitle: 'Active Approval Stages Awaiting My Decision',
-    pendingEmpty: 'No active workflow stages currently require your role on permitted documents.',
-    recentAuditTitle: 'Latest Recorded Audit Events',
-    openSearchBtn: 'Global Search',
-    openDocsBtn: 'API Documents',
-    openIntegsBtn: 'Integrations',
-    openPortalBtn: 'Consumer Portal',
-    openAuditBtn: 'Audit Log',
-    colTarget: 'Integration & Document',
-    colStage: 'Stage & Role',
-    colType: 'Workflow Target',
-    colAction: 'Action',
-    goReviewBtn: 'Open in Integrations',
-    loadingText: 'Loading dashboard...',
-    loadErrorTitle: 'Unable to Load Dashboard',
-    retryLabel: 'Retry',
-  },
-} as const;
+interface SystemCardViewModel {
+  id: string;
+  name: string;
+  providerEntities: string[];
+  consumerEntities: string[];
+}
 
 export function DashboardPage({
   lang,
-  userName,
   onSessionExpired,
   onNavigateToScreen,
 }: DashboardPageProps) {
-  const txt = DASH_TEXT[lang];
-  const [data, setData] = useState<DashboardSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const loadSummary = useCallback(async () => {
+  const [systemsCount, setSystemsCount] = useState(0);
+  const [sectorsCount, setSectorsCount] = useState(0);
+  const [consumersCount, setConsumersCount] = useState(0);
+  const [providersCount, setProvidersCount] = useState(0);
+  const [apiRoutesCount, setApiRoutesCount] = useState(0);
+  const [systemCards, setSystemCards] = useState<SystemCardViewModel[]>([]);
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
+
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const summary = await getDashboardSummary(lang);
-      setData(summary);
+      const [
+        systemsRes,
+        categoriesRes,
+        consumersRes,
+        internalProvRes,
+        externalProvRes,
+        docsRes,
+        integrationsRes,
+        summaryRes,
+      ] = await Promise.allSettled([
+        listCompanySystems({ page: 1, pageSize: 50, lang }),
+        listConsumerCategories({ page: 1, pageSize: 50, lang }),
+        listConsumers({ page: 1, pageSize: 50, lang }),
+        listInternalProviders({ page: 1, pageSize: 50, lang }),
+        listExternalProviders({ page: 1, pageSize: 50, lang }),
+        listApiDocuments({ page: 1, pageSize: 100 }, lang),
+        listIntegrations({ page: 1, pageSize: 100 }, lang),
+        getDashboardSummary(lang),
+      ]);
+
+      const allResults = [
+        systemsRes,
+        categoriesRes,
+        consumersRes,
+        internalProvRes,
+        externalProvRes,
+        docsRes,
+        integrationsRes,
+        summaryRes,
+      ];
+      for (const r of allResults) {
+        if (r.status === 'rejected' && (r.reason as ApiProblemError)?.status === 401) {
+          onSessionExpired();
+          return;
+        }
+      }
+
+      const systems: CompanySystemItem[] =
+        systemsRes.status === 'fulfilled' ? systemsRes.value.items : [];
+      const totalSystems =
+        systemsRes.status === 'fulfilled' ? systemsRes.value.totalCount : 0;
+
+      const totalCategories =
+        categoriesRes.status === 'fulfilled' ? categoriesRes.value.totalCount : 0;
+
+      const totalConsumers =
+        consumersRes.status === 'fulfilled' ? consumersRes.value.totalCount : 0;
+
+      const totalProviders =
+        (internalProvRes.status === 'fulfilled' ? internalProvRes.value.totalCount : 0) +
+        (externalProvRes.status === 'fulfilled' ? externalProvRes.value.totalCount : 0);
+
+      const totalDocs =
+        docsRes.status === 'fulfilled'
+          ? docsRes.value.totalCount
+          : summaryRes.status === 'fulfilled'
+            ? summaryRes.value.visibleDocumentsCount
+            : 0;
+
+      setSystemsCount(totalSystems);
+      setSectorsCount(totalCategories);
+      setConsumersCount(totalConsumers);
+      setProvidersCount(totalProviders);
+      setApiRoutesCount(totalDocs);
+
+      const integrations: IntegrationItem[] =
+        integrationsRes.status === 'fulfilled' ? integrationsRes.value.items : [];
+
+      // Verify which integrations have actually passed all stages (APPROVED revision or PUBLISHED publication)
+      const candidateIntegrations = integrations.filter(
+        (integ) => integ.documentState !== 'ARCHIVED' && integ.versionsCount > 0
+      );
+
+      const stageChecks = await Promise.all(
+        candidateIntegrations.map(async (integ) => {
+          const [versRes, pubsRes] = await Promise.allSettled([
+            listIntegrationVersions(integ.id, lang),
+            getIntegrationPublications(integ.id, lang),
+          ]);
+
+          const hasApprovedVersion =
+            versRes.status === 'fulfilled' &&
+            versRes.value.versions.some(
+              (v) => !v.isArchived && v.latestRevisionStatus?.toUpperCase() === 'APPROVED'
+            );
+
+          const hasPublishedPackage =
+            pubsRes.status === 'fulfilled' &&
+            (Boolean(pubsRes.value.activeConsumerVersion) ||
+              pubsRes.value.publications.some((p) => p.state?.toUpperCase() === 'PUBLISHED'));
+
+          return {
+            integ,
+            isFullyIntegrated: hasApprovedVersion || hasPublishedPackage,
+          };
+        })
+      );
+
+      const completedIntegrations = stageChecks
+        .filter((entry) => entry.isFullyIntegrated)
+        .map((entry) => entry.integ);
+
+      const cards: SystemCardViewModel[] = systems.map((sys) => {
+        const providersSet = new Set<string>();
+        const consumersSet = new Set<string>();
+
+        for (const integ of completedIntegrations) {
+          // If this system is the CONSUMER in the completed integration, the other side is a PROVIDER to this system
+          if (
+            integ.consumerName === sys.name &&
+            integ.providerName &&
+            integ.providerName !== sys.name
+          ) {
+            providersSet.add(integ.providerName);
+          }
+          // If this system is the PROVIDER in the completed integration, the other side is a CONSUMER of this system
+          if (
+            integ.providerName === sys.name &&
+            integ.consumerName &&
+            integ.consumerName !== sys.name
+          ) {
+            consumersSet.add(integ.consumerName);
+          }
+        }
+
+        return {
+          id: sys.id,
+          name: sys.name,
+          providerEntities: Array.from(providersSet),
+          consumerEntities: Array.from(consumersSet),
+        };
+      });
+
+      setSystemCards(cards);
     } catch (err) {
       if ((err as ApiProblemError)?.status === 401) {
         onSessionExpired();
         return;
       }
-      setErrorMsg((err as Error).message || txt.loadErrorTitle);
+      setErrorMsg((err as Error).message || 'Error');
     } finally {
       setLoading(false);
     }
-  }, [lang, onSessionExpired, txt.loadErrorTitle]);
+  }, [lang, onSessionExpired]);
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    void loadDashboardData();
+  }, [loadDashboardData]);
 
-  if (loading && !data) {
+  const toggleCardDrawer = (id: string) => {
+    setCollapsedMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  if (loading && systemCards.length === 0) {
     return (
       <div className="content-card">
-        <LoadingState title={txt.loadingText} />
+        <LoadingState
+          title={lang === 'ar' ? 'جارٍ تحميل لوحة الداشبورد...' : 'Loading dashboard...'}
+        />
       </div>
     );
   }
@@ -116,240 +220,151 @@ export function DashboardPage({
     return (
       <div className="content-card">
         <ErrorState
-          title={txt.loadErrorTitle}
+          title={lang === 'ar' ? 'تعذر تحميل لوحة الداشبورد' : 'Unable to Load Dashboard'}
           message={errorMsg}
-          retryLabel={txt.retryLabel}
-          onRetry={() => void loadSummary()}
+          retryLabel={lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+          onRetry={() => void loadDashboardData()}
         />
       </div>
     );
   }
 
-  if (!data) {
-    return null;
-  }
-
   return (
-    <div className="module-stack" data-testid="dashboard-page">
-      <div className="page-actions" style={{ justifyContent: 'space-between' }}>
-        <div className="row wrap">
-          <span className="sr-only">
-            <StatusBadge variant="info">{txt.badge}</StatusBadge>
-            <span>{txt.welcome(userName)}</span>
-            <span>{txt.subtitle}</span>
+    <div className="ref-dashboard-page" data-testid="dashboard-page">
+      <div className="ref-dashboard-stats-bar">
+        <button
+          type="button"
+          className="ref-stat-pill"
+          onClick={() => onNavigateToScreen('UI-01')}
+        >
+          <span className="ref-stat-label">
+            {lang === 'ar' ? 'الأنظمة:' : 'Systems:'}
           </span>
-          <Button variant="outline" size="sm" onClick={() => void loadSummary()}>
-            {txt.refreshBtn}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-18')}>
-            <ReferenceIcon name="search" size={15} /> {txt.openSearchBtn}
-          </Button>
-          {data.canViewPortal && (
-            <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-19')}>
-              <ReferenceIcon name="external" size={15} /> {txt.openPortalBtn}
-            </Button>
-          )}
-        </div>
-        <div className="row wrap">
-          {data.canViewDocuments && (
-            <Button variant="primary" onClick={() => onNavigateToScreen('UI-07')}>
-              <ReferenceIcon name="plus" size={15} /> {txt.openDocsBtn}
-            </Button>
-          )}
-        </div>
+          <strong className="ref-stat-num">{systemsCount}</strong>
+        </button>
+
+        <button
+          type="button"
+          className="ref-stat-pill"
+          onClick={() => onNavigateToScreen('UI-02')}
+        >
+          <span className="ref-stat-label">
+            {lang === 'ar' ? 'القطاعات:' : 'Sectors:'}
+          </span>
+          <strong className="ref-stat-num">{sectorsCount}</strong>
+        </button>
+
+        <button
+          type="button"
+          className="ref-stat-pill"
+          onClick={() => onNavigateToScreen('UI-02')}
+        >
+          <span className="ref-stat-label">
+            {lang === 'ar' ? 'جهات مستهلكة:' : 'Consumers:'}
+          </span>
+          <strong className="ref-stat-num cyan">{consumersCount}</strong>
+        </button>
+
+        <button
+          type="button"
+          className="ref-stat-pill"
+          onClick={() => onNavigateToScreen('UI-03')}
+        >
+          <span className="ref-stat-label">
+            {lang === 'ar' ? 'جهات مزوّدة:' : 'Providers:'}
+          </span>
+          <strong className="ref-stat-num purple">{providersCount}</strong>
+        </button>
+
+        <button
+          type="button"
+          className="ref-stat-pill"
+          onClick={() => onNavigateToScreen('UI-21')}
+        >
+          <span className="ref-stat-label">
+            {lang === 'ar' ? 'مسارات الـ API:' : 'API Routes:'}
+          </span>
+          <strong className="ref-stat-num">{apiRoutesCount}</strong>
+        </button>
       </div>
 
-      {/* Exact 5-card reference stat-grid.stat-five */}
-      <div className="stat-grid stat-five">
-        <div className="stat dashboard-kpi-card">
-          <div className="stat-top">
-            <span className="dashboard-kpi-label">{txt.kpiDocs}</span>
-            <span className="stat-icon">
-              <ReferenceIcon name="file" size={18} />
-            </span>
-          </div>
-          <div className="stat-num dashboard-kpi-value">{data.visibleDocumentsCount}</div>
-        </div>
+      <div className="ref-systems-grid">
+        {systemCards.map((card) => {
+          const isProvidersCollapsed = Boolean(collapsedMap[`${card.id}:providers`]);
+          const isConsumersCollapsed = Boolean(collapsedMap[`${card.id}:consumers`]);
+          const hasProviders = card.providerEntities.length > 0;
+          const hasConsumers = card.consumerEntities.length > 0;
 
-        <div className="stat dashboard-kpi-card">
-          <div className="stat-top">
-            <span className="dashboard-kpi-label">{txt.kpiIntegs}</span>
-            <span className="stat-icon">
-              <ReferenceIcon name="network" size={18} />
-            </span>
-          </div>
-          <div className="stat-num dashboard-kpi-value">{data.visibleIntegrationsCount}</div>
-        </div>
+          return (
+            <article key={card.id} className="ref-system-card">
+              <div className="ref-system-card-head">
+                <h2 className="ref-system-title heading-font">{card.name}</h2>
+              </div>
 
-        <div className="stat dashboard-kpi-card">
-          <div className="stat-top">
-            <span className="dashboard-kpi-label">{txt.kpiPendingStages}</span>
-            <span className="stat-icon">
-              <ReferenceIcon name="clock" size={18} />
-            </span>
-          </div>
-          <div className="stat-num dashboard-kpi-value">{data.pendingMyApprovalStagesCount}</div>
-        </div>
+              {hasProviders && (
+                <div className="ref-system-providers-box">
+                  <button
+                    type="button"
+                    className="ref-system-providers-toggle"
+                    aria-expanded={!isProvidersCollapsed}
+                    onClick={() => toggleCardDrawer(`${card.id}:providers`)}
+                  >
+                    <span>{lang === 'ar' ? 'جهات مزوّدة' : 'Provider Entities'}</span>
+                    <span className={`ref-chevron ${isProvidersCollapsed ? 'collapsed' : ''}`}>
+                      ⌄
+                    </span>
+                  </button>
 
-        <div className="stat dashboard-kpi-card">
-          <div className="stat-top">
-            <span className="dashboard-kpi-label">{txt.kpiOpenChanges}</span>
-            <span className="stat-icon">
-              <ReferenceIcon name="repeat" size={18} />
-            </span>
-          </div>
-          <div className="stat-num dashboard-kpi-value">{data.openChangeRequestsCount}</div>
-        </div>
-
-        <div className="stat dashboard-kpi-card">
-          <div className="stat-top">
-            <span className="dashboard-kpi-label">{txt.kpiPublished}</span>
-            <span className="stat-icon">
-              <ReferenceIcon name="external" size={18} />
-            </span>
-          </div>
-          <div className="stat-num dashboard-kpi-value">{data.publishedRevisionsCount}</div>
-          <span className="sr-only">
-            {txt.kpiUnreadNotifs}: {data.unreadNotificationsCount}
-          </span>
-        </div>
-      </div>
-
-      {/* Available Work Cases Panel (.scenario-grid of .scenario-card) */}
-      <section className="panel content-card">
-        <div className="panel-head">
-          <div>
-            <h2 className="panel-title">
-              {lang === 'ar' ? 'حالات العمل المتاحة' : 'Available Work Cases'}
-            </h2>
-          </div>
-          {data.canViewIntegrations && (
-            <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
-              {txt.openIntegsBtn}
-            </Button>
-          )}
-        </div>
-        <div className="scenario-grid">
-          {data.pendingApprovalStages.map((stage, idx) => (
-            <div key={`case-${stage.stageId}`} className="scenario-card">
-              <div className="row between">
-                <span className="chip ltr-code">{`CASE-0${idx + 1}`}</span>
-                <StatusBadge variant="warning">{stage.roleName}</StatusBadge>
-              </div>
-              <b>{`${stage.title} (${stage.stageName})`}</b>
-              <div className="item-sub">{stage.targetKind}</div>
-              <div className="row between scenario-foot">
-                <span className="chip">{stage.targetKind}</span>
-                <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
-                  {lang === 'ar' ? 'فتح الحالة' : 'Open Case'}
-                </Button>
-              </div>
-            </div>
-          ))}
-          {data.canViewDocuments && (
-            <div className="scenario-card">
-              <div className="row between">
-                <span className="chip">API</span>
-                <StatusBadge variant="info">{data.visibleDocumentsCount}</StatusBadge>
-              </div>
-              <b>{txt.kpiDocs}</b>
-              <div className="item-sub">{txt.subtitle}</div>
-              <div className="row between scenario-foot">
-                <span className="chip">DOCS</span>
-                <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-21')}>
-                  {txt.openDocsBtn}
-                </Button>
-              </div>
-            </div>
-          )}
-          {data.canViewIntegrations && (
-            <div className="scenario-card">
-              <div className="row between">
-                <span className="chip">INT</span>
-                <StatusBadge variant="success">{data.visibleIntegrationsCount}</StatusBadge>
-              </div>
-              <b>{txt.kpiIntegs}</b>
-              <div className="item-sub">
-                {lang === 'ar'
-                  ? 'إدارة الإصدارات والملفات والمراجعات وطلبات التغيير'
-                  : 'Manage API versions, files, reviews, and change requests'}
-              </div>
-              <div className="row between scenario-foot">
-                <span className="chip">{data.publishedRevisionsCount} PUBLISHED</span>
-                <Button variant="secondary" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
-                  {txt.openIntegsBtn}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Two-Column Assigned Actions & Recent Activities (.grid-2) */}
-      <div className="grid-2">
-        <section className="panel content-card">
-          <div className="panel-head">
-            <h2 className="panel-title section-title">{txt.pendingTitle}</h2>
-          </div>
-          {data.pendingApprovalStages.length === 0 ? (
-            <div className="empty-state-box empty">
-              <ReferenceIcon name="search" size={26} />
-              <div>{txt.pendingEmpty}</div>
-            </div>
-          ) : (
-            <div>
-              {data.pendingApprovalStages.map((stage) => (
-                <div key={stage.stageId} className="row between work-row">
-                  <div>
-                    <b>{stage.title}</b>
-                    <div className="item-sub">
-                      <code className="ltr-code">{stage.referenceCode}</code> — {stage.stageName} ({stage.roleName})
+                  {!isProvidersCollapsed && (
+                    <div className="ref-system-chips-wrap">
+                      {card.providerEntities.map((ent) => (
+                        <span key={ent} className="ref-entity-chip">
+                          {ent}
+                        </span>
+                      ))}
                     </div>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => onNavigateToScreen('UI-22')}>
-                    {txt.goReviewBtn}
-                  </Button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              )}
 
-        <section className="panel content-card">
-          <div className="panel-head">
-            <h2 className="panel-title section-title">{txt.recentAuditTitle}</h2>
-            {data.canViewAudit && (
-              <Button variant="ghost" size="sm" onClick={() => onNavigateToScreen('UI-16')}>
-                {txt.openAuditBtn}
-              </Button>
-            )}
-          </div>
-          {data.recentAuditEvents.length === 0 ? (
-            <div className="empty-state-box empty">
-              <ReferenceIcon name="clock" size={24} />
-              <div>{lang === 'ar' ? 'لا توجد أنشطة مسجلة' : 'No recent activities'}</div>
-            </div>
-          ) : (
-            <div>
-              {data.recentAuditEvents.slice(0, 6).map((ev) => (
-                <div key={ev.id} className="work-row row between">
-                  <div>
-                    <b>
-                      <code className="ltr-code">{ev.operation}</code>
-                    </b>
-                    <div className="item-sub">
-                      {ev.actorName ?? 'System'} ·{' '}
-                      <code className="ltr-code">{new Date(ev.recordedAt).toLocaleString()}</code>
+              {hasConsumers && (
+                <div className="ref-system-providers-box">
+                  <button
+                    type="button"
+                    className="ref-system-providers-toggle"
+                    aria-expanded={!isConsumersCollapsed}
+                    onClick={() => toggleCardDrawer(`${card.id}:consumers`)}
+                  >
+                    <span>{lang === 'ar' ? 'جهات مستهلكة' : 'Consumer Entities'}</span>
+                    <span className={`ref-chevron ${isConsumersCollapsed ? 'collapsed' : ''}`}>
+                      ⌄
+                    </span>
+                  </button>
+
+                  {!isConsumersCollapsed && (
+                    <div className="ref-system-chips-wrap">
+                      {card.consumerEntities.map((ent) => (
+                        <span key={ent} className="ref-entity-chip">
+                          {ent}
+                        </span>
+                      ))}
                     </div>
-                  </div>
-                  <StatusBadge variant={ev.result === 'SUCCESS' ? 'success' : 'warning'}>
-                    {ev.result}
-                  </StatusBadge>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              )}
+
+              {!hasProviders && !hasConsumers && (
+                <div className="ref-system-providers-box">
+                  <div className="ref-system-chips-wrap">
+                    <span className="ref-entity-chip muted">
+                      {lang === 'ar' ? 'لا توجد جهات مرتبطة' : 'No linked entities'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
       </div>
     </div>
   );

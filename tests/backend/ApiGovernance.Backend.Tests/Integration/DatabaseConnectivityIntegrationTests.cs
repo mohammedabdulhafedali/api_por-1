@@ -316,6 +316,8 @@ public sealed class DatabaseConnectivityIntegrationTests
         {
             Id = userId,
             FullName = "F05 Constraint Tester",
+            Username = $"f05-{userId:N}"[..24],
+            NormalizedUsername = $"F05-{userId:N}"[..24].ToUpperInvariant(),
             Email = $"f05-{userId:N}@example.local",
             NormalizedEmail = $"F05-{userId:N}@EXAMPLE.LOCAL",
             SecurityStamp = Guid.NewGuid().ToString("N"),

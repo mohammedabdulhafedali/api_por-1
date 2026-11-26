@@ -14,8 +14,6 @@ import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import { AuditLogPage } from './components/monitoring/AuditLogPage';
 import { DashboardPage } from './components/monitoring/DashboardPage';
 import { NotificationBellControl } from './components/monitoring/NotificationBellControl';
-import { SearchAndBrowsePage } from './components/monitoring/SearchAndBrowsePage';
-import { ConsumerPortalPage } from './components/portal/ConsumerPortalPage';
 import { CompanySystemsPage } from './components/masterdata/CompanySystemsPage';
 import { ConsumersManagementPage } from './components/masterdata/ConsumersManagementPage';
 import { FileTypesManagementPage } from './components/masterdata/FileTypesManagementPage';
@@ -111,6 +109,8 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
   const [openGroupId, setOpenGroupId] = useState<string>(SIDEBAR_GROUPS[0].id);
   const [activeNavItem, setActiveNavItem] = useState<NavItemSpec>(STANDALONE_NAV_ITEMS[0]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState<boolean>(false);
+  const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
 
   // Standalone page mode ('catalog' | 'create' | 'edit') — Create/Edit are standalone pages, NOT modals (PRD-06)
   const [workspaceMode, setWorkspaceMode] = useState<ShellWorkspaceMode>('catalog');
@@ -434,9 +434,12 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
         openGroupId={openGroupId}
         activeNavItem={activeNavItem}
         mobileSidebarOpen={mobileSidebarOpen}
+        desktopSidebarCollapsed={desktopSidebarCollapsed}
+        onToggleDesktopSidebar={() => setDesktopSidebarCollapsed((prev) => !prev)}
         onToggleGroup={handleToggleGroup}
         onSelectNavItem={(item) => {
           setShowChangePassword(false);
+          setUserMenuOpen(false);
           handleSelectNavItem(item);
         }}
         onToggleMobileSidebar={() => setMobileSidebarOpen((open) => !open)}
@@ -445,38 +448,73 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
         onToggleTheme={() => setTheme((current) => (current === 'light' ? 'dark' : 'light'))}
         userActions={
           <div className="topbar-user-actions">
-            <NotificationBellControl
-              lang={lang}
-              enabled={initialAuthenticatedUser === undefined}
-              onNavigateToScreen={navigateByNavId}
-            />
-            <div className="account-avatar-wrapper">
-              <div
-                className="avatar"
+            <div className="user-profile-dropdown-wrap">
+              <button
+                type="button"
+                className="user-profile-pill-btn"
                 title={`${sessionUser.fullName} (${sessionUser.email})`}
                 data-testid="authenticated-user-pill"
+                aria-expanded={userMenuOpen}
+                onClick={() => setUserMenuOpen((prev) => !prev)}
               >
-                <span>{(sessionUser.fullName || 'م').trim().charAt(0).toUpperCase()}</span>
+                <span className="user-profile-avatar-emerald" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </span>
+                <span className="user-profile-text-col">
+                  <span className="user-profile-primary-line">
+                    {sessionUser.fullName === 'System Administrator' && lang === 'ar'
+                      ? 'محمد المقطري (مدير النظام)'
+                      : `${sessionUser.fullName}${
+                          sessionUser.roles[0]?.name
+                            ? ` (${sessionUser.roles[0].name.split('/')[0].trim()})`
+                            : ''
+                        }`}
+                  </span>
+                  <span className="user-profile-role-line">
+                    {sessionUser.roles[0]?.name
+                      ? sessionUser.roles[0].name.includes('مدير النظام')
+                        ? lang === 'ar'
+                          ? 'مدير النظام الشامل'
+                          : 'System Administrator'
+                        : sessionUser.roles[0].name
+                      : lang === 'ar'
+                        ? 'مستخدم المنصة'
+                        : 'Platform User'}
+                  </span>
+                </span>
+                <span className="user-profile-chevron" aria-hidden="true">⌄</span>
                 <span className="sr-only">
                   {sessionUser.fullName} {sessionUser.email}
                 </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowChangePassword(true)}
-              >
-                {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  void handleLogout();
-                }}
-              >
-                {lang === 'ar' ? 'تسجيل الخروج' : 'Logout'}
-              </Button>
+              </button>
+
+              {userMenuOpen && (
+                <div className="user-profile-dropdown-menu">
+                  <button
+                    type="button"
+                    className="user-profile-menu-item"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setShowChangePassword(true);
+                    }}
+                  >
+                    {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
+                  </button>
+                  <button
+                    type="button"
+                    className="user-profile-menu-item danger"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      void handleLogout();
+                    }}
+                  >
+                    {lang === 'ar' ? 'تسجيل الخروج' : 'Logout'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         }
@@ -491,10 +529,12 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               setSessionUser(null);
             }}
           />
-        ) : activeNavItem.id === 'UI-01' ? (
+        ) : activeNavItem.id === 'UI-01' || activeNavItem.id === 'UI-04G' ? (
           <CompanySystemsPage
+            key={activeNavItem.id}
             lang={lang}
             permissions={sessionUser.permissions}
+            section={activeNavItem.id === 'UI-04G' ? 'api-groups' : 'systems'}
             onSessionExpired={() => {
               setShowChangePassword(false);
               setSessionUser(null);
@@ -545,10 +585,12 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               setSessionUser(null);
             }}
           />
-        ) : activeNavItem.id === 'UI-06' ? (
+        ) : activeNavItem.id === 'UI-06' || activeNavItem.id === 'UI-06P' ? (
           <ChangeTypesAndPoliciesPage
+            key={activeNavItem.id}
             lang={lang}
             permissions={sessionUser.permissions}
+            section={activeNavItem.id === 'UI-06P' ? 'policies' : 'types'}
             onSessionExpired={() => {
               setShowChangePassword(false);
               setSessionUser(null);
@@ -605,14 +647,6 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
                 .catch(() => {});
             }}
           />
-        ) : activeNavItem.id === 'UI-19' ? (
-          <ConsumerPortalPage
-            lang={lang}
-            onSessionExpired={() => {
-              setShowChangePassword(false);
-              setSessionUser(null);
-            }}
-          />
         ) : activeNavItem.id === 'UI-16' ? (
           <AuditLogPage
             lang={lang}
@@ -622,17 +656,7 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               setSessionUser(null);
             }}
           />
-        ) : activeNavItem.id === 'UI-18' ? (
-          <SearchAndBrowsePage
-            lang={lang}
-            permissions={sessionUser.permissions}
-            onSessionExpired={() => {
-              setShowChangePassword(false);
-              setSessionUser(null);
-            }}
-            onNavigateToScreen={navigateByNavId}
-          />
-        ) : activeNavItem.id === 'UI-17' && sessionUser.permissions.includes('dashboard.view') ? (
+        ) : activeNavItem.id === 'UI-17' ? (
           <DashboardPage
             lang={lang}
             userName={sessionUser.fullName}
