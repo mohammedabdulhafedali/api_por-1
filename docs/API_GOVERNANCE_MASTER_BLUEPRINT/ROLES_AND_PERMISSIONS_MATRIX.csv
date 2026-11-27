@@ -1,0 +1,18 @@
+Permission candidate,Area,Typical assignment only,Document ACL candidate,Context guard
+reference.view/manage,قوائم وتهيئة,مسؤول مرجعي,لا,إذن عام؛ scope الجهة
+config.view/manage,قوالب ومسارات وسياسات,مسؤول تهيئة,لا,نسخة تهيئة جديدة؛ لا تعديل معاملات
+users.manage/roles.manage,المستخدمون والأدوار,مدير مخول,لا,إذن عام؛ تدقيق
+docs.view,وثائق,مستخدم مخول,doc.view,ACL + إذن عام
+docs.create/edit,وثائق,مسؤول وثائق,doc.edit حيث سجل موجود,تفرد وقيود حالة
+docs.permissions.manage,ACL,مسؤول مخول,doc.permissions_manage (تحقق من الاسم),تفويض مستقل؛ لا منح ذاتي غير مخول
+integrations.view,تكامل,مستخدم مخول,doc.view,ACL
+integrations.create,تكامل,مسؤول مخول,doc.edit,تكامل واحد
+developers.assign,تعيين,مسؤول مخول,doc.assignment_manage (مقترح),لا منح أذونات ضمني
+versions.view/create,إصدار,مطور مخول,doc.version_manage للإنشاء,تعيين + حالة + إذن عام
+files.view/upload,ملف,مطور مخول,doc.files_manage للرفع,تعيين + مسودة + قالب
+files.download,تنزيل,مراجع/مطور/مستهلك مخول,doc.view + إذن تنزيل معتمد,CLEAN؛ جمهور منشور للمستهلك
+reviews.decide,قرار,مراجع/معتمد مخول,doc.review/approve (تحقق),مرحلة نشطة + تعيين + فصل واجبات إن اعتمد
+changes.create/decide,طلب,مطور/معتمد مخول,doc.change_manage (تحقق),نوع مسموح + حالة + تعيين
+publishing.publish/withdraw,نشر,ناشر مخول,doc.publish (تحقق),manifest معتمد + CLEAN + جمهور
+audit.view,تدقيق,مدقق مخول,حسب نوع الهدف,قيد النطاق وعدم إفشاء
+notifications.view,إشعارات,المستخدم نفسه,للرابط المرتبط,لا يكفي الإشعار لإذن الوصول
