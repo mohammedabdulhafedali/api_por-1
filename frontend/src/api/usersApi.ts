@@ -31,6 +31,7 @@ export interface CreateUserPayload {
   email: string;
   consumerEntityId?: string | null;
   triggerActivationToken: boolean;
+  initialPassword?: string;
   roleIds?: string[];
 }
 

@@ -270,6 +270,7 @@ export function UsersManagementPage({
   const [formFullName, setFormFullName] = useState('');
   const [formUsername, setFormUsername] = useState('');
   const [formEmail, setFormEmail] = useState('');
+  const [formInitialPassword, setFormInitialPassword] = useState('');
   const [formConsumerEntityId, setFormConsumerEntityId] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
   const [formTriggerActivation, setFormTriggerActivation] = useState(false);
@@ -409,6 +410,7 @@ export function UsersManagementPage({
           email: formEmail,
           consumerEntityId: formConsumerEntityId.trim() || null,
           triggerActivationToken: formTriggerActivation && canReset,
+          initialPassword: formInitialPassword ? formInitialPassword : undefined,
           roleIds: canAssignRoles ? selectedRoleIds : [],
         },
         lang
@@ -961,6 +963,21 @@ export function UsersManagementPage({
                     }}
                   />
                 </FormField>
+
+                {mode === 'create' && (
+                  <FormField
+                    id="user-initial-password-input"
+                    label={lang === 'ar' ? 'كلمة المرور الأولية (اختياري للتفعيل الفوري)' : 'Initial Password (optional for immediate login)'}
+                  >
+                    <TextInput
+                      id="user-initial-password-input"
+                      type="password"
+                      ltrCode
+                      value={formInitialPassword}
+                      onChange={(e) => setFormInitialPassword(e.target.value)}
+                    />
+                  </FormField>
+                )}
 
                 <FormField
                   id="user-email-input"

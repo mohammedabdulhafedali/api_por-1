@@ -59,6 +59,8 @@ public sealed record CreateUserRequest : IValidatableObject
 
     public bool TriggerActivationToken { get; init; }
 
+    public string? InitialPassword { get; init; }
+
     public IReadOnlyList<Guid>? RoleIds { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

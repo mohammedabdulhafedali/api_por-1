@@ -1,0 +1,117 @@
+<div id="permission-concept" dir="rtl" lang="ar">
+  <style>
+    #permission-concept{--p-bg:light-dark(#f5f6fa,#141827);--p-panel:light-dark(#fff,#1c2233);--p-text:light-dark(#20273b,#eef0fa);--p-muted:light-dark(#646b80,#acb4ca);--p-line:light-dark(#e5e8f0,#353d54);--p-brand:light-dark(#4338ca,#a5a1ff);--p-selected:light-dark(#eeedff,#323051);--p-yes:light-dark(#15704a,#80d9b2);--p-no:light-dark(#b63746,#ff9da9);font:14px/1.65 Tahoma,Arial,sans-serif;color:var(--p-text);background:var(--p-bg);border:1px solid var(--p-line);border-radius:14px;overflow:hidden}
+    #permission-concept *{box-sizing:border-box}
+    #permission-concept button,#permission-concept input{font:inherit}
+    #permission-concept button{cursor:pointer}
+    #permission-concept button:focus-visible,#permission-concept input:focus-visible{outline:2px solid var(--p-brand);outline-offset:3px}
+    #permission-concept .pc-top{background:var(--p-panel);padding:22px 24px 0;border-bottom:1px solid var(--p-line)}
+    #permission-concept .pc-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    #permission-concept h2,#permission-concept h3,#permission-concept p{margin:0}
+    #permission-concept h2{font-size:19px;font-weight:500}
+    #permission-concept h3{font-size:16px;font-weight:500}
+    #permission-concept .pc-muted{color:var(--p-muted);font-size:12px}
+    #permission-concept .pc-preview{color:var(--p-brand);background:var(--p-selected);padding:3px 10px;border-radius:6px;font-size:12px}
+    #permission-concept .pc-tabs{display:flex;gap:22px;flex-wrap:wrap;margin-top:18px}
+    #permission-concept .pc-tab{color:var(--p-muted);background:none;border:0;border-bottom:3px solid transparent;padding:10px 0}
+    #permission-concept .pc-tab[aria-pressed=true]{color:var(--p-brand);border-bottom-color:var(--p-brand)}
+    #permission-concept .pc-context{padding:20px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    #permission-concept .pc-context-main{flex:1;min-width:180px}
+    #permission-concept .pc-subtabs{display:flex;gap:4px;background:var(--p-panel);padding:4px;border:1px solid var(--p-line);border-radius:9px}
+    #permission-concept .pc-subtabs button{padding:7px 16px;background:none;color:var(--p-muted);border:0;border-radius:6px}
+    #permission-concept .pc-subtabs button[aria-pressed=true]{background:var(--p-selected);color:var(--p-brand)}
+    #permission-concept .pc-work{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;padding:0 24px 24px;min-height:440px}
+    #permission-concept .pc-side,#permission-concept .pc-main{background:var(--p-panel);border:1px solid var(--p-line);border-radius:10px;padding:16px;min-width:0}
+    #permission-concept .pc-search{width:100%;padding:9px 10px;color:var(--p-text);background:var(--p-bg);border:1px solid var(--p-line);border-radius:7px;margin-bottom:12px;min-width:0}
+    #permission-concept .pc-nav{display:flex;flex-direction:column;gap:5px}
+    #permission-concept .pc-nav button{display:flex;justify-content:space-between;align-items:center;text-align:start;background:none;color:var(--p-text);border:0;border-radius:7px;padding:11px 10px;gap:10px}
+    #permission-concept .pc-nav button[aria-pressed=true]{background:var(--p-selected);color:var(--p-brand)}
+    #permission-concept .pc-main-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    #permission-concept .pc-row{display:grid;grid-template-columns:minmax(130px,1fr) auto;gap:16px;padding:15px 0;border-top:1px solid var(--p-line);align-items:center}
+    #permission-concept .pc-row-title{font-weight:500}
+    #permission-concept .pc-choice{display:flex;gap:3px;padding:3px;background:var(--p-bg);border-radius:8px;flex-wrap:wrap}
+    #permission-concept .pc-choice button{border:0;background:none;padding:6px 10px;border-radius:6px;color:var(--p-muted)}
+    #permission-concept .pc-choice button[aria-pressed=true]{background:var(--p-panel);color:var(--p-brand);box-shadow:0 1px 4px light-dark(#22222214,#00000030)}
+    #permission-concept .pc-choice button[data-decision=grant][aria-pressed=true]{color:var(--p-yes)}
+    #permission-concept .pc-choice button[data-decision=revoke][aria-pressed=true]{color:var(--p-no)}
+    #permission-concept .pc-result{font-size:12px;color:var(--p-muted);margin-top:3px}
+    #permission-concept .pc-yes{color:var(--p-yes)}
+    #permission-concept .pc-no{color:var(--p-no)}
+    #permission-concept .pc-check{display:flex;align-items:center;gap:8px;min-height:40px;color:var(--p-muted)}
+    #permission-concept .pc-check input{accent-color:var(--p-brand);width:17px;height:17px}
+    #permission-concept .pc-foot{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--p-panel);border-top:1px solid var(--p-line);padding:16px 24px}
+    #permission-concept .pc-actions{display:flex;gap:8px}
+    #permission-concept .pc-button{border:1px solid var(--p-line);padding:8px 22px;background:var(--p-panel);color:var(--p-text);border-radius:7px}
+    #permission-concept .pc-primary{background:light-dark(#4338ca,#a5a1ff);color:light-dark(#fff,#18152d);border-color:transparent}
+    #permission-concept [hidden]{display:none!important}
+    @media(max-width:650px){#permission-concept .pc-work{grid-template-columns:1fr;padding:0 12px 12px;min-height:0}#permission-concept .pc-nav{flex-direction:row;flex-wrap:wrap}#permission-concept .pc-top,#permission-concept .pc-context,#permission-concept .pc-foot{padding-inline:16px}#permission-concept .pc-row{grid-template-columns:1fr;gap:7px}#permission-concept .pc-choice{width:fit-content}#permission-concept .pc-tabs{gap:14px}}
+  </style>
+  <header class="pc-top">
+    <div class="pc-heading"><h2>إدارة الصلاحيات</h2><span class="pc-preview">معاينة ببيانات تجريبية</span></div>
+    <div class="pc-tabs" aria-label="نوع الصلاحيات">
+      <button type="button" class="pc-tab" data-view="role" aria-pressed="false">صلاحيات الدور</button>
+      <button type="button" class="pc-tab" data-view="user" aria-pressed="true">صلاحيات المستخدم</button>
+      <button type="button" class="pc-tab" data-view="document" aria-pressed="false">صلاحيات الوثيقة</button>
+    </div>
+  </header>
+  <div class="pc-context">
+    <div class="pc-context-main"><h3 id="pc-subject">مستخدم تجريبي</h3><p class="pc-muted" id="pc-subject-detail">الدور المسند: مطوّر التكاملات</p></div>
+    <div class="pc-subtabs" id="pc-doc-tabs" hidden aria-label="أطراف صلاحيات الوثيقة"><button type="button" data-scope="roles" aria-pressed="false">الأدوار</button><button type="button" data-scope="users" aria-pressed="true">المستخدمون</button></div>
+  </div>
+  <div class="pc-work">
+    <aside class="pc-side"><input class="pc-search" id="pc-search" type="search" placeholder="ابحث في الأقسام" aria-label="بحث"><div class="pc-nav" id="pc-nav"></div></aside>
+    <section class="pc-main" aria-label="إعداد الصلاحيات"><div class="pc-main-head"><h3 id="pc-section">التكاملات</h3><span class="pc-muted" id="pc-count"></span></div><div id="pc-rows"></div></section>
+  </div>
+  <footer class="pc-foot"><span class="pc-muted" id="pc-message" aria-live="polite">لا توجد تغييرات</span><div class="pc-actions"><button type="button" class="pc-button pc-primary" id="pc-save">حفظ</button><button type="button" class="pc-button" id="pc-cancel">إلغاء</button></div></footer>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('permission-concept');
+  const groups={ 'الأنظمة والجهات':['عرض الأنظمة','إضافة نظام','تعديل نظام','حذف نظام'], 'الإعدادات':['عرض مسارات الاعتماد','إضافة مسار اعتماد','تعديل مسار اعتماد'], 'الإدارة':['عرض المستخدمين','إضافة مستخدم','تعديل مستخدم','إدارة الصلاحيات'], 'وثائق API':['عرض الوثائق','إنشاء وثيقة','تعديل وثيقة','حذف وثيقة'], 'التكاملات':['عرض التكاملات','إنشاء تكامل','تعيين المطورين','حذف تكامل'] };
+  const docItems=['عرض الوثيقة','تعديل بيانات الوثيقة','إدارة الملفات','تقديم للمراجعة','اتخاذ قرار مراجعة','نشر الملفات'];
+  const state={view:'user',scope:'users',selected:'التكاملات',draft:{},saved:{}};
+  const el=id=>root.querySelector('#'+id);
+  function restore(snapshot){const p=snapshot?.privateContent?.permissionsPreview;if(p&&['role','user','document'].includes(p.view)){state.view=p.view;state.scope=p.scope==='roles'?'roles':'users';state.selected=typeof p.selected==='string'?p.selected:'التكاملات';state.draft=p.draft||{};state.saved={...state.draft};}}
+  restore(window.openai?.widgetState);
+  function remember(){window.openai?.setWidgetState?.({modelContent:{preview:'تصور الصلاحيات',view:state.view,scope:state.scope},privateContent:{permissionsPreview:{view:state.view,scope:state.scope,selected:state.selected,draft:state.draft}}})?.catch(()=>{});}
+  function names(){return state.view==='document'?(state.scope==='roles'?['مطوّر التكاملات','مراجع الوثائق','ناشر الوثائق']:['مستخدم تجريبي','مراجع تجريبي','ناشر تجريبي']):Object.keys(groups);}
+  function key(i){return [state.view,state.scope,state.selected,i].join('|');}
+  function render(){
+    const doc=state.view==='document';
+    root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===state.view)));
+    root.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===state.scope)));
+    el('pc-doc-tabs').hidden=!doc;
+    el('pc-subject').textContent=doc?'وثيقة: النظام التجريبي أ ← النظام التجريبي ب':state.view==='role'?'دور: مطوّر التكاملات':'مستخدم تجريبي';
+    el('pc-subject-detail').textContent=doc?'مجموعة API: الخدمات التجريبية':state.view==='role'?'صلاحيات عامة تُمنح لأعضاء الدور':'الدور المسند: مطوّر التكاملات';
+    const list=names();if(!list.includes(state.selected))state.selected=doc?list[0]:'التكاملات';
+    el('pc-search').placeholder=doc?(state.scope==='roles'?'ابحث عن دور':'ابحث عن مستخدم'):'ابحث في الأقسام';
+    const term=el('pc-search').value.trim();
+    el('pc-nav').replaceChildren();
+    list.filter(n=>n.includes(term)).forEach(n=>{const b=document.createElement('button');b.type='button';b.textContent=n;b.setAttribute('aria-pressed',String(n===state.selected));b.onclick=()=>{state.selected=n;render();remember();};el('pc-nav').append(b);});
+    el('pc-section').textContent=state.selected;
+    const items=doc?docItems:groups[state.selected];
+    const roleMode=state.view==='role';
+    el('pc-count').textContent=doc?'إذن الوثيقة · يتطلب أيضًا الصلاحية العامة':roleMode?'تحديد الصلاحيات الممنوحة':'النتيجة بعد تطبيق الاستثناء الفردي';
+    el('pc-rows').replaceChildren();
+    items.forEach((label,i)=>{
+      const k=key(i),inherit=i<2,decision=state.draft[k]||(roleMode?(inherit?'grant':'revoke'):'inherit');
+      const allowed=decision==='grant'||(decision==='inherit'&&inherit&&!(doc&&state.scope==='roles'));
+      const row=document.createElement('div');row.className='pc-row';
+      const meta=document.createElement('div');const title=document.createElement('div');title.className='pc-row-title';title.textContent=label;meta.append(title);
+      if(!roleMode){const result=document.createElement('div');result.className='pc-result';const roleDoc=doc&&state.scope==='roles';result.textContent=roleDoc?(decision==='inherit'?'لا يوجد قرار صريح':decision==='grant'?'منح للدور':'منع صريح للدور'):(allowed?'مسموح':'غير مسموح')+' · '+(decision==='inherit'?(inherit?'من الدور المسند':'لا يوجد منح من الأدوار'):'استثناء فردي');if(!roleDoc)result.classList.add(allowed?'pc-yes':'pc-no');meta.append(result);}
+      row.append(meta);
+      const change=d=>{state.draft[k]=d;el('pc-message').textContent='تغييرات غير محفوظة في المعاينة';render();remember();};
+      if(roleMode){const l=document.createElement('label');l.className='pc-check';const box=document.createElement('input');box.type='checkbox';box.checked=allowed;box.setAttribute('aria-label',label);box.onchange=()=>change(box.checked?'grant':'revoke');l.append(box,document.createTextNode('سماح'));row.append(l);}
+      else {const choices=document.createElement('div');choices.className='pc-choice';choices.setAttribute('role','group');choices.setAttribute('aria-label',label);const first=doc&&state.scope==='roles'?'غير محدد':'حسب الأدوار';[[first,'inherit'],['سماح','grant'],['منع','revoke']].forEach(([text,value])=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.dataset.decision=value;b.setAttribute('aria-pressed',String(decision===value));b.onclick=()=>change(value);choices.append(b);});row.append(choices);}
+      el('pc-rows').append(row);
+    });
+  }
+  root.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;el('pc-search').value='';render();remember();});
+  root.querySelectorAll('[data-scope]').forEach(b=>b.onclick=()=>{state.scope=b.dataset.scope;el('pc-search').value='';render();remember();});
+  el('pc-search').oninput=render;
+  el('pc-save').onclick=()=>{state.saved={...state.draft};el('pc-message').textContent='تم حفظ اختيارات المعاينة فقط';remember();};
+  el('pc-cancel').onclick=()=>{state.draft={...state.saved};el('pc-message').textContent='تم إلغاء تغييرات المعاينة';render();remember();};
+  window.addEventListener('openai:set_globals',e=>{restore(e.detail?.globals?.widgetState);render();});
+  render();
+})();
+</script>

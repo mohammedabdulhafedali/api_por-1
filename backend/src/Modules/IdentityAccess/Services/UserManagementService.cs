@@ -217,9 +217,20 @@ public sealed class UserManagementService(
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        var createResult = await userManager.CreateAsync(user);
+        var hasInitialPassword = !string.IsNullOrEmpty(request.InitialPassword);
+        var createResult = hasInitialPassword
+            ? await userManager.CreateAsync(user, request.InitialPassword!)
+            : await userManager.CreateAsync(user);
         if (!createResult.Succeeded)
         {
+            if (hasInitialPassword)
+            {
+                var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
+                throw ApiContractException.UnprocessableEntity(
+                    messageAr: $"كلمة المرور الأولية لا تستوفي سياسة الأمان: {errors}",
+                    messageEn: $"Initial password does not meet security policy: {errors}");
+            }
+
             throw ApiContractException.Conflict(
                 messageAr: "تعذر إنشاء حساب المستخدم لتعارض بياناته مع حساب قائم.",
                 messageEn: "Unable to create user account due to a conflicting record.");
