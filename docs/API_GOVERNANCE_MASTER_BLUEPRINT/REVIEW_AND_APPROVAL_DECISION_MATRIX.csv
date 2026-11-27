@@ -1,0 +1,21 @@
+Machine,From,Action,To,Actor,Guard
+File,UPLOADING,قبول محتوى وتخزين معزول,PENDING_SCAN,نظام,الحجم والتوقيع والبصمة؛ لا تنزيل
+File,PENDING_SCAN,نتيجة scan سليمة حقيقية,CLEAN,عامل الفحص,ربط النتيجة ببصمة البايتات
+File,PENDING_SCAN,ضار,UNSAFE,عامل الفحص,حجر ومنع وصول
+File,PENDING_SCAN,مهلة أو خطأ,PENDING_SCAN,عامل الفحص,تسجيل خطأ وإعادة محدودة
+File,CLEAN,إشارة حادث موثوقة,QUARANTINED,أمن مخول,حجب فوري وإيقاف نشر وفق السياسة
+Revision,DRAFT,تقديم,IN_REVIEW,مطور مخول,اكتمال + CLEAN + manifest + ETag + مسار
+Revision,IN_REVIEW,اعتماد مرحلة غير أخيرة,IN_REVIEW,مراجع/معتمد مخول,مرحلة تالية؛ نفس manifest
+Revision,IN_REVIEW,إرجاع,RETURNED,مراجع مخول,سبب؛ حفظ المرشح؛ مسودة مشتقة منفصلة
+Revision,IN_REVIEW,رفض,REJECTED,مراجع مخول,سبب؛ إغلاق المهمة؛ لا تعديل
+Revision,IN_REVIEW,اكتمال آخر مرحلة,APPROVED,معتمد مخول,لا مانع مفتوح؛ immutable
+Revision,RETURNED,إعادة العمل,DRAFT (new),مطور مخول,نسخة عمل جديدة؛ لا تغيير السابقة
+Revision,REJECTED,إعادة فتح بإذن,DRAFT (new),مطور مخول,سياسة/طلب معتمد
+Change,DRAFT,إرسال طلب,PENDING,مطور مخول,نوع مسموح وأثر ومرجع أساس
+Change,PENDING,اعتماد الطلب,AUTHORIZED,معتمد مخول,قرار الطلب لا يعتمد الملفات
+Change,PENDING,رفض,REJECTED,معتمد مخول,سبب؛ لا فتح نسخة عمل
+Change,AUTHORIZED,إنشاء نسخة عمل,IN_PROGRESS,مطور مخول,مرة واحدة مع ETag
+Change,IN_PROGRESS,اكتمال اعتماد المراجعة الجديدة,IMPLEMENTED,نظام,مرجع الحزمة الجديدة
+Publication,UNPUBLISHED,نشر,PUBLISHED,ناشر مخول,APPROVED + CLEAN subset + جمهور
+Publication,PUBLISHED,إيقاف,WITHDRAWN,ناشر مخول,سبب؛ منع التنزيل الجديد
+Publication,PUBLISHED,حجب بسبب حادث,SUSPENDED,أمن مخول,منع الوصول؛ استعادة بإجراء مدقق
