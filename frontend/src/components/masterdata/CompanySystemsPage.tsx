@@ -370,15 +370,6 @@ export function CompanySystemsPage({
         render: (row) => renderSystemTypeBadge(row),
       },
       {
-        key: 'docs',
-        header: copy.colDocsCount,
-        render: (row) => (
-          <code className="ltr-code">
-            P:{row.documentsAsProviderCount} / C:{row.documentsAsConsumerCount}
-          </code>
-        ),
-      },
-      {
         key: 'status',
         header: copy.colStatus,
         render: (row) => (

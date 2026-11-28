@@ -26,6 +26,7 @@ import {
   CentralModalDialog,
   DataTable,
   DataTableColumn,
+  EmptyState,
   ErrorState,
   FormField,
   LoadingState,
@@ -92,6 +93,30 @@ function getInitialTheme(): AppTheme {
 
 export interface AppProps {
   initialAuthenticatedUser?: AuthenticatedUser | null;
+}
+
+const NAV_REQUIRED_PERMISSIONS: Record<string, string[]> = {
+  'UI-17': ['dashboard.view'],
+  'UI-01': ['company_systems.view'],
+  'UI-02': ['consumers.view'],
+  'UI-03': ['providers.view'],
+  'UI-04': ['file_types.view'],
+  'UI-23': ['requirements.view'],
+  'UI-05': ['routes.view'],
+  'UI-06': ['changes.config.view'],
+  'UI-06P': ['changes.config.view'],
+  'UI-15': ['users.view'],
+  'UI-25': ['roles.view', 'permissions.view'],
+  'UI-16': ['audit.view'],
+  'UI-21': ['api_documents.view'],
+  'UI-04G': ['api_groups.view'],
+  'UI-22': ['integrations.view'],
+};
+
+function canAccessNavItem(navId: string, permSet: ReadonlySet<string>): boolean {
+  const required = NAV_REQUIRED_PERMISSIONS[navId];
+  if (!required || required.length === 0) return true;
+  return required.some((code) => permSet.has(code));
 }
 
 export function App({ initialAuthenticatedUser }: AppProps = {}) {
@@ -237,6 +262,43 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
       setSessionUser(null);
     }
   };
+
+  const userPermSet = useMemo(
+    () => new Set((sessionUser?.permissions ?? []).map((p) => p.toLowerCase())),
+    [sessionUser?.permissions]
+  );
+
+  const visibleStandaloneNavItems = useMemo(
+    () => STANDALONE_NAV_ITEMS.filter((item) => canAccessNavItem(item.id, userPermSet)),
+    [userPermSet]
+  );
+
+  const visibleSidebarGroups = useMemo(
+    () =>
+      SIDEBAR_GROUPS.map((grp) => ({
+        ...grp,
+        items: grp.items.filter((item) => canAccessNavItem(item.id, userPermSet)),
+      })).filter((grp) => grp.items.length > 0),
+    [userPermSet]
+  );
+
+  const allVisibleNavItems = useMemo(
+    () => [...visibleStandaloneNavItems, ...visibleSidebarGroups.flatMap((g) => g.items)],
+    [visibleStandaloneNavItems, visibleSidebarGroups]
+  );
+
+  useEffect(() => {
+    if (!sessionUser || allVisibleNavItems.length === 0) return;
+    const isCurrentVisible = allVisibleNavItems.some((item) => item.id === activeNavItem.id);
+    if (!isCurrentVisible) {
+      const first = allVisibleNavItems[0];
+      setActiveNavItem(first);
+      const parentGroup = visibleSidebarGroups.find((g) => g.items.some((i) => i.id === first.id));
+      if (parentGroup) {
+        setOpenGroupId(parentGroup.id);
+      }
+    }
+  }, [sessionUser, allVisibleNavItems, visibleSidebarGroups, activeNavItem.id]);
 
   const handleToggleGroup = (groupId: string) => {
     setOpenGroupId((current) => (current === groupId ? '' : groupId));
@@ -429,8 +491,8 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
         themeToggleAriaLabel={t.themeToggleLabel}
         langToggleAriaLabel={t.langToggleLabel}
         mobileMenuAriaLabel={t.mobileMenuToggle}
-        standaloneNavItems={STANDALONE_NAV_ITEMS}
-        sidebarGroups={SIDEBAR_GROUPS}
+        standaloneNavItems={visibleStandaloneNavItems}
+        sidebarGroups={visibleSidebarGroups}
         openGroupId={openGroupId}
         activeNavItem={activeNavItem}
         mobileSidebarOpen={mobileSidebarOpen}
@@ -656,6 +718,17 @@ export function App({ initialAuthenticatedUser }: AppProps = {}) {
               setSessionUser(null);
             }}
           />
+        ) : allVisibleNavItems.length === 0 ? (
+          <section className="surface-card">
+            <EmptyState
+              title={lang === 'ar' ? 'لا توجد صلاحيات مسندة' : 'No Permissions Assigned'}
+              description={
+                lang === 'ar'
+                  ? 'حسابك نشط ولكن لم تُسند له صلاحيات عرض لأي شاشة بعد. تواصل مع مدير النظام.'
+                  : 'Your account is active, but no screen permissions have been assigned yet. Contact your system administrator.'
+              }
+            />
+          </section>
         ) : activeNavItem.id === 'UI-17' ? (
           <DashboardPage
             lang={lang}
